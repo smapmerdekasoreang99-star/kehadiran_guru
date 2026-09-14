@@ -758,3 +758,8 @@ textarea {
 .persen.rendah { background: var(--flame-tint); color: var(--flame); }
 .date-field input[type="text"] { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
 .pengganti-note { color: #3B5578; font-weight: 600; }
+
+/* ---------- Pengaturan ---------- */
+.pengaturan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 20px; }
+.pengaturan-blok h3 { font-size: 15px; margin-bottom: 12px; }
+@media (max-width: 800px) { .pengaturan-grid { grid-template-columns: 1fr; } }

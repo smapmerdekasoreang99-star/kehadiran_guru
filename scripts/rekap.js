@@ -1,11 +1,12 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260913a";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260913a";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260913a";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260913a";
-import { rekapKehadiran, rekapPengganti, keCSV, isoTanggal } from "../assets/rekap-hitung.js?v=20260913a";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260913a";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914f";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914f";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914f";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260914f";
+import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR } from "../assets/rekap-hitung.js?v=20260914f";
+import { bukuHonor, bukuKehadiran, bukuPengganti, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260914f";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914f";
 
-try { initLockUI(() => renderLibur()); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
+try { initLockUI(() => { renderLibur(); renderPengaturan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
 function laporError(konteks, error) {
     console.error(konteks, error);
@@ -31,7 +32,17 @@ let state = {
     ketidakhadiran: [], penugasan: [],
     hasilKehadiran: null, hasilPengganti: null,
     saring: "", viewPengganti: "ringkas",
+    pengaturan: null,
 };
+
+const PENGATURAN_DEFAULT = {
+    tarif_PT: "6000", tarif_GT: "9000", tarif_Inf: "12000",
+    nama_sekolah: 'SMA Plus "Merdeka" Soreang', alamat_sekolah: "Jl. Citaliktik-Sindang Wargi Soreang Kab. Bandung",
+    tahun_ajaran: "2026/2027", tempat: "Soreang", kepala_sekolah: "", bendahara: "",
+};
+const FIELD_PENGATURAN = { tarif_PT: "pTarifPT", tarif_GT: "pTarifGT", tarif_Inf: "pTarifInf", nama_sekolah: "pNamaSekolah", alamat_sekolah: "pAlamat", tahun_ajaran: "pTahunAjaran", tempat: "pTempat", kepala_sekolah: "pKepsek", bendahara: "pBendahara" };
+const demoPengaturan = { ...PENGATURAN_DEFAULT, kepala_sekolah: "Mohamad Gunawan, S.Si.", bendahara: "Dra. Ida Susana" };
+const tarif = () => ({ PT: Number(state.pengaturan.tarif_PT) || 0, GT: Number(state.pengaturan.tarif_GT) || 0, Inf: Number(state.pengaturan.tarif_Inf) || 0 });
 
 const namaGuru = (id) => state.guru.find((g) => g.id === id)?.nama || id;
 const namaKelas = (id) => state.kelas.find((k) => k.id === id)?.nama_kelas || id;
@@ -60,11 +71,12 @@ async function boot() {
         if (eJ) { laporError("Gagal memuat jadwal", eJ); return; }
         state.guru = guru || []; state.kelas = urutkanKelas(kelas || []); state.mapel = mapel || []; state.jadwal = jadwal || [];
         await muatLibur();
+        await muatPengaturan();
     } else {
         state.guru = demoData.guru; state.kelas = urutkanKelas(demoData.kelas); state.mapel = demoData.mapel; state.jadwal = demoData.jadwal;
-        state.libur = demoLibur;
+        state.libur = demoLibur; state.pengaturan = { ...demoPengaturan };
     }
-    renderLibur();
+    renderLibur(); renderPengaturan();
     await hitung();
 }
 
@@ -76,6 +88,36 @@ async function muatLibur() {
         state.libur = []; return;
     }
     state.libur = data || [];
+}
+
+async function muatPengaturan() {
+    state.pengaturan = { ...PENGATURAN_DEFAULT };
+    const { data, error } = await supabaseClient.from("kg_pengaturan").select("kunci, nilai");
+    if (error) { laporError("Tabel kg_pengaturan belum ada — jalankan migrasi_pengaturan.sql (sementara memakai tarif & identitas bawaan)", error); return; }
+    for (const r of data || []) state.pengaturan[r.kunci] = r.nilai;
+}
+
+function renderPengaturan() {
+    if (!state.pengaturan) return;
+    for (const [k, id] of Object.entries(FIELD_PENGATURAN)) document.getElementById(id).value = state.pengaturan[k] ?? "";
+    const unlocked = isUnlocked();
+    for (const id of Object.values(FIELD_PENGATURAN)) document.getElementById(id).disabled = !unlocked;
+    document.getElementById("pengaturanSimpan").disabled = !unlocked;
+    document.getElementById("pengaturanStatus").textContent = unlocked ? "" : "Buka kunci untuk mengubah.";
+}
+
+async function simpanPengaturan() {
+    const baru = {};
+    for (const [k, id] of Object.entries(FIELD_PENGATURAN)) baru[k] = document.getElementById(id).value.trim();
+    if (isSupabaseConfigured) {
+        const rows = Object.entries(baru).map(([kunci, nilai]) => ({ kunci, nilai }));
+        const { error } = await supabaseClient.from("kg_pengaturan").upsert(rows, { onConflict: "kunci" });
+        if (error) { laporError("Gagal menyimpan pengaturan", error); return; }
+    }
+    state.pengaturan = { ...state.pengaturan, ...baru };
+    document.getElementById("pengaturanStatus").textContent = "Tersimpan ✓";
+    setTimeout(() => (document.getElementById("pengaturanStatus").textContent = ""), 2000);
+    renderHonor();
 }
 
 // ---------- Hitung ----------
@@ -104,7 +146,7 @@ async function hitung() {
     const liburSet = new Set(state.libur.map((l) => l.tanggal));
     state.hasilKehadiran = rekapKehadiran({ jadwal: state.jadwal, ketidakhadiran: state.ketidakhadiran, awal: state.awal, akhir: state.akhir, liburSet });
     state.hasilPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: state.ketidakhadiran, jadwal: state.jadwal, awal: state.awal, akhir: state.akhir });
-    renderKehadiran(); renderPengganti();
+    renderKehadiran(); renderPengganti(); renderHonor();
 }
 
 // ---------- Render kehadiran ----------
@@ -190,34 +232,60 @@ async function hapusLibur(tanggal) {
     renderLibur(); await hitung();
 }
 
-// ---------- CSV ----------
-function unduh(nama, isi) {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([isi], { type: "text/csv;charset=utf-8" })); a.download = nama; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+// ---------- Honor ----------
+const rp = (v) => "Rp " + Math.round(v).toLocaleString("id-ID");
+
+function barisHonor() {
+    const h = state.hasilPengganti; if (!h) return [];
+    return h.baris.map((r) => ({ nama: namaGuru(r.guru_id), PT: r.PT, GT: r.GT, Inf: r.Inf }))
+        .sort((a, b) => a.nama.localeCompare(b.nama));
 }
 
-function csvKehadiran() {
-    const rows = barisKehadiranTersaring().map((r) => [r.nama, r.terjadwal, r.hadirTM, r.HTTM, r.ST, r.STT, r.IT, r.ITT, r.TK, r.hadir, r.persen === null ? "" : r.persen]);
-    unduh(`rekap-kehadiran-${state.awal}_${state.akhir}.csv`, keCSV(["Guru", "Terjadwal", "Hadir tatap muka", "HTTM", "ST", "STT", "IT", "ITT", "TK", "Hadir (bobot)", "% Hadir"], rows));
+function renderHonor() {
+    if (!state.hasilPengganti || !state.pengaturan) return;
+    const t = tarif(); const rows = barisHonor();
+    let tot = { PT: 0, GT: 0, Inf: 0, jumlah: 0 };
+    document.getElementById("bodyHonor").innerHTML = rows.map((b, i) => {
+        const jumlah = b.PT * t.PT + b.GT * t.GT + b.Inf * t.Inf;
+        tot.PT += b.PT; tot.GT += b.GT; tot.Inf += b.Inf; tot.jumlah += jumlah;
+        return `<tr><td class="num">${i + 1}</td><td>${b.nama}</td>${num(b.PT)}${num(rp(t.PT))}${num(b.GT)}${num(rp(t.GT))}${num(b.Inf)}${num(rp(t.Inf))}<td class="num"><strong>${rp(jumlah)}</strong></td></tr>`;
+    }).join("") || `<tr><td colspan="9" class="empty-state">Belum ada penugasan pada rentang ini.</td></tr>`;
+    document.getElementById("footHonor").innerHTML = `<tr class="total"><td colspan="2">JUMLAH (${rows.length} guru)</td>${num(tot.PT)}${num(rp(tot.PT * t.PT))}${num(tot.GT)}${num(rp(tot.GT * t.GT))}${num(tot.Inf)}${num(rp(tot.Inf * t.Inf))}<td class="num"><strong>${rp(tot.jumlah)}</strong></td></tr>`;
+    document.getElementById("ringkasHonor").textContent = `${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)} · tarif PT ${rp(t.PT)} · GT ${rp(t.GT)} · Inf ${rp(t.Inf)} per jam`;
+    document.getElementById("footHonorTeks").textContent = `Terbilang: ${terbilang(tot.jumlah)}. Tarif diubah di tab Pengaturan.`;
 }
 
-function csvPengganti() {
-    const h = state.hasilPengganti;
-    if (state.viewPengganti === "ringkas") {
-        unduh(`rekap-pengganti-${state.awal}_${state.akhir}.csv`, keCSV(["Guru Pengganti", "GT", "PT", "Inf", "Total"], h.baris.map((r) => [namaGuru(r.guru_id), r.GT, r.PT, r.Inf, r.total])));
-    } else {
-        unduh(`rincian-pengganti-${state.awal}_${state.akhir}.csv`, keCSV(["Tanggal", "Jam ke", "Kelas", "Mapel", "Guru Tidak Hadir", "Ket", "Guru Pengganti", "Status"],
-            h.rincian.map((r) => [r.tanggal, r.jam_ke, namaKelas(r.kelas_id), namaMapel(r.mapel_id), namaGuru(r.guru_id), STATUS_LABEL[r.status] || r.status, r.pengganti_id ? namaGuru(r.pengganti_id) : "", r.kode])));
-    }
-}
+// ---------- Ekspor Excel ----------
+let logoCache = null;
+async function logo() { if (logoCache === null) logoCache = (await ambilLogoBase64("assets/logo-kecil.png")) || false; return logoCache || null; }
+const ExcelJSLib = () => { if (!window.ExcelJS) throw new Error("Pustaka ExcelJS belum termuat (periksa koneksi internet), coba muat ulang halaman."); return window.ExcelJS; };
+const bungkus = (fn) => async () => { try { await fn(); } catch (err) { laporError("Gagal membuat file Excel", err); } };
+
+const xlsKehadiran = bungkus(async () => {
+    const h = state.hasilKehadiran; if (!h) return;
+    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisKehadiranTersaring(), total: h.total, pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
+    await unduhWorkbook(wb, `Rekap Kehadiran Guru ${state.awal} sd ${state.akhir}.xlsx`);
+});
+const xlsPengganti = bungkus(async () => {
+    const h = state.hasilPengganti; if (!h) return;
+    const wb = await bukuPengganti({ ExcelJS: ExcelJSLib(),
+        ringkas: h.baris.map((r) => ({ nama: namaGuru(r.guru_id), GT: r.GT, PT: r.PT, Inf: r.Inf, total: r.total })),
+        rincian: h.rincian.map((r) => ({ tanggal: r.tanggal, jam_ke: r.jam_ke, kelas: namaKelas(r.kelas_id), mapel: namaMapel(r.mapel_id), guru: namaGuru(r.guru_id), status: r.status, pengganti: r.pengganti_id ? namaGuru(r.pengganti_id) : "", kode: r.kode })),
+        tanpaPengganti: h.tanpaPengganti, pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
+    await unduhWorkbook(wb, `Rekap Guru Pengganti ${state.awal} sd ${state.akhir}.xlsx`);
+});
+const xlsHonor = bungkus(async () => {
+    if (!state.hasilPengganti) return;
+    const wb = await bukuHonor({ ExcelJS: ExcelJSLib(), baris: barisHonor(), tarif: tarif(), pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
+    await unduhWorkbook(wb, `Honor Guru Pengganti ${state.awal} sd ${state.akhir}.xlsx`);
+});
 
 // ---------- Wiring ----------
 try {
     document.getElementById("rekapBtn").addEventListener("click", hitung);
     document.querySelectorAll(".rekap-tab").forEach((b) => b.addEventListener("click", () => {
         document.querySelectorAll(".rekap-tab").forEach((x) => x.classList.toggle("active", x === b));
-        for (const t of ["kehadiran", "pengganti", "libur"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
+        for (const t of ["kehadiran", "pengganti", "honor", "libur", "pengaturan"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
     }));
     document.querySelectorAll("#tab-pengganti .day-tabs button").forEach((b) => b.addEventListener("click", () => {
         state.viewPengganti = b.dataset.view;
@@ -225,8 +293,10 @@ try {
         renderPengganti();
     }));
     document.getElementById("cariKehadiran").addEventListener("input", (e) => { state.saring = e.target.value; renderKehadiran(); });
-    document.getElementById("csvKehadiran").addEventListener("click", csvKehadiran);
-    document.getElementById("csvPengganti").addEventListener("click", csvPengganti);
+    document.getElementById("xlsKehadiran").addEventListener("click", xlsKehadiran);
+    document.getElementById("xlsPengganti").addEventListener("click", xlsPengganti);
+    document.getElementById("xlsHonor").addEventListener("click", xlsHonor);
+    document.getElementById("pengaturanSimpan").addEventListener("click", simpanPengaturan);
     document.getElementById("liburTambah").addEventListener("click", tambahLibur);
 } catch (err) {
     console.error("Ada elemen halaman yang tidak ditemukan — kemungkinan HTML dan JS beda versi. Lakukan hard refresh (Ctrl+Shift+R).", err);

@@ -6,8 +6,9 @@
 <title>Rekap — Guru Pengganti SMA Plus Merdeka Soreang</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20260913a" />
+<link rel="stylesheet" href="assets/style.css?v=20260914f" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 </head>
 <body>
 
@@ -54,7 +55,9 @@
     <div class="rekap-tabs">
       <button type="button" class="rekap-tab active" data-tab="kehadiran">Kehadiran Guru</button>
       <button type="button" class="rekap-tab" data-tab="pengganti">Guru Pengganti</button>
+      <button type="button" class="rekap-tab" data-tab="honor">Honor Pengganti</button>
       <button type="button" class="rekap-tab" data-tab="libur">Hari Libur</button>
+      <button type="button" class="rekap-tab" data-tab="pengaturan">Pengaturan</button>
     </div>
 
     <!-- TAB: Kehadiran -->
@@ -66,7 +69,7 @@
         </div>
         <div class="toolbar-actions">
           <span id="ringkasKehadiran" class="tugas-note"></span>
-          <button type="button" id="csvKehadiran" class="btn btn-ghost">Unduh CSV</button>
+          <button type="button" id="xlsKehadiran" class="btn btn-primary">⬇ Unduh Excel</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -102,7 +105,7 @@
         </div>
         <div class="toolbar-actions">
           <span id="ringkasPengganti" class="tugas-note"></span>
-          <button type="button" id="csvPengganti" class="btn btn-ghost">Unduh CSV</button>
+          <button type="button" id="xlsPengganti" class="btn btn-primary">⬇ Unduh Excel</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -138,6 +141,57 @@
       <div class="table-foot" id="footPengganti"></div>
     </section>
 
+    <!-- TAB: Honor -->
+    <section id="tab-honor" class="card" hidden>
+      <div class="toolbar">
+        <span id="ringkasHonor" class="tugas-note"></span>
+        <div class="toolbar-actions">
+          <button type="button" id="xlsHonor" class="btn btn-primary">⬇ Unduh Excel (format keuangan)</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="tabel-rekap">
+          <thead>
+            <tr>
+              <th>No</th><th>Nama</th>
+              <th class="num">PT</th><th class="num">Honor</th>
+              <th class="num">GT</th><th class="num">Honor</th>
+              <th class="num">Inf</th><th class="num">Honor</th>
+              <th class="num">Jumlah</th>
+            </tr>
+          </thead>
+          <tbody id="bodyHonor"></tbody>
+          <tfoot id="footHonor"></tfoot>
+        </table>
+      </div>
+      <div class="table-foot" id="footHonorTeks"></div>
+    </section>
+
+    <!-- TAB: Pengaturan -->
+    <section id="tab-pengaturan" class="card" hidden>
+      <div class="pengaturan-grid">
+        <div class="pengaturan-blok">
+          <h3>Tarif honor per jam pelajaran</h3>
+          <div class="field"><label for="pTarifPT">PT — Piket diTugaskan (Rp)</label><input type="number" id="pTarifPT" min="0" step="500" /></div>
+          <div class="field"><label for="pTarifGT">GT — Guru diTugaskan (Rp)</label><input type="number" id="pTarifGT" min="0" step="500" /></div>
+          <div class="field"><label for="pTarifInf">Inf — Infaler (Rp)</label><input type="number" id="pTarifInf" min="0" step="500" /></div>
+        </div>
+        <div class="pengaturan-blok">
+          <h3>Identitas pada dokumen</h3>
+          <div class="field"><label for="pNamaSekolah">Nama sekolah</label><input type="text" id="pNamaSekolah" /></div>
+          <div class="field"><label for="pAlamat">Alamat</label><input type="text" id="pAlamat" /></div>
+          <div class="field"><label for="pTahunAjaran">Tahun ajaran</label><input type="text" id="pTahunAjaran" /></div>
+          <div class="field"><label for="pTempat">Tempat tanda tangan</label><input type="text" id="pTempat" /></div>
+          <div class="field"><label for="pKepsek">Kepala Sekolah</label><input type="text" id="pKepsek" /></div>
+          <div class="field"><label for="pBendahara">Bendahara</label><input type="text" id="pBendahara" /></div>
+        </div>
+      </div>
+      <div class="toolbar" style="border-top:1px solid var(--line);border-bottom:none;justify-content:flex-end;">
+        <span id="pengaturanStatus" class="tugas-note"></span>
+        <button type="button" id="pengaturanSimpan" class="btn btn-primary">Simpan pengaturan</button>
+      </div>
+    </section>
+
     <!-- TAB: Hari libur -->
     <section id="tab-libur" class="card" hidden>
       <div class="toolbar">
@@ -163,7 +217,7 @@
 <div id="pinModal" class="modal-backdrop" hidden>
   <div class="modal" style="max-width:360px;">
     <h2>Buka Kunci Edit</h2>
-    <p style="margin:-8px 0 16px;color:#6E6455;font-size:13.5px;">Masukkan PIN untuk mengubah daftar hari libur.</p>
+    <p style="margin:-8px 0 16px;color:#6E6455;font-size:13.5px;">Masukkan PIN untuk mengubah hari libur dan pengaturan.</p>
     <form id="pinForm">
       <div class="field">
         <label for="pinInput">PIN</label>
@@ -178,6 +232,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/rekap.js?v=20260913a"></script>
+<script type="module" src="scripts/rekap.js?v=20260914f"></script>
 </body>
 </html>

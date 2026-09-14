@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Data Guru — Guru Pengganti SMA Plus Merdeka Soreang</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=20260914m" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  /* Ringkasan kelengkapan data — khusus halaman ini */
+  .lengkap-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+  .lengkap-chip {
+      display: inline-flex; align-items: baseline; gap: 7px;
+      padding: 7px 12px; border-radius: 999px;
+      border: 1px solid var(--line); background: var(--surface);
+      font-size: 13px; color: var(--ink-muted);
+  }
+  .lengkap-chip b { color: var(--ink); font-weight: 600; font-size: 13.5px; }
+  .lengkap-chip.penuh { border-color: #BFD6B6; background: #F1F7EE; }
+  .lengkap-chip.kosong { border-color: var(--flame-tint); background: var(--flame-tint); color: var(--flame); }
+  .lengkap-chip.kosong b { color: var(--flame); }
+
+  .badge-kurang {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      background: var(--flame-tint); color: var(--flame);
+      font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  }
+  .badge-nonaktif {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      background: #ECE8E0; color: #5B5346; font-size: 11.5px; font-weight: 600;
+  }
+  tr.baris-nonaktif td { opacity: 0.5; }
+  .sel-kecil { color: var(--ink-muted); font-size: 12.5px; }
+  .field-hint { margin: 5px 0 0; font-size: 12.5px; color: var(--ink-muted); }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="assets/logo.png" alt="Lambang SMA Plus Merdeka Soreang" />
+      <div class="name">SMA Plus<br/>Merdeka Soreang</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="index.html">Beranda</a>
+      <a href="guru.html" class="active">Data Guru</a>
+      <a href="jadwal.html">Jadwal KBM</a>
+      <a href="ketidakhadiran.html">Ketidakhadiran Guru</a>
+      <a href="penugasan.html">Penugasan Pengganti</a>
+      <a href="rekap.html">Rekap</a>
+    </nav>
+
+    <div class="sidebar-foot">Sistem Guru Pengganti<br/>Tahun Ajaran 2026/2027</div>
+  </aside>
+
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Data Guru</h1>
+        <p>Data induk guru sekolah — dipakai bersama oleh seluruh aplikasi.</p>
+      </div>
+      <button id="lockToggle" class="btn-lock">🔒 Buka Kunci Edit</button>
+    </div>
+
+    <div id="notice" class="notice" hidden>
+      Belum terhubung ke Supabase. Isi kredensial di <code>assets/supabase-client.js</code>.
+    </div>
+
+    <div id="lengkapWrap" class="lengkap-wrap"></div>
+
+    <div class="card">
+      <div class="toolbar">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="12.8" y1="12.8" x2="17" y2="17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input id="cariGuru" type="search" placeholder="Cari nama, NIG, atau mata pelajaran…" autocomplete="off" spellcheck="false" />
+          <button type="button" id="cariClear" class="search-clear" hidden aria-label="Hapus pencarian">×</button>
+        </div>
+        <div class="toolbar-actions">
+          <select id="saringFilter" class="kelas-filter">
+            <option value="AKTIF">Guru aktif</option>
+            <option value="SEMUA">Semua guru</option>
+            <option value="NONAKTIF">Nonaktif saja</option>
+            <option value="KURANG">Data belum lengkap</option>
+          </select>
+          <button id="addBtn" class="btn btn-primary">+ Tambah Guru</button>
+        </div>
+      </div>
+
+      <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>NIG</th>
+            <th>Nama</th>
+            <th>Mapel Utama</th>
+            <th>Jenis PTK</th>
+            <th>TMT</th>
+            <th>Tugas</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="guruBody"></tbody>
+      </table>
+      </div>
+
+      <div id="emptyState" class="empty-state" hidden>
+        Tidak ada guru yang cocok dengan pencarian.
+      </div>
+      <div id="ringkasan" class="table-foot"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal: tambah / ubah guru -->
+<div id="guruModal" class="modal-backdrop" hidden>
+  <div class="modal" style="max-width:520px;">
+    <h2 id="modalTitle">Tambah Guru</h2>
+    <form id="guruForm">
+      <div class="field-row">
+        <div class="field">
+          <label for="fNig">NIG <span style="color:var(--flame)">*</span></label>
+          <input type="text" id="fNig" inputmode="numeric" autocomplete="off" required />
+          <p class="field-hint" id="nigHint"></p>
+        </div>
+        <div class="field">
+          <label for="fId">ID Guru <span style="color:var(--flame)">*</span></label>
+          <input type="text" id="fId" autocomplete="off" required />
+          <p class="field-hint">Terisi otomatis, boleh disunting.</p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="fNama">Nama lengkap dengan gelar <span style="color:var(--flame)">*</span></label>
+        <input type="text" id="fNama" autocomplete="off" required />
+      </div>
+
+      <div class="field">
+        <label for="fTmt">TMT di sekolah ini <span style="color:var(--flame)">*</span></label>
+        <input type="date" id="fTmt" required />
+        <p class="field-hint">Tanggal mulai bertugas. Dipakai untuk perhitungan masa kerja.</p>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="fMapel">Mata pelajaran utama</label>
+          <select id="fMapel"></select>
+        </div>
+        <div class="field">
+          <label for="fJenisPtk">Jenis PTK</label>
+          <select id="fJenisPtk">
+            <option value="">— belum diisi —</option>
+            <option value="Guru Tetap Yayasan">Guru Tetap Yayasan</option>
+            <option value="Guru Tidak Tetap">Guru Tidak Tetap</option>
+            <option value="Tenaga Kependidikan">Tenaga Kependidikan</option>
+            <option value="Pimpinan">Pimpinan</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="fNuptk">NUPTK</label>
+          <input type="text" id="fNuptk" inputmode="numeric" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="fHp">Nomor HP</label>
+          <input type="text" id="fHp" inputmode="tel" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="fStatus">Status</label>
+        <select id="fStatus">
+          <option value="Aktif">Aktif</option>
+          <option value="Cuti">Cuti</option>
+          <option value="Nonaktif">Nonaktif</option>
+        </select>
+        <p class="field-hint">Guru nonaktif tidak muncul di daftar pilihan, tetapi namanya tetap terbaca pada data lama.</p>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="modalCancel" class="btn btn-ghost">Batal</button>
+        <button type="submit" class="btn btn-primary">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: tugas tambahan -->
+<div id="tugasModal" class="modal-backdrop" hidden>
+  <div class="modal" style="max-width:440px;">
+    <h2>Tugas Tambahan</h2>
+    <p id="tugasNama" style="margin:-8px 0 16px;color:var(--ink-muted);font-size:13.5px;"></p>
+    <form id="tugasForm">
+      <div class="field">
+        <label for="fWali">Wali kelas</label>
+        <select id="fWali"></select>
+        <p class="field-hint">Satu guru hanya boleh menjadi wali satu kelas.</p>
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="fPiket" style="width:auto;margin:0;" />
+          Bertugas piket
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="tugasCancel" class="btn btn-ghost">Batal</button>
+        <button type="submit" class="btn btn-primary">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: PIN (satu kali per sesi browser) -->
+<div id="pinModal" class="modal-backdrop" hidden>
+  <div class="modal" style="max-width:360px;">
+    <h2>Buka Kunci Edit</h2>
+    <p style="margin:-8px 0 16px;color:#6E6455;font-size:13.5px;">Masukkan PIN untuk mengaktifkan tambah/ubah di seluruh halaman selama sesi ini.</p>
+    <form id="pinForm">
+      <div class="field">
+        <label for="pinInput">PIN</label>
+        <input type="password" id="pinInput" inputmode="text" autocomplete="off" required />
+        <p id="pinError" hidden style="color:#A8432E;font-size:12.5px;margin:6px 0 0;">PIN salah, coba lagi.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="pinCancel" class="btn btn-ghost">Batal</button>
+        <button type="submit" class="btn btn-primary">Konfirmasi</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script type="module" src="scripts/guru.js?v=20260914m"></script>
+</body>
+</html>

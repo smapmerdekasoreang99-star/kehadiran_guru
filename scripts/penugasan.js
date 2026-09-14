@@ -68,7 +68,7 @@ async function boot() {
     if (isSupabaseConfigured) {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jam }] =
             await Promise.all([
-                supabaseClient.from("kg_guru").select("id, nama, mapel_utama, is_piket").order("nama"),
+                supabaseClient.from("v_guru_aktif").select("id, nama, mapel_utama, is_piket").order("nama"),
                 supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
                 supabaseClient.from("kg_mapel").select("id, nama_mapel, rumpun_mapel").order("nama_mapel"),
                 supabaseClient.from("kg_jam_pelajaran").select("*").order("jam_ke"),

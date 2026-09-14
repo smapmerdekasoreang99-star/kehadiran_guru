@@ -1,10 +1,10 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914f";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914f";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914f";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260914f";
-import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR } from "../assets/rekap-hitung.js?v=20260914f";
-import { bukuHonor, bukuKehadiran, bukuPengganti, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260914f";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914f";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914h";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914h";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914h";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260914h";
+import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260914h";
+import { bukuHonor, bukuKehadiran, bukuPengganti, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260914h";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914h";
 
 try { initLockUI(() => { renderLibur(); renderPengaturan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
@@ -30,7 +30,7 @@ let state = {
     awal: "", akhir: "",
     guru: [], kelas: [], mapel: [], jadwal: [], libur: [],
     ketidakhadiran: [], penugasan: [],
-    hasilKehadiran: null, hasilPengganti: null,
+    hasilKehadiran: null, hasilWali: null, hasilPengganti: null, jamWaliDikecualikan: 0,
     saring: "", viewPengganti: "ringkas",
     pengaturan: null,
 };
@@ -144,8 +144,13 @@ async function hitung() {
     }
 
     const liburSet = new Set(state.libur.map((l) => l.tanggal));
-    state.hasilKehadiran = rekapKehadiran({ jadwal: state.jadwal, ketidakhadiran: state.ketidakhadiran, awal: state.awal, akhir: state.akhir, liburSet });
-    state.hasilPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: state.ketidakhadiran, jadwal: state.jadwal, awal: state.awal, akhir: state.akhir });
+    const { mengajar, wali, ketMengajar, ketWali } = pisahWaliKelas(state.jadwal, state.ketidakhadiran);
+    state.hasilKehadiran = rekapKehadiran({ jadwal: mengajar, ketidakhadiran: ketMengajar, awal: state.awal, akhir: state.akhir, liburSet });
+    state.hasilWali = rekapKehadiran({ jadwal: wali, ketidakhadiran: ketWali, awal: state.awal, akhir: state.akhir, liburSet });
+    // pengganti & honor: hanya jam mengajar; jam tugas wali kelas dihitung terpisah (belum ada tarifnya)
+    const semuaPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: state.ketidakhadiran, jadwal: state.jadwal, awal: state.awal, akhir: state.akhir });
+    state.hasilPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: ketMengajar, jadwal: mengajar, awal: state.awal, akhir: state.akhir });
+    state.jamWaliDikecualikan = semuaPengganti.rincian.length - state.hasilPengganti.rincian.length;
     renderKehadiran(); renderPengganti(); renderHonor();
 }
 
@@ -173,6 +178,23 @@ function renderKehadiran() {
     document.getElementById("footKehadiran").innerHTML = `
       <tr class="total"><td>Total (${h.baris.length} guru)</td>${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.STT)}${num(t.IT)}${num(t.ITT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
     document.getElementById("ringkasKehadiran").textContent = `${h.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
+    renderWali();
+}
+
+function barisWaliTersaring() {
+    const q = state.saring.trim().toLowerCase();
+    return (state.hasilWali?.baris || []).map((r) => ({ ...r, nama: namaGuru(r.guru_id) }))
+        .filter((r) => !q || r.nama.toLowerCase().includes(q)).sort((a, b) => a.nama.localeCompare(b.nama));
+}
+
+function renderWali() {
+    const w = state.hasilWali; if (!w) return;
+    const rows = barisWaliTersaring();
+    document.getElementById("bodyWali").innerHTML = rows.map((r) => `
+      <tr><td>${r.nama}</td>${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.STT)}${num(r.IT)}${num(r.ITT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}</tr>`).join("")
+      || `<tr><td colspan="11" class="empty-state">Tidak ada jam tugas wali kelas pada rentang ini.</td></tr>`;
+    const t = w.total;
+    document.getElementById("footWali").innerHTML = `<tr class="total"><td>Total (${w.baris.length} wali kelas)</td>${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.STT)}${num(t.IT)}${num(t.ITT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
 }
 
 // ---------- Render pengganti ----------
@@ -190,7 +212,7 @@ function renderPengganti() {
         <td>${namaGuru(r.guru_id)}</td><td><span class="badge-status badge-${r.status.toLowerCase()}">${r.status}</span></td>
         <td>${r.pengganti_id ? namaGuru(r.pengganti_id) : "—"}</td><td><span class="badge-tugas badge-${r.kode.toLowerCase()}">${r.kode}</span></td>
       </tr>`).join("") || `<tr><td colspan="8" class="empty-state">Belum ada penugasan pada rentang ini.</td></tr>`;
-    document.getElementById("ringkasPengganti").textContent = `${h.total.total} jam digantikan · ${h.tanpaPengganti} jam tanpa pengganti (TP)`;
+    document.getElementById("ringkasPengganti").textContent = `${h.total.total} jam digantikan · ${h.tanpaPengganti} jam tanpa pengganti (TP)` + (state.jamWaliDikecualikan ? ` · ${state.jamWaliDikecualikan} jam tugas wali kelas tidak termasuk` : "");
     document.getElementById("footPengganti").textContent = `GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler · TP = Tidak Perlu Pengganti (tidak masuk hitungan per guru).`;
 }
 
@@ -252,7 +274,7 @@ function renderHonor() {
     }).join("") || `<tr><td colspan="9" class="empty-state">Belum ada penugasan pada rentang ini.</td></tr>`;
     document.getElementById("footHonor").innerHTML = `<tr class="total"><td colspan="2">JUMLAH (${rows.length} guru)</td>${num(tot.PT)}${num(rp(tot.PT * t.PT))}${num(tot.GT)}${num(rp(tot.GT * t.GT))}${num(tot.Inf)}${num(rp(tot.Inf * t.Inf))}<td class="num"><strong>${rp(tot.jumlah)}</strong></td></tr>`;
     document.getElementById("ringkasHonor").textContent = `${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)} · tarif PT ${rp(t.PT)} · GT ${rp(t.GT)} · Inf ${rp(t.Inf)} per jam`;
-    document.getElementById("footHonorTeks").textContent = `Terbilang: ${terbilang(tot.jumlah)}. Tarif diubah di tab Pengaturan.`;
+    document.getElementById("footHonorTeks").textContent = `Terbilang: ${terbilang(tot.jumlah)}. Tarif diubah di tab Pengaturan.` + (state.jamWaliDikecualikan ? ` Penggantian tugas wali kelas (Upacara/Bimbingan) sebanyak ${state.jamWaliDikecualikan} jam tidak termasuk — honornya dihitung terpisah.` : "");
 }
 
 // ---------- Ekspor Excel ----------
@@ -263,7 +285,7 @@ const bungkus = (fn) => async () => { try { await fn(); } catch (err) { laporErr
 
 const xlsKehadiran = bungkus(async () => {
     const h = state.hasilKehadiran; if (!h) return;
-    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisKehadiranTersaring(), total: h.total, pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
+    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisKehadiranTersaring(), total: h.total, wali: { baris: barisWaliTersaring(), total: state.hasilWali.total }, pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Kehadiran Guru ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsPengganti = bungkus(async () => {

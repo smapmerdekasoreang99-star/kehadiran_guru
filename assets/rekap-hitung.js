@@ -5,6 +5,21 @@
 const HARI_FROM_JS_DAY = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 export const STATUS_ABSEN = ["ST", "STT", "IT", "ITT", "TK", "HTTM"];
 
+// Mata pelajaran yang termasuk TUGAS WALI KELAS (Senin jam 1-2): dihitung terpisah dari jam mengajar
+export const MAPEL_WALI_KELAS = ["M08", "M25"]; // M08 = Bimbingan Wali Kelas, M25 = Upacara
+
+// Memisahkan jadwal menjadi { mengajar, wali } dan ketidakhadiran mengikuti jadwalnya
+export function pisahWaliKelas(jadwal, ketidakhadiran) {
+    const wali = jadwal.filter((j) => MAPEL_WALI_KELAS.includes(j.mapel_id));
+    const mengajar = jadwal.filter((j) => !MAPEL_WALI_KELAS.includes(j.mapel_id));
+    const idWali = new Set(wali.map((j) => j.id));
+    return {
+        mengajar, wali,
+        ketMengajar: ketidakhadiran.filter((k) => !idWali.has(k.jadwal_id)),
+        ketWali: ketidakhadiran.filter((k) => idWali.has(k.jadwal_id)),
+    };
+}
+
 // Bobot kehadiran per status (kebijakan sekolah): dianggap hadir sekian persen
 export const BOBOT_HADIR = { HTTM: 1.0, ST: 0.20, STT: 0.15, IT: 0.10, ITT: 0.05, TK: 0.0 };
 

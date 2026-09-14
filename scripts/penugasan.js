@@ -1,8 +1,9 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914f";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914f";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914f";
-import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260914f";
-import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914f";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914h";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914h";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914h";
+import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260914h";
+import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914h";
+import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260914h";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -165,6 +166,7 @@ function pendampingUntuk(jadwal) {
         });
 }
 const urutKelas = (id) => indeksKelas(state.kelas)(id);
+const perluPengganti = (jadwal) => jadwal.jam_ke !== 8 && !MAPEL_WALI_KELAS.includes(jadwal.mapel_id);
 const namaKelas = (id) => state.kelas.find((k) => k.id === id)?.nama_kelas || id;
 const mapelById = (id) => state.mapel.find((m) => m.id === id);
 const jamInfo = (jamKe) => state.jam.find((j) => j.jam_ke === Number(jamKe));
@@ -175,10 +177,11 @@ function renderTable() {
     const unlocked = isUnlocked();
     const disabledAttr = unlocked ? "" : "disabled";
 
-    // Jam ke-8 (Tahsin) tidak memerlukan guru pengganti — kewenangan bagian Kesiswaan
+    // Tidak memerlukan guru pengganti: jam ke-8 (Tahsin, kewenangan Kesiswaan)
+    // dan jam tugas wali kelas (Upacara & Bimbingan Wali Kelas, Senin jam 1-2)
     const rows = state.ketidakhadiran
         .map((k) => ({ k, jadwal: state.jadwal.find((j) => j.id === k.jadwal_id) }))
-        .filter((r) => r.jadwal && r.jadwal.jam_ke !== 8)
+        .filter((r) => r.jadwal && perluPengganti(r.jadwal))
         .sort((a, b) => a.jadwal.jam_ke - b.jadwal.jam_ke);
 
     if (rows.length === 0) {
@@ -417,7 +420,7 @@ function dataBagikan() {
     const items = []; let belum = 0;
     for (const k of state.ketidakhadiran) {
         const j = state.jadwal.find((x) => x.id === k.jadwal_id);
-        if (!j || j.jam_ke === 8) continue;
+        if (!j || !perluPengganti(j)) continue;
         const p = state.penugasan.find((x) => x.ketidakhadiran_id === k.id);
         if (!p) { belum++; continue; }
         if (p.status_pengganti === "TP") continue;

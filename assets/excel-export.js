@@ -185,13 +185,20 @@ export async function bukuHonor({ ExcelJS, baris, tarif, pengaturan, awal, akhir
 // 2. REKAP KEHADIRAN GURU
 // =========================================================
 // baris: [{ nama, terjadwal, hadirTM, HTTM, ST, STT, IT, ITT, TK, hadir, persen }]
-export async function bukuKehadiran({ ExcelJS, baris, total, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64 }) {
+export async function bukuKehadiran({ ExcelJS, baris, total, wali, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64 }) {
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Kehadiran Guru");
+    tulisSheetKehadiran(wb, "Kehadiran Guru", "REKAPITULASI KEHADIRAN GURU (JAM MENGAJAR)", baris, total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64,
+        catatan: "Upacara dan Bimbingan Wali Kelas (Senin jam 1-2) tidak termasuk; lihat sheet Tugas Wali Kelas." });
+    if (wali) tulisSheetKehadiran(wb, "Tugas Wali Kelas", "REKAPITULASI KEHADIRAN TUGAS WALI KELAS", wali.baris, wali.total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64,
+        catatan: "Upacara & Bimbingan Wali Kelas, Senin jam 1-2." });
+    return wb;
+}
+
+function tulisSheetKehadiran(wb, namaSheet, judul, baris, total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64, catatan }) {
+    const ws = wb.addWorksheet(namaSheet);
     const KOL = 12;
     ws.columns = [{ width: 5 }, { width: 34 }, { width: 10 }, { width: 8 }, { width: 7 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 10 }, { width: 10 }];
-    let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul: "REKAPITULASI KEHADIRAN GURU", sub: `${labelPeriode(awal, akhir).replace(" :", ":")}  ·  ${jumlahHariKerja} hari kerja`, kolomTerakhir: KOL });
-    r += 0;
+    let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul, sub: `${labelPeriode(awal, akhir).replace(" :", ":")}  ·  ${jumlahHariKerja} hari kerja`, kolomTerakhir: KOL });
     kepalaTabel(ws, r, ["NO", "NAMA GURU", "TERJADWAL (JP)", "HADIR", "HTTM", "ST", "STT", "IT", "ITT", "TK", "HADIR (BOBOT)", "% HADIR"], { tinggi: 30 });
     r += 1;
     baris.forEach((b, i) => {
@@ -207,13 +214,12 @@ export async function bukuKehadiran({ ExcelJS, baris, total, pengaturan, awal, a
     selData(ws, r, 11, total.hadir, { fmt: "0.00", align: "center", bold: true, fill: true });
     selData(ws, r, 12, total.persen === null ? "" : total.persen / 100, { fmt: "0.00%", align: "center", bold: true, fill: true });
     r += 2;
-    ws.getCell(r, 1).value = `Bobot kehadiran: HTTM ${bobot.HTTM * 100}% · ST ${bobot.ST * 100}% · STT ${bobot.STT * 100}% · IT ${bobot.IT * 100}% · ITT ${bobot.ITT * 100}% · TK ${bobot.TK * 100}%.  % Hadir = (Hadir + jumlah berbobot) ÷ Terjadwal.`;
+    ws.getCell(r, 1).value = `Bobot kehadiran: HTTM ${bobot.HTTM * 100}% · ST ${bobot.ST * 100}% · STT ${bobot.STT * 100}% · IT ${bobot.IT * 100}% · ITT ${bobot.ITT * 100}% · TK ${bobot.TK * 100}%.  % Hadir = (Hadir + jumlah berbobot) ÷ Terjadwal.  ${catatan || ""}`;
     ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true }; ws.mergeCells(r, 1, r, KOL);
     r += 2;
     blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 10, kolomTerakhir: KOL });
     pengaturanCetak(ws, "portrait");
     ws.pageSetup.printTitlesRow = "6:6";
-    return wb;
 }
 
 // =========================================================

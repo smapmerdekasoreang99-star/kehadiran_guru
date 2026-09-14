@@ -1,9 +1,9 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914i";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914i";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914i";
-import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260914i";
-import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914i";
-import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260914i";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914k";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914k";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914k";
+import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260914k";
+import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914k";
+import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260914k";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -68,7 +68,7 @@ async function boot() {
     if (isSupabaseConfigured) {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jam }] =
             await Promise.all([
-                supabaseClient.from("v_guru_aktif").select("id, nama, mapel_utama, is_piket").order("nama"),
+                supabaseClient.from("v_guru").select("id, nama, mapel_utama, is_piket, status_aktif").order("nama"),
                 supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
                 supabaseClient.from("kg_mapel").select("id, nama_mapel, rumpun_mapel").order("nama_mapel"),
                 supabaseClient.from("kg_jam_pelajaran").select("*").order("jam_ke"),
@@ -84,7 +84,7 @@ async function boot() {
         state.jam = demoData.jam.filter((j) => j.keterangan !== "Tahsin");
     }
 
-    document.getElementById("fGuruPengganti").innerHTML = state.guru
+    document.getElementById("fGuruPengganti").innerHTML = daftarGuruAktif()
         .map((g) => `<option value="${g.id}">${g.nama}</option>`)
         .join("");
 
@@ -166,6 +166,18 @@ function pendampingUntuk(jadwal) {
         });
 }
 const urutKelas = (id) => indeksKelas(state.kelas)(id);
+
+// Status aktif dari view v_guru — toleran terhadap boolean maupun teks ("Aktif"/"Y"/1).
+// Bila kolomnya tidak ada (mode pratinjau), guru dianggap aktif.
+function guruAktif(g) {
+    const v = g?.status_aktif;
+    if (v === undefined || v === null) return true;
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v === 1;
+    return /^(aktif|active|y|ya|true|1)$/i.test(String(v).trim());
+}
+const daftarGuruAktif = () => state.guru.filter(guruAktif);
+
 const perluPengganti = (jadwal) => jadwal.jam_ke !== 8 && !MAPEL_WALI_KELAS.includes(jadwal.mapel_id);
 const namaKelas = (id) => state.kelas.find((k) => k.id === id)?.nama_kelas || id;
 const mapelById = (id) => state.mapel.find((m) => m.id === id);
@@ -263,12 +275,13 @@ function computeRecommendations(jadwal, mapel) {
         state.jadwal.filter((j) => j.jam_ke === jadwal.jam_ke).map((j) => j.guru_id)
     );
 
+    const idAktif = new Set(daftarGuruAktif().map((g) => g.id));
     const piketJamIni = state.piket
         .filter((p) => p.jam_ke === jadwal.jam_ke)
         .map((p) => p.guru_id)
-        .filter((id) => !busyGuruIds.has(id));
+        .filter((id) => !busyGuruIds.has(id) && idAktif.has(id));
 
-    const infaler = state.guru
+    const infaler = daftarGuruAktif()
         .filter(
             (g) =>
                 g.mapel_utama &&
@@ -279,7 +292,7 @@ function computeRecommendations(jadwal, mapel) {
         )
         .map((g) => g.id);
 
-    const serumpun = state.guru
+    const serumpun = daftarGuruAktif()
         .filter(
             (g) =>
                 mapel &&
@@ -347,7 +360,7 @@ function bukaFormPenugasan(ketidakhadiranId) {
 
     renderRecommendations(jadwal, mapel);
 
-    document.getElementById("fGuruPengganti").value = existing?.guru_pengganti_id || state.guru[0]?.id;
+    document.getElementById("fGuruPengganti").value = existing?.guru_pengganti_id || daftarGuruAktif()[0]?.id;
     document.getElementById("fStatus").value = existing ? existing.status_pengganti : "GT";
     document.getElementById("fCatatan").value = existing ? existing.catatan || "" : "";
     toggleGuruField();

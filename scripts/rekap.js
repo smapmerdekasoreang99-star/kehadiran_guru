@@ -1,10 +1,10 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914i";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914i";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914i";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260914i";
-import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260914i";
-import { bukuHonor, bukuKehadiran, bukuPengganti, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260914i";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914i";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914k";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914k";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914k";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260914k";
+import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260914k";
+import { bukuHonor, bukuKehadiran, bukuPengganti, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260914k";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914k";
 
 try { initLockUI(() => { renderLibur(); renderPengaturan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
@@ -63,7 +63,7 @@ async function boot() {
 
     if (isSupabaseConfigured) {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jadwal, error: eJ }] = await Promise.all([
-            supabaseClient.from("v_guru_aktif").select("id, nama").order("nama"),
+            supabaseClient.from("v_guru").select("id, nama").order("nama"),
             supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
             supabaseClient.from("kg_mapel").select("id, nama_mapel"),
             supabaseClient.from("kg_jadwal_kbm").select("id, hari, jam_ke, kelas_id, mapel_id, guru_id"),

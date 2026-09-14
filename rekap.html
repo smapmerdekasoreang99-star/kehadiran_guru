@@ -6,7 +6,7 @@
 <title>Rekap — Guru Pengganti SMA Plus Merdeka Soreang</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20260914h" />
+<link rel="stylesheet" href="assets/style.css?v=20260914i" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 </head>
@@ -54,6 +54,7 @@
 
     <div class="rekap-tabs">
       <button type="button" class="rekap-tab active" data-tab="kehadiran">Kehadiran Guru</button>
+      <button type="button" class="rekap-tab" data-tab="wali">Tugas Wali Kelas</button>
       <button type="button" class="rekap-tab" data-tab="pengganti">Guru Pengganti</button>
       <button type="button" class="rekap-tab" data-tab="honor">Honor Pengganti</button>
       <button type="button" class="rekap-tab" data-tab="libur">Hari Libur</button>
@@ -93,9 +94,22 @@
           <tfoot id="footKehadiran"></tfoot>
         </table>
       </div>
-      <div class="table-foot">Bobot kehadiran per status: HTTM 100% · ST 20% · STT 15% · IT 10% · ITT 5% · TK 0%. % Hadir = (Hadir tatap muka + jumlah berbobot) ÷ Terjadwal. Sabtu–Minggu dan tanggal di tab Hari Libur tidak dihitung sebagai hari kerja. <strong>Upacara dan Bimbingan Wali Kelas (Senin jam 1–2) tidak termasuk</strong> — direkap terpisah di bawah.</div>
+      <div class="table-foot">Bobot kehadiran per status: HTTM 100% · ST 20% · STT 15% · IT 10% · ITT 5% · TK 0%. % Hadir = (Hadir tatap muka + jumlah berbobot) ÷ Terjadwal. Sabtu–Minggu dan tanggal di tab Hari Libur tidak dihitung sebagai hari kerja. <strong>Upacara dan Bimbingan Wali Kelas (Senin jam 1–2) tidak termasuk</strong> — lihat tab Tugas Wali Kelas.</div>
 
-      <div class="toolbar toolbar-days"><strong>Tugas Wali Kelas</strong>&nbsp;<span class="tugas-note">— Upacara &amp; Bimbingan Wali Kelas, Senin jam 1–2 (direkap terpisah dari jam mengajar)</span></div>
+    </section>
+
+    <!-- TAB: Tugas Wali Kelas -->
+    <section id="tab-wali" class="card" hidden>
+      <div class="toolbar">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="12.8" y1="12.8" x2="17" y2="17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input id="cariWali" type="search" placeholder="Saring nama wali kelas…" autocomplete="off" />
+        </div>
+        <div class="toolbar-actions">
+          <span id="ringkasWali" class="tugas-note"></span>
+          <button type="button" id="xlsWali" class="btn btn-primary">⬇ Unduh Excel</button>
+        </div>
+      </div>
       <div class="table-scroll">
         <table class="tabel-rekap">
           <thead>
@@ -109,9 +123,10 @@
           <tfoot id="footWali"></tfoot>
         </table>
       </div>
+      <div class="table-foot">Upacara &amp; Bimbingan Wali Kelas, Senin jam 1–2 — direkap terpisah dari jam mengajar. Bobot dan rumus % Hadir sama dengan rekap kehadiran.</div>
     </section>
 
-    <!-- TAB: Pengganti -->
+    <!-- TAB: Guru Pengganti -->
     <section id="tab-pengganti" class="card" hidden>
       <div class="toolbar">
         <div class="day-tabs">
@@ -247,6 +262,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/rekap.js?v=20260914h"></script>
+<script type="module" src="scripts/rekap.js?v=20260914i"></script>
 </body>
 </html>

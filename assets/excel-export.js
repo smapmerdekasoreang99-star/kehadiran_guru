@@ -185,10 +185,10 @@ export async function bukuHonor({ ExcelJS, baris, tarif, pengaturan, awal, akhir
 // 2. REKAP KEHADIRAN GURU
 // =========================================================
 // baris: [{ nama, terjadwal, hadirTM, HTTM, ST, STT, IT, ITT, TK, hadir, persen }]
-export async function bukuKehadiran({ ExcelJS, baris, total, wali, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64 }) {
+export async function bukuKehadiran({ ExcelJS, baris, total, wali, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64, judul, namaSheet, catatan }) {
     const wb = new ExcelJS.Workbook();
-    tulisSheetKehadiran(wb, "Kehadiran Guru", "REKAPITULASI KEHADIRAN GURU (JAM MENGAJAR)", baris, total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64,
-        catatan: "Upacara dan Bimbingan Wali Kelas (Senin jam 1-2) tidak termasuk; lihat sheet Tugas Wali Kelas." });
+    tulisSheetKehadiran(wb, namaSheet || "Kehadiran Guru", judul || "REKAPITULASI KEHADIRAN GURU (JAM MENGAJAR)", baris, total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64,
+        catatan: catatan ?? "Upacara dan Bimbingan Wali Kelas (Senin jam 1-2) tidak termasuk; direkap terpisah." });
     if (wali) tulisSheetKehadiran(wb, "Tugas Wali Kelas", "REKAPITULASI KEHADIRAN TUGAS WALI KELAS", wali.baris, wali.total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64,
         catatan: "Upacara & Bimbingan Wali Kelas, Senin jam 1-2." });
     return wb;

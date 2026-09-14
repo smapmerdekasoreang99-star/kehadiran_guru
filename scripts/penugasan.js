@@ -1,9 +1,9 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914h";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914h";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914h";
-import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260914h";
-import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914h";
-import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260914h";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914i";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914i";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914i";
+import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260914i";
+import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914i";
+import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260914i";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.

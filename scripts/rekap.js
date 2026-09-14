@@ -1,10 +1,10 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914h";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914h";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914h";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260914h";
-import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260914h";
-import { bukuHonor, bukuKehadiran, bukuPengganti, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260914h";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914h";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914i";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914i";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914i";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260914i";
+import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260914i";
+import { bukuHonor, bukuKehadiran, bukuPengganti, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260914i";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914i";
 
 try { initLockUI(() => { renderLibur(); renderPengaturan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
@@ -31,7 +31,7 @@ let state = {
     guru: [], kelas: [], mapel: [], jadwal: [], libur: [],
     ketidakhadiran: [], penugasan: [],
     hasilKehadiran: null, hasilWali: null, hasilPengganti: null, jamWaliDikecualikan: 0,
-    saring: "", viewPengganti: "ringkas",
+    saring: "", saringWali: "", viewPengganti: "ringkas",
     pengaturan: null,
 };
 
@@ -182,7 +182,7 @@ function renderKehadiran() {
 }
 
 function barisWaliTersaring() {
-    const q = state.saring.trim().toLowerCase();
+    const q = state.saringWali.trim().toLowerCase();
     return (state.hasilWali?.baris || []).map((r) => ({ ...r, nama: namaGuru(r.guru_id) }))
         .filter((r) => !q || r.nama.toLowerCase().includes(q)).sort((a, b) => a.nama.localeCompare(b.nama));
 }
@@ -194,6 +194,7 @@ function renderWali() {
       <tr><td>${r.nama}</td>${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.STT)}${num(r.IT)}${num(r.ITT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}</tr>`).join("")
       || `<tr><td colspan="11" class="empty-state">Tidak ada jam tugas wali kelas pada rentang ini.</td></tr>`;
     const t = w.total;
+    document.getElementById("ringkasWali").textContent = `${w.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
     document.getElementById("footWali").innerHTML = `<tr class="total"><td>Total (${w.baris.length} wali kelas)</td>${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.STT)}${num(t.IT)}${num(t.ITT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
 }
 
@@ -285,8 +286,13 @@ const bungkus = (fn) => async () => { try { await fn(); } catch (err) { laporErr
 
 const xlsKehadiran = bungkus(async () => {
     const h = state.hasilKehadiran; if (!h) return;
-    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisKehadiranTersaring(), total: h.total, wali: { baris: barisWaliTersaring(), total: state.hasilWali.total }, pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
+    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisKehadiranTersaring(), total: h.total, wali: null, pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Kehadiran Guru ${state.awal} sd ${state.akhir}.xlsx`);
+});
+const xlsWali = bungkus(async () => {
+    const w = state.hasilWali; if (!w) return;
+    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisWaliTersaring(), total: w.total, wali: null, judul: "REKAPITULASI KEHADIRAN TUGAS WALI KELAS", namaSheet: "Tugas Wali Kelas", catatan: "Upacara & Bimbingan Wali Kelas, Senin jam 1-2 (terpisah dari jam mengajar).", pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, jumlahHariKerja: w.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
+    await unduhWorkbook(wb, `Rekap Tugas Wali Kelas ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsPengganti = bungkus(async () => {
     const h = state.hasilPengganti; if (!h) return;
@@ -307,7 +313,7 @@ try {
     document.getElementById("rekapBtn").addEventListener("click", hitung);
     document.querySelectorAll(".rekap-tab").forEach((b) => b.addEventListener("click", () => {
         document.querySelectorAll(".rekap-tab").forEach((x) => x.classList.toggle("active", x === b));
-        for (const t of ["kehadiran", "pengganti", "honor", "libur", "pengaturan"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
+        for (const t of ["kehadiran", "wali", "pengganti", "honor", "libur", "pengaturan"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
     }));
     document.querySelectorAll("#tab-pengganti .day-tabs button").forEach((b) => b.addEventListener("click", () => {
         state.viewPengganti = b.dataset.view;
@@ -317,6 +323,8 @@ try {
     document.getElementById("cariKehadiran").addEventListener("input", (e) => { state.saring = e.target.value; renderKehadiran(); });
     document.getElementById("xlsKehadiran").addEventListener("click", xlsKehadiran);
     document.getElementById("xlsPengganti").addEventListener("click", xlsPengganti);
+    document.getElementById("xlsWali").addEventListener("click", xlsWali);
+    document.getElementById("cariWali").addEventListener("input", (e) => { state.saringWali = e.target.value; renderWali(); });
     document.getElementById("xlsHonor").addEventListener("click", xlsHonor);
     document.getElementById("pengaturanSimpan").addEventListener("click", simpanPengaturan);
     document.getElementById("liburTambah").addEventListener("click", tambahLibur);

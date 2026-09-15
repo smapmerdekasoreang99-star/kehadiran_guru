@@ -1,10 +1,10 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914k";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914k";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914k";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260914k";
-import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260914k";
-import { bukuHonor, bukuKehadiran, bukuPengganti, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260914k";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914k";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914m";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914m";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914m";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260914m";
+import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260914m";
+import { bukuHonor, bukuKehadiran, bukuPengganti, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260914m";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914m";
 
 try { initLockUI(() => { renderLibur(); renderPengaturan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
@@ -66,10 +66,19 @@ async function boot() {
             supabaseClient.from("v_guru").select("id, nama").order("nama"),
             supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
             supabaseClient.from("kg_mapel").select("id, nama_mapel"),
-            supabaseClient.from("kg_jadwal_kbm").select("id, hari, jam_ke, kelas_id, mapel_id, guru_id"),
+            supabaseClient.from("kg_jadwal_kbm").select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id").range(0, 999),
         ]);
         if (eJ) { laporError("Gagal memuat jadwal", eJ); return; }
-        state.guru = guru || []; state.kelas = urutkanKelas(kelas || []); state.mapel = mapel || []; state.jadwal = jadwal || [];
+        state.guru = guru || []; state.kelas = urutkanKelas(kelas || []); state.mapel = mapel || [];
+        // ambil sisa baris di atas batas 1.000
+        state.jadwal = jadwal || [];
+        for (let mulai = 1000; state.jadwal.length === mulai; mulai += 1000) {
+            const { data, error } = await supabaseClient.from("kg_jadwal_kbm")
+                .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id").range(mulai, mulai + 999);
+            if (error) { laporError("Gagal memuat sisa jadwal", error); break; }
+            state.jadwal = state.jadwal.concat(data || []);
+            if (!data || data.length < 1000) break;
+        }
         await muatLibur();
         await muatPengaturan();
     } else {

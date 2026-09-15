@@ -1,7 +1,7 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914k";
-import { demoData } from "../assets/demo-data.js?v=20260914k";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914k";
-import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260914k";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914m";
+import { demoData } from "../assets/demo-data.js?v=20260914m";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914m";
+import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260914m";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -111,12 +111,22 @@ function renderDayTabs() {
 // ---------- Data loading (seluruh minggu, sekali) ----------
 async function loadJadwal() {
     if (isSupabaseConfigured) {
-        const { data, error } = await supabaseClient
-            .from("kg_jadwal_kbm")
-            .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id")
-            .order("jam_ke");
-        if (error) { laporError("Gagal memuat jadwal", error); return; }
-        state.semua = data;
+        // Supabase membatasi 1.000 baris per permintaan, sedangkan jadwal seminggu
+        // melebihi itu — jadi diambil bertahap sampai habis.
+        const UKURAN = 1000;
+        let semua = [], mulai = 0;
+        for (;;) {
+            const { data, error } = await supabaseClient
+                .from("kg_jadwal_kbm")
+                .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id")
+                .order("id")
+                .range(mulai, mulai + UKURAN - 1);
+            if (error) { laporError("Gagal memuat jadwal", error); return; }
+            semua = semua.concat(data || []);
+            if (!data || data.length < UKURAN) break;
+            mulai += UKURAN;
+        }
+        state.semua = semua;
     } else {
         state.semua = demoData.jadwal;
     }
@@ -165,7 +175,12 @@ function filteredRows() {
 function renderBanner(rows) {
     const banner = document.getElementById("cariBanner");
     const f = state.filter;
-    if (!modeCari()) { banner.hidden = true; return; }
+    if (!modeCari()) {
+        banner.hidden = true;
+        document.getElementById("bannerNama").textContent = "";
+        document.getElementById("bannerInfo").textContent = "";
+        return;
+    }
     const nama = f.guruId ? namaGuru(f.guruId) : namaMapel(f.mapelId);
     const semuaBaris = state.semua.filter((r) => (f.guruId ? r.guru_id === f.guruId : r.mapel_id === f.mapelId));
     const kelasSet = new Set(semuaBaris.map((r) => r.kelas_id));

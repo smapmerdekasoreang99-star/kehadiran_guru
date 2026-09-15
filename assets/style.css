@@ -25,6 +25,10 @@
 
 * { box-sizing: border-box; }
 
+/* Atribut hidden harus selalu menang atas aturan display di kelas mana pun
+   (mis. .guru-banner{display:flex}), supaya elemen yang disembunyikan benar-benar hilang. */
+[hidden] { display: none !important; }
+
 html, body {
     margin: 0;
     padding: 0;
@@ -503,7 +507,6 @@ textarea {
     z-index: 20;
 }
 
-.modal-backdrop[hidden] { display: none; }
 
 .modal {
     background: var(--surface);
@@ -557,7 +560,8 @@ textarea {
 }
 
 /* ---------- Pencarian guru (halaman Ketidakhadiran) ---------- */
-.toolbar { position: relative; z-index: 5; }
+.toolbar { position: relative; z-index: 20; }
+.toolbar-days { position: relative; z-index: 1; }  /* di bawah kotak saran pencarian */
 
 .search-box {
     position: relative;
@@ -763,3 +767,7 @@ textarea {
 .pengaturan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 20px; }
 .pengaturan-blok h3 { font-size: 15px; margin-bottom: 12px; }
 @media (max-width: 800px) { .pengaturan-grid { grid-template-columns: 1fr; } }
+
+/* kepala tabel tetap terlihat saat menggulir daftar panjang */
+.table-scroll { max-height: 70vh; overflow-y: auto; }
+.tabel-rekap thead th, table thead th { position: sticky; top: 0; z-index: 2; }

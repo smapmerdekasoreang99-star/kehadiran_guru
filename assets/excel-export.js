@@ -275,3 +275,140 @@ export async function unduhWorkbook(wb, namaFile) {
 }
 
 export { ambilLogoBase64 };
+
+// =========================================================
+// HONOR / GAJI GURU (mengajar) — tata letak mengikuti format sekolah
+// =========================================================
+export async function bukuHonorMengajar({ ExcelJS, baris, total, tarif, pengaturan, awal, akhir, logoBase64 }) {
+    const FONT2 = '"Public Sans", Arial, sans-serif';
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Honor Mengajar");
+    const KOL = 13; // A..M
+    ws.columns = [
+        { width: 5 },   // NO
+        { width: 32 },  // Nama
+        { width: 9 },   // Masa kerja
+        { width: 8 },   // Jam
+        { width: 12 },  // Tarif/jam
+        { width: 15 },  // Honor mengajar
+        { width: 16 },  // Transport berdiri
+        { width: 8 },   // Jam TM
+        { width: 15 },  // Insentif TM
+        { width: 7 },   // Hari
+        { width: 15 },  // Konsumsi
+        { width: 17 },  // Jumlah
+        { width: 20 },  // Tanda tangan
+    ];
+
+    let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan,
+        judul: "HONOR / GAJI GURU", sub: `TAHUN PELAJARAN ${pengaturan.tahun_ajaran}`, kolomTerakhir: KOL });
+    ws.getCell(r, 10).value = labelPeriode(awal, akhir);
+    ws.getCell(r, 10).font = { name: FONT, size: 10, bold: true };
+    ws.mergeCells(r, 10, r, KOL);
+    r += 1;
+
+    // kepala tabel dua tingkat
+    const t0 = r, t1 = r + 1;
+    const judulKolom = [
+        [1, "NO"], [2, "NAMA GURU"], [3, "MASA KERJA"], [4, "JUMLAH JAM"], [5, "STANDAR HONOR / JAM"],
+        [12, "JUMLAH PENERIMAAN"], [13, "TANDA TANGAN"],
+    ];
+    for (const [c, t] of judulKolom) {
+        ws.mergeCells(t0, c, t1, c);
+        const cell = ws.getCell(t0, c);
+        cell.value = t; cell.font = { name: FONT, size: 10, bold: true };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = BORDER; cell.fill = HEAD_FILL;
+    }
+    const grup = [[6, 7, "NOMINAL"], [8, 9, "TATAP MUKA"], [10, 11, "KEDATANGAN"]];
+    for (const [a, b, t] of grup) {
+        ws.mergeCells(t0, a, t0, b);
+        const cell = ws.getCell(t0, a);
+        cell.value = t; cell.font = { name: FONT, size: 10, bold: true };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = BORDER; cell.fill = HEAD_FILL;
+    }
+    const sub = [[6, "Honor Mengajar"], [7, "Transport Berdiri"], [8, "Jam"], [9, "Insentif"], [10, "Hari"], [11, "Konsumsi"]];
+    for (const [c, t] of sub) {
+        const cell = ws.getCell(t1, c);
+        cell.value = t; cell.font = { name: FONT, size: 9.5, bold: true };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = BORDER; cell.fill = HEAD_FILL;
+    }
+    ws.getRow(t0).height = 20; ws.getRow(t1).height = 30;
+    r = t1 + 1;
+
+    const RP = '"Rp" #,##0';
+    baris.forEach((b, i) => {
+        selData(ws, r, 1, i + 1, { align: "center" });
+        selData(ws, r, 2, b.nama);
+        selData(ws, r, 3, b.masaKerja === null ? "—" : b.masaKerja, { align: "center" });
+        selData(ws, r, 4, b.jam, { align: "center" });
+        if (b.jamTambahan) ws.getCell(r, 4).note = `Termasuk ${b.jamTambahan} jam tugas tambahan${b.ketTambahan ? ": " + b.ketTambahan : ""}`;
+        selData(ws, r, 5, b.tarifJam, { fmt: "#,##0" });
+        selData(ws, r, 6, b.honorGuru, { fmt: "#,##0" });
+        selData(ws, r, 7, b.transport, { fmt: "#,##0" });
+        selData(ws, r, 8, b.jamTM, { align: "center" });
+        selData(ws, r, 9, b.insentif, { fmt: "#,##0" });
+        selData(ws, r, 10, b.hariDatang, { align: "center" });
+        selData(ws, r, 11, b.konsumsi, { fmt: "#,##0" });
+        selData(ws, r, 12, b.jumlah, { fmt: RP, bold: true });
+        selData(ws, r, 13, `${i + 1}. ……………………`, { align: "left" });
+        ws.getRow(r).height = 30;
+        r += 1;
+    });
+
+    selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 3);
+    selData(ws, r, 4, total.jam, { bold: true, align: "center", fill: true });
+    selData(ws, r, 5, "", { fill: true });
+    selData(ws, r, 6, total.honorGuru, { fmt: RP, bold: true, fill: true });
+    selData(ws, r, 7, total.transport, { fmt: RP, bold: true, fill: true });
+    selData(ws, r, 8, total.jamTM, { bold: true, align: "center", fill: true });
+    selData(ws, r, 9, total.insentif, { fmt: RP, bold: true, fill: true });
+    selData(ws, r, 10, total.hariDatang, { bold: true, align: "center", fill: true });
+    selData(ws, r, 11, total.konsumsi, { fmt: RP, bold: true, fill: true });
+    selData(ws, r, 12, total.jumlah, { fmt: RP, bold: true, fill: true });
+    selData(ws, r, 13, "", { fill: true });
+    r += 1;
+
+    selData(ws, r, 1, "Terbilang:", { bold: true }); ws.mergeCells(r, 1, r, 3);
+    selData(ws, r, 4, terbilang(total.jumlah), { wrap: true }); ws.mergeCells(r, 4, r, KOL);
+    ws.getCell(r, 4).font = { name: FONT, size: 10, italic: true };
+    ws.getRow(r).height = 22;
+    r += 2;
+
+    // tanda tangan: Setuju dibayar (Kepsek) - Lunas dibayar (Bendahara)
+    const set = (row, col, v, bold = false, underline = false) => {
+        const c = ws.getCell(row, col); c.value = v;
+        c.font = { name: FONT, size: 10, bold, underline };
+        c.alignment = { horizontal: "center" };
+    };
+    set(r, 2, "Setuju dibayar :"); set(r, 11, "Lunas dibayar :");
+    set(r + 1, 11, `${pengaturan.tempat}, ${tglIndo(akhir)}`);
+    set(r + 2, 2, "Kepala Sekolah,"); set(r + 2, 11, "Bendahara,");
+    set(r + 7, 2, pengaturan.kepala_sekolah, true, true);
+    set(r + 7, 11, pengaturan.bendahara, true, true);
+    r += 9;
+
+    // keterangan tarif
+    ws.getCell(r, 2).value = "Keterangan tarif:";
+    ws.getCell(r, 2).font = { name: FONT, size: 9, bold: true };
+    const ket = [
+        ["Transport Berdiri", `${tarif.transport_berdiri.toLocaleString("id-ID")} / jam mengajar`],
+        ["Insentif Tatap Muka", `${tarif.insentif_tm.toLocaleString("id-ID")} / jam tatap muka`],
+        ["Konsumsi Kedatangan", `${tarif.konsumsi.toLocaleString("id-ID")} / hari kedatangan`],
+        ["Honor Mengajar", "menurut masa kerja: " + tarif.masaKerja.map((b) => `${b.min}-${b.max > 900 ? "dst" : b.max} th Rp${b.tarif.toLocaleString("id-ID")}`).join("  ·  ")],
+    ];
+    ket.forEach(([k, v], i) => {
+        ws.getCell(r + 1 + i, 2).value = k;
+        ws.getCell(r + 1 + i, 2).font = { name: FONT, size: 9 };
+        ws.getCell(r + 1 + i, 4).value = ": Rp " + v;
+        ws.getCell(r + 1 + i, 4).font = { name: FONT, size: 9 };
+        ws.mergeCells(r + 1 + i, 4, r + 1 + i, KOL);
+        ws.getCell(r + 1 + i, 4).alignment = { horizontal: "left" };
+    });
+
+    pengaturanCetak(ws, "landscape");
+    ws.pageSetup.printTitlesRow = `${t0}:${t1}`;
+    return wb;
+}

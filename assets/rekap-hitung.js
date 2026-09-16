@@ -115,3 +115,122 @@ export function keCSV(header, rows) {
     const esc = (v) => { const s = v === null || v === undefined ? "" : String(v); return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     return "\uFEFF" + [header, ...rows].map((r) => r.map(esc).join(";")).join("\r\n");
 }
+
+// =========================================================
+// HONOR MENGAJAR (mengacu dokumen Pembiayaan Tendik)
+// 4 komponen:
+//   1. Honor Mengajar      : tarif menurut masa kerja x jam mengajar (kontrak per minggu)
+//   2. Transport Berdiri   : tarif tetap x jam mengajar (kontrak per minggu)
+//   3. Insentif Tatap Muka : tarif tetap x jam hadir tatap muka (dari rekap kehadiran)
+//   4. Konsumsi Kedatangan : tarif tetap x hari kedatangan
+// =========================================================
+
+// Tarif honor per jam menurut masa kerja (tahun). Nilai bawaan dokumen pembiayaan.
+export const TARIF_MASA_KERJA_DEFAULT = [
+    { min: 0,  max: 1,    tarif: 20000 },
+    { min: 2,  max: 4,    tarif: 21000 },
+    { min: 5,  max: 7,    tarif: 22000 },
+    { min: 8,  max: 10,   tarif: 23000 },
+    { min: 11, max: 13,   tarif: 24000 },
+    { min: 14, max: 16,   tarif: 25000 },
+    { min: 17, max: 19,   tarif: 26000 },
+    { min: 20, max: 22,   tarif: 27000 },
+    { min: 23, max: 25,   tarif: 28000 },
+    { min: 26, max: 999,  tarif: 29000 },
+];
+
+export function tarifMenurutMasaKerja(tahun, daftar = TARIF_MASA_KERJA_DEFAULT) {
+    if (tahun === null || tahun === undefined) return null;
+    const b = daftar.find((x) => tahun >= x.min && tahun <= x.max);
+    return b ? b.tarif : null;
+}
+
+// Masa kerja penuh (tahun) dari tanggal mulai sampai tanggal akhir periode
+export function masaKerjaTahun(tmt, sampai) {
+    if (!tmt) return null;
+    const a = new Date(tmt + "T00:00:00"), b = new Date(sampai + "T00:00:00");
+    if (isNaN(a)) return null;
+    let th = b.getFullYear() - a.getFullYear();
+    const blm = b.getMonth() < a.getMonth() || (b.getMonth() === a.getMonth() && b.getDate() < a.getDate());
+    if (blm) th -= 1;
+    return Math.max(0, th);
+}
+
+// Hari kedatangan per guru: hari kerja yang guru punya jadwal DAN paling sedikit
+// satu jamnya benar-benar hadir tatap muka. Seluruh jam berstatus apa pun
+// (termasuk HTTM) berarti hari itu tidak dihitung sebagai hari kedatangan.
+export function hitungHariKedatangan({ jadwal, ketidakhadiran, awal, akhir, liburSet }) {
+    const hari = hariKerja(awal, akhir, liburSet);
+    const absen = new Map(); // "guru|tanggal" -> jumlah jam tanpa tatap muka
+    for (const k of ketidakhadiran) {
+        const key = `${k.guru_id}|${k.tanggal}`;
+        absen.set(key, (absen.get(key) || 0) + 1);
+    }
+    const jadwalPerHari = new Map(); // "guru|Hari" -> jumlah jam
+    for (const j of jadwal) {
+        const key = `${j.guru_id}|${j.hari}`;
+        jadwalPerHari.set(key, (jadwalPerHari.get(key) || 0) + 1);
+    }
+    const hasil = new Map();
+    for (const h of hari) {
+        for (const [key, jumlahJam] of jadwalPerHari) {
+            const [gid, namaHari] = key.split("|");
+            if (namaHari !== h.hari) continue;
+            const tanpaTatapMuka = absen.get(`${gid}|${h.tanggal}`) || 0;
+            if (tanpaTatapMuka < jumlahJam) hasil.set(gid, (hasil.get(gid) || 0) + 1);
+        }
+    }
+    return hasil; // Map guru_id -> jumlah hari
+}
+
+// Jam mengajar kontrak per minggu (jumlah baris jadwal mingguan per guru)
+export function jamKontrakPerMinggu(jadwal) {
+    const m = new Map();
+    for (const j of jadwal) m.set(j.guru_id, (m.get(j.guru_id) || 0) + 1);
+    return m;
+}
+
+// tarif: { masaKerja: [...], transport_berdiri, insentif_tm, konsumsi }
+// barisKehadiran: hasil rekapKehadiran (untuk jam hadir tatap muka)
+// jamTambahan: [{ guru_id, jam, keterangan }] — tugas tambahan di luar jadwal KBM
+export function rekapHonorMengajar({ jadwal, ketidakhadiran, barisKehadiran, guruList, awal, akhir, liburSet, tarif, jamTambahan = [] }) {
+    const jamKontrak = jamKontrakPerMinggu(jadwal);
+    for (const t of jamTambahan) {
+        const n = Number(t.jam) || 0;
+        if (n) jamKontrak.set(t.guru_id, (jamKontrak.get(t.guru_id) || 0) + n);
+    }
+    const tambahanMap = new Map(jamTambahan.map((t) => [t.guru_id, t]));
+    const hariDatang = hitungHariKedatangan({ jadwal, ketidakhadiran, awal, akhir, liburSet });
+    const hadirMap = new Map(barisKehadiran.map((b) => [b.guru_id, b]));
+
+    const baris = [];
+    for (const [gid, jam] of jamKontrak) {
+        const g = guruList.find((x) => x.id === gid);
+        const masaKerja = masaKerjaTahun(g?.tmt_sekolah, akhir);
+        const tarifJam = tarifMenurutMasaKerja(masaKerja, tarif.masaKerja) ?? 0;
+        const hadirTM = hadirMap.get(gid)?.hadirTM ?? 0;
+        const hari = hariDatang.get(gid) || 0;
+
+        const honorGuru  = jam * tarifJam;
+        const transport  = jam * tarif.transport_berdiri;
+        const insentif   = hadirTM * tarif.insentif_tm;
+        const konsumsi   = hari * tarif.konsumsi;
+        const tmb = tambahanMap.get(gid);
+        baris.push({
+            guru_id: gid, nama: g?.nama || gid,
+            masaKerja, jam, tarifJam,
+            jamTambahan: Number(tmb?.jam) || 0,
+            ketTambahan: tmb?.keterangan || "",
+            honorGuru, transport,
+            jamTM: hadirTM, insentif,
+            hariDatang: hari, konsumsi,
+            jumlah: honorGuru + transport + insentif + konsumsi,
+        });
+    }
+    baris.sort((a, b) => (b.masaKerja ?? -1) - (a.masaKerja ?? -1) || a.nama.localeCompare(b.nama));
+    const total = baris.reduce((t, r) => {
+        for (const k of ["jam", "honorGuru", "transport", "jamTM", "insentif", "hariDatang", "konsumsi", "jumlah"]) t[k] += r[k];
+        return t;
+    }, { jam: 0, honorGuru: 0, transport: 0, jamTM: 0, insentif: 0, hariDatang: 0, konsumsi: 0, jumlah: 0 });
+    return { baris, total };
+}

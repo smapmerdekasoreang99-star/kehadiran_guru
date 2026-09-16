@@ -1,12 +1,12 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260914m";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260914m";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260914m";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260914m";
-import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260914m";
-import { bukuHonor, bukuKehadiran, bukuPengganti, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260914m";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260914m";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916b";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916b";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916b";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260916b";
+import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas, rekapHonorMengajar, TARIF_MASA_KERJA_DEFAULT } from "../assets/rekap-hitung.js?v=20260916b";
+import { bukuHonor, bukuKehadiran, bukuPengganti, bukuHonorMengajar, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260916b";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260916b";
 
-try { initLockUI(() => { renderLibur(); renderPengaturan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
+try { initLockUI(() => { renderLibur(); renderPengaturan(); renderTambahan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
 function laporError(konteks, error) {
     console.error(konteks, error);
@@ -25,13 +25,15 @@ const HARI_FROM_JS_DAY = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat",
 
 // Penyimpanan hari libur di mode pratinjau
 const demoLibur = [];
+const demoTambahan = [];
 
 let state = {
     awal: "", akhir: "",
     guru: [], kelas: [], mapel: [], jadwal: [], libur: [],
     ketidakhadiran: [], penugasan: [],
     hasilKehadiran: null, hasilWali: null, hasilPengganti: null, jamWaliDikecualikan: 0,
-    saring: "", saringWali: "", viewPengganti: "ringkas",
+    saring: "", saringWali: "", saringHM: "", viewPengganti: "ringkas",
+    hasilHonorMengajar: null, jamTambahan: [],
     pengaturan: null,
 };
 
@@ -39,9 +41,24 @@ const PENGATURAN_DEFAULT = {
     tarif_PT: "6000", tarif_GT: "9000", tarif_Inf: "12000",
     nama_sekolah: 'SMA Plus "Merdeka" Soreang', alamat_sekolah: "Jl. Citaliktik-Sindang Wargi Soreang Kab. Bandung",
     tahun_ajaran: "2026/2027", tempat: "Soreang", kepala_sekolah: "", bendahara: "",
+    transport_berdiri: "40000", insentif_tm: "2000", konsumsi: "16000",
+    tarif_mk_0: "20000", tarif_mk_2: "21000", tarif_mk_5: "22000", tarif_mk_8: "23000", tarif_mk_11: "24000",
+    tarif_mk_14: "25000", tarif_mk_17: "26000", tarif_mk_20: "27000", tarif_mk_23: "28000", tarif_mk_26: "29000",
 };
-const FIELD_PENGATURAN = { tarif_PT: "pTarifPT", tarif_GT: "pTarifGT", tarif_Inf: "pTarifInf", nama_sekolah: "pNamaSekolah", alamat_sekolah: "pAlamat", tahun_ajaran: "pTahunAjaran", tempat: "pTempat", kepala_sekolah: "pKepsek", bendahara: "pBendahara" };
+const FIELD_PENGATURAN = { tarif_PT: "pTarifPT", tarif_GT: "pTarifGT", tarif_Inf: "pTarifInf", nama_sekolah: "pNamaSekolah", alamat_sekolah: "pAlamat", tahun_ajaran: "pTahunAjaran", tempat: "pTempat", kepala_sekolah: "pKepsek", bendahara: "pBendahara",
+    transport_berdiri: "pTransportBerdiri", insentif_tm: "pInsentifTM", konsumsi: "pKonsumsi",
+    tarif_mk_0: "pTarifMK0", tarif_mk_2: "pTarifMK2", tarif_mk_5: "pTarifMK5", tarif_mk_8: "pTarifMK8", tarif_mk_11: "pTarifMK11",
+    tarif_mk_14: "pTarifMK14", tarif_mk_17: "pTarifMK17", tarif_mk_20: "pTarifMK20", tarif_mk_23: "pTarifMK23", tarif_mk_26: "pTarifMK26" };
 const demoPengaturan = { ...PENGATURAN_DEFAULT, kepala_sekolah: "Mohamad Gunawan, S.Si.", bendahara: "Dra. Ida Susana" };
+const tarifMengajar = () => {
+    const n = (k, d) => Number(state.pengaturan?.[k] ?? d) || 0;
+    return {
+        transport_berdiri: n("transport_berdiri", 40000),
+        insentif_tm: n("insentif_tm", 2000),
+        konsumsi: n("konsumsi", 16000),
+        masaKerja: TARIF_MASA_KERJA_DEFAULT.map((b) => ({ ...b, tarif: n("tarif_mk_" + b.min, b.tarif) })),
+    };
+};
 const tarif = () => ({ PT: Number(state.pengaturan.tarif_PT) || 0, GT: Number(state.pengaturan.tarif_GT) || 0, Inf: Number(state.pengaturan.tarif_Inf) || 0 });
 
 const namaGuru = (id) => state.guru.find((g) => g.id === id)?.nama || id;
@@ -63,7 +80,7 @@ async function boot() {
 
     if (isSupabaseConfigured) {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jadwal, error: eJ }] = await Promise.all([
-            supabaseClient.from("v_guru").select("id, nama").order("nama"),
+            supabaseClient.from("v_guru").select("id, nama, tmt_sekolah").order("nama"),
             supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
             supabaseClient.from("kg_mapel").select("id, nama_mapel"),
             supabaseClient.from("kg_jadwal_kbm").select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id").range(0, 999),
@@ -81,11 +98,12 @@ async function boot() {
         }
         await muatLibur();
         await muatPengaturan();
+        await muatTambahan();
     } else {
         state.guru = demoData.guru; state.kelas = urutkanKelas(demoData.kelas); state.mapel = demoData.mapel; state.jadwal = demoData.jadwal;
-        state.libur = demoLibur; state.pengaturan = { ...demoPengaturan };
+        state.libur = demoLibur; state.pengaturan = { ...demoPengaturan }; state.jamTambahan = demoTambahan;
     }
-    renderLibur(); renderPengaturan();
+    renderLibur(); renderPengaturan(); renderTambahan();
     await hitung();
 }
 
@@ -104,6 +122,56 @@ async function muatPengaturan() {
     const { data, error } = await supabaseClient.from("kg_pengaturan").select("kunci, nilai");
     if (error) { laporError("Tabel kg_pengaturan belum ada — jalankan migrasi_pengaturan.sql (sementara memakai tarif & identitas bawaan)", error); return; }
     for (const r of data || []) state.pengaturan[r.kunci] = r.nilai;
+}
+
+async function muatTambahan() {
+    const { data, error } = await supabaseClient.from("kg_jam_tambahan").select("guru_id, jam, keterangan");
+    if (error) { laporError("Tabel kg_jam_tambahan belum ada — jalankan migrasi_jam_tambahan.sql (sementara jam tambahan dianggap kosong)", error); state.jamTambahan = []; return; }
+    state.jamTambahan = data || [];
+}
+
+function renderTambahan() {
+    const unlocked = isUnlocked();
+    const sel = document.getElementById("tambahanGuru");
+    if (sel && !sel.options.length) sel.innerHTML = state.guru.map((g) => `<option value="${g.id}">${g.nama}</option>`).join("");
+    for (const id of ["tambahanGuru", "tambahanJam", "tambahanKet", "tambahanSimpan"]) {
+        const el = document.getElementById(id); if (el) el.disabled = !unlocked;
+    }
+    document.getElementById("bodyTambahan").innerHTML = state.jamTambahan
+        .map((t) => `<tr><td>${namaGuru(t.guru_id)}</td>${num(t.jam)}<td>${t.keterangan || ""}</td>
+            <td><button class="btn-danger-text" ${unlocked ? "" : "disabled"} data-hapus-tambahan="${t.guru_id}">Hapus</button></td></tr>`).join("")
+        || `<tr><td colspan="4" class="empty-state">Belum ada jam tugas tambahan.</td></tr>`;
+    document.querySelectorAll("[data-hapus-tambahan]").forEach((b) =>
+        b.addEventListener("click", () => hapusTambahan(b.dataset.hapusTambahan)));
+}
+
+async function simpanTambahan() {
+    const guru_id = document.getElementById("tambahanGuru").value;
+    const jam = Number(document.getElementById("tambahanJam").value) || 0;
+    const keterangan = document.getElementById("tambahanKet").value || null;
+    if (!guru_id || !jam) return;
+    if (isSupabaseConfigured) {
+        const { error } = await supabaseClient.from("kg_jam_tambahan").upsert({ guru_id, jam, keterangan }, { onConflict: "guru_id" });
+        if (error) { laporError("Gagal menyimpan jam tugas tambahan", error); return; }
+        await muatTambahan();
+    } else {
+        const i = demoTambahan.findIndex((t) => t.guru_id === guru_id);
+        if (i > -1) demoTambahan[i] = { guru_id, jam, keterangan }; else demoTambahan.push({ guru_id, jam, keterangan });
+    }
+    document.getElementById("tambahanJam").value = "";
+    document.getElementById("tambahanKet").value = "";
+    renderTambahan(); await hitung();
+}
+
+async function hapusTambahan(guru_id) {
+    if (isSupabaseConfigured) {
+        const { error } = await supabaseClient.from("kg_jam_tambahan").delete().eq("guru_id", guru_id);
+        if (error) { laporError("Gagal menghapus jam tugas tambahan", error); return; }
+        await muatTambahan();
+    } else {
+        const i = demoTambahan.findIndex((t) => t.guru_id === guru_id); if (i > -1) demoTambahan.splice(i, 1);
+    }
+    renderTambahan(); await hitung();
 }
 
 function renderPengaturan() {
@@ -126,7 +194,7 @@ async function simpanPengaturan() {
     state.pengaturan = { ...state.pengaturan, ...baru };
     document.getElementById("pengaturanStatus").textContent = "Tersimpan ✓";
     setTimeout(() => (document.getElementById("pengaturanStatus").textContent = ""), 2000);
-    renderHonor();
+    renderHonor(); renderHonorMengajar();
 }
 
 // ---------- Hitung ----------
@@ -160,7 +228,12 @@ async function hitung() {
     const semuaPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: state.ketidakhadiran, jadwal: state.jadwal, awal: state.awal, akhir: state.akhir });
     state.hasilPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: ketMengajar, jadwal: mengajar, awal: state.awal, akhir: state.akhir });
     state.jamWaliDikecualikan = semuaPengganti.rincian.length - state.hasilPengganti.rincian.length;
-    renderKehadiran(); renderPengganti(); renderHonor();
+    state.hasilHonorMengajar = rekapHonorMengajar({
+        jadwal: mengajar, ketidakhadiran: ketMengajar, barisKehadiran: state.hasilKehadiran.baris,
+        guruList: state.guru, awal: state.awal, akhir: state.akhir, liburSet, tarif: tarifMengajar(),
+        jamTambahan: state.jamTambahan,
+    });
+    renderKehadiran(); renderPengganti(); renderHonor(); renderHonorMengajar();
 }
 
 // ---------- Render kehadiran ----------
@@ -287,6 +360,30 @@ function renderHonor() {
     document.getElementById("footHonorTeks").textContent = `Terbilang: ${terbilang(tot.jumlah)}. Tarif diubah di tab Pengaturan.` + (state.jamWaliDikecualikan ? ` Penggantian tugas wali kelas (Upacara/Bimbingan) sebanyak ${state.jamWaliDikecualikan} jam tidak termasuk — honornya dihitung terpisah.` : "");
 }
 
+function barisHonorMengajarTersaring() {
+    const q = state.saringHM.trim().toLowerCase();
+    return (state.hasilHonorMengajar?.baris || []).filter((r) => !q || r.nama.toLowerCase().includes(q));
+}
+
+function renderHonorMengajar() {
+    const h = state.hasilHonorMengajar; if (!h) return;
+    const rows = barisHonorMengajarTersaring();
+    const t = tarifMengajar();
+    document.getElementById("bodyHonorMengajar").innerHTML = rows.map((r, i) => `
+      <tr><td class="num">${i + 1}</td><td>${r.nama}</td>
+      ${num(r.masaKerja === null ? "—" : r.masaKerja)}<td class="num" title="${r.jamTambahan ? "termasuk " + r.jamTambahan + " jam tugas tambahan: " + r.ketTambahan : ""}">${r.jam}${r.jamTambahan ? ` <span class="tugas-note" style="display:inline">(+${r.jamTambahan})</span>` : ""}</td>${num(rp(r.tarifJam))}${num(rp(r.honorGuru))}${num(rp(r.transport))}
+      ${num(r.jamTM)}${num(rp(r.insentif))}${num(r.hariDatang)}${num(rp(r.konsumsi))}
+      <td class="num"><strong>${rp(r.jumlah)}</strong></td></tr>`).join("")
+      || `<tr><td colspan="12" class="empty-state">Belum ada data pada rentang ini.</td></tr>`;
+    const o = h.total;
+    document.getElementById("footHonorMengajar").innerHTML =
+      `<tr class="total"><td colspan="3">JUMLAH (${h.baris.length} guru)</td>${num(o.jam)}<td></td>${num(rp(o.honorGuru))}${num(rp(o.transport))}${num(o.jamTM)}${num(rp(o.insentif))}${num(o.hariDatang)}${num(rp(o.konsumsi))}<td class="num"><strong>${rp(o.jumlah)}</strong></td></tr>`;
+    document.getElementById("ringkasHonorMengajar").textContent =
+      `${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)} · transport ${rp(t.transport_berdiri)}/jam · insentif ${rp(t.insentif_tm)}/jam TM · konsumsi ${rp(t.konsumsi)}/hari`;
+    document.getElementById("footHonorMengajarTeks").textContent =
+      `Terbilang: ${terbilang(o.jumlah)}. Masa kerja dihitung dari TMT sekolah sampai tanggal akhir periode. Honor Mengajar & Transport Berdiri memakai jam kontrak per minggu; Insentif Tatap Muka memakai jam hadir tatap muka; Konsumsi memakai hari kedatangan (hari yang guru datang, termasuk HTTM). Tarif diubah di tab Pengaturan.`;
+}
+
 // ---------- Ekspor Excel ----------
 let logoCache = null;
 async function logo() { if (logoCache === null) logoCache = (await ambilLogoBase64("assets/logo-kecil.png")) || false; return logoCache || null; }
@@ -302,6 +399,12 @@ const xlsWali = bungkus(async () => {
     const w = state.hasilWali; if (!w) return;
     const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisWaliTersaring(), total: w.total, wali: null, judul: "REKAPITULASI KEHADIRAN TUGAS WALI KELAS", namaSheet: "Tugas Wali Kelas", catatan: "Upacara & Bimbingan Wali Kelas, Senin jam 1-2 (terpisah dari jam mengajar).", pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, jumlahHariKerja: w.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Tugas Wali Kelas ${state.awal} sd ${state.akhir}.xlsx`);
+});
+const xlsHonorMengajar = bungkus(async () => {
+    const h = state.hasilHonorMengajar; if (!h) return;
+    const wb = await bukuHonorMengajar({ ExcelJS: ExcelJSLib(), baris: barisHonorMengajarTersaring(), total: h.total,
+        tarif: tarifMengajar(), pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
+    await unduhWorkbook(wb, `Honor Mengajar Guru ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsPengganti = bungkus(async () => {
     const h = state.hasilPengganti; if (!h) return;
@@ -322,7 +425,7 @@ try {
     document.getElementById("rekapBtn").addEventListener("click", hitung);
     document.querySelectorAll(".rekap-tab").forEach((b) => b.addEventListener("click", () => {
         document.querySelectorAll(".rekap-tab").forEach((x) => x.classList.toggle("active", x === b));
-        for (const t of ["kehadiran", "wali", "pengganti", "honor", "libur", "pengaturan"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
+        for (const t of ["kehadiran", "honormengajar", "wali", "pengganti", "honor", "libur", "pengaturan"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
     }));
     document.querySelectorAll("#tab-pengganti .day-tabs button").forEach((b) => b.addEventListener("click", () => {
         state.viewPengganti = b.dataset.view;
@@ -333,9 +436,12 @@ try {
     document.getElementById("xlsKehadiran").addEventListener("click", xlsKehadiran);
     document.getElementById("xlsPengganti").addEventListener("click", xlsPengganti);
     document.getElementById("xlsWali").addEventListener("click", xlsWali);
+    document.getElementById("xlsHonorMengajar").addEventListener("click", xlsHonorMengajar);
+    document.getElementById("cariHonorMengajar").addEventListener("input", (e) => { state.saringHM = e.target.value; renderHonorMengajar(); });
     document.getElementById("cariWali").addEventListener("input", (e) => { state.saringWali = e.target.value; renderWali(); });
     document.getElementById("xlsHonor").addEventListener("click", xlsHonor);
     document.getElementById("pengaturanSimpan").addEventListener("click", simpanPengaturan);
+    document.getElementById("tambahanSimpan").addEventListener("click", simpanTambahan);
     document.getElementById("liburTambah").addEventListener("click", tambahLibur);
 } catch (err) {
     console.error("Ada elemen halaman yang tidak ditemukan — kemungkinan HTML dan JS beda versi. Lakukan hard refresh (Ctrl+Shift+R).", err);

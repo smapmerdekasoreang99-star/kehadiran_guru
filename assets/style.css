@@ -560,8 +560,9 @@ textarea {
 }
 
 /* ---------- Pencarian guru (halaman Ketidakhadiran) ---------- */
-.toolbar { position: relative; z-index: 20; }
-.toolbar-days { position: relative; z-index: 1; }  /* di bawah kotak saran pencarian */
+.toolbar { position: relative; z-index: 60; }
+.toolbar-days { position: relative; z-index: 0; }  /* selalu di bawah kotak saran pencarian */
+.search-box { z-index: 61; }
 
 .search-box {
     position: relative;
@@ -622,7 +623,7 @@ textarea {
     box-shadow: 0 12px 32px rgba(43, 38, 32, 0.14);
     max-height: 340px;
     overflow-y: auto;
-    z-index: 30;
+    z-index: 70;
 }
 
 .suggest-item {
@@ -771,3 +772,11 @@ textarea {
 /* kepala tabel tetap terlihat saat menggulir daftar panjang */
 .table-scroll { max-height: 70vh; overflow-y: auto; }
 .tabel-rekap thead th, table thead th { position: sticky; top: 0; z-index: 2; }
+
+/* ---------- Grid tarif masa kerja ---------- */
+.tarif-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
+.tarif-grid label { font-size: 12.5px; color: var(--ink-muted); font-weight: 600; white-space: nowrap; }
+.tarif-grid input { width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--ink); }
+.pengaturan-grid { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 1100px) { .pengaturan-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 800px)  { .pengaturan-grid { grid-template-columns: 1fr; } }

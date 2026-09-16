@@ -1,10 +1,10 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916b";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916b";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916b";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260916b";
-import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas, rekapHonorMengajar, TARIF_MASA_KERJA_DEFAULT } from "../assets/rekap-hitung.js?v=20260916b";
-import { bukuHonor, bukuKehadiran, bukuPengganti, bukuHonorMengajar, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260916b";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260916b";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916d";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916d";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916d";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260916d";
+import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas, rekapHonorMengajar, TARIF_MASA_KERJA_DEFAULT, uraiTarifMasaKerja, susunTarifMasaKerja } from "../assets/rekap-hitung.js?v=20260916d";
+import { bukuHonor, bukuKehadiran, bukuPengganti, bukuHonorMengajar, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260916d";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260916d";
 
 try { initLockUI(() => { renderLibur(); renderPengaturan(); renderTambahan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
@@ -42,13 +42,10 @@ const PENGATURAN_DEFAULT = {
     nama_sekolah: 'SMA Plus "Merdeka" Soreang', alamat_sekolah: "Jl. Citaliktik-Sindang Wargi Soreang Kab. Bandung",
     tahun_ajaran: "2026/2027", tempat: "Soreang", kepala_sekolah: "", bendahara: "",
     transport_berdiri: "40000", insentif_tm: "2000", konsumsi: "16000",
-    tarif_mk_0: "20000", tarif_mk_2: "21000", tarif_mk_5: "22000", tarif_mk_8: "23000", tarif_mk_11: "24000",
-    tarif_mk_14: "25000", tarif_mk_17: "26000", tarif_mk_20: "27000", tarif_mk_23: "28000", tarif_mk_26: "29000",
+    tarif_masa_kerja: "",
 };
 const FIELD_PENGATURAN = { tarif_PT: "pTarifPT", tarif_GT: "pTarifGT", tarif_Inf: "pTarifInf", nama_sekolah: "pNamaSekolah", alamat_sekolah: "pAlamat", tahun_ajaran: "pTahunAjaran", tempat: "pTempat", kepala_sekolah: "pKepsek", bendahara: "pBendahara",
-    transport_berdiri: "pTransportBerdiri", insentif_tm: "pInsentifTM", konsumsi: "pKonsumsi",
-    tarif_mk_0: "pTarifMK0", tarif_mk_2: "pTarifMK2", tarif_mk_5: "pTarifMK5", tarif_mk_8: "pTarifMK8", tarif_mk_11: "pTarifMK11",
-    tarif_mk_14: "pTarifMK14", tarif_mk_17: "pTarifMK17", tarif_mk_20: "pTarifMK20", tarif_mk_23: "pTarifMK23", tarif_mk_26: "pTarifMK26" };
+    transport_berdiri: "pTransportBerdiri", insentif_tm: "pInsentifTM", konsumsi: "pKonsumsi" };
 const demoPengaturan = { ...PENGATURAN_DEFAULT, kepala_sekolah: "Mohamad Gunawan, S.Si.", bendahara: "Dra. Ida Susana" };
 const tarifMengajar = () => {
     const n = (k, d) => Number(state.pengaturan?.[k] ?? d) || 0;
@@ -56,7 +53,7 @@ const tarifMengajar = () => {
         transport_berdiri: n("transport_berdiri", 40000),
         insentif_tm: n("insentif_tm", 2000),
         konsumsi: n("konsumsi", 16000),
-        masaKerja: TARIF_MASA_KERJA_DEFAULT.map((b) => ({ ...b, tarif: n("tarif_mk_" + b.min, b.tarif) })),
+        masaKerja: uraiTarifMasaKerja(state.pengaturan?.tarif_masa_kerja) || TARIF_MASA_KERJA_DEFAULT,
     };
 };
 const tarif = () => ({ PT: Number(state.pengaturan.tarif_PT) || 0, GT: Number(state.pengaturan.tarif_GT) || 0, Inf: Number(state.pengaturan.tarif_Inf) || 0 });
@@ -174,6 +171,35 @@ async function hapusTambahan(guru_id) {
     renderTambahan(); await hitung();
 }
 
+function daftarTarifMK() {
+    return uraiTarifMasaKerja(state.pengaturan?.tarif_masa_kerja) || TARIF_MASA_KERJA_DEFAULT;
+}
+
+function renderTarifMK(daftar = daftarTarifMK()) {
+    const unlocked = isUnlocked();
+    const dis = unlocked ? "" : "disabled";
+    document.getElementById("bodyTarifMK").innerHTML = daftar.map((b, i) => `
+      <tr>
+        <td><input type="number" min="0" step="1" value="${b.min}" data-tarif="min" data-i="${i}" ${dis}></td>
+        <td><input type="number" min="0" step="1" value="${b.max >= 999 ? "" : b.max}" placeholder="ke atas" data-tarif="max" data-i="${i}" ${dis}></td>
+        <td><input type="number" min="0" step="500" value="${b.tarif}" data-tarif="tarif" data-i="${i}" ${dis}></td>
+        <td><button class="btn-danger-text" ${dis} data-hapus-tarif="${i}">Hapus</button></td>
+      </tr>`).join("");
+    document.getElementById("tarifMKTambah").disabled = !unlocked;
+    document.querySelectorAll("[data-hapus-tarif]").forEach((b) =>
+        b.addEventListener("click", () => {
+            const d = bacaTarifMK(); d.splice(Number(b.dataset.hapusTarif), 1); renderTarifMK(d);
+        }));
+}
+
+function bacaTarifMK() {
+    const rows = [...document.querySelectorAll("#bodyTarifMK tr")];
+    return rows.map((tr) => {
+        const v = (k) => tr.querySelector(`[data-tarif="${k}"]`).value;
+        return { min: Number(v("min")) || 0, max: v("max") === "" ? 999 : Number(v("max")), tarif: Number(v("tarif")) || 0 };
+    });
+}
+
 function renderPengaturan() {
     if (!state.pengaturan) return;
     for (const [k, id] of Object.entries(FIELD_PENGATURAN)) document.getElementById(id).value = state.pengaturan[k] ?? "";
@@ -181,11 +207,13 @@ function renderPengaturan() {
     for (const id of Object.values(FIELD_PENGATURAN)) document.getElementById(id).disabled = !unlocked;
     document.getElementById("pengaturanSimpan").disabled = !unlocked;
     document.getElementById("pengaturanStatus").textContent = unlocked ? "" : "Buka kunci untuk mengubah.";
+    renderTarifMK();
 }
 
 async function simpanPengaturan() {
     const baru = {};
     for (const [k, id] of Object.entries(FIELD_PENGATURAN)) baru[k] = document.getElementById(id).value.trim();
+    baru.tarif_masa_kerja = susunTarifMasaKerja(bacaTarifMK());
     if (isSupabaseConfigured) {
         const rows = Object.entries(baru).map(([kunci, nilai]) => ({ kunci, nilai }));
         const { error } = await supabaseClient.from("kg_pengaturan").upsert(rows, { onConflict: "kunci" });
@@ -194,7 +222,7 @@ async function simpanPengaturan() {
     state.pengaturan = { ...state.pengaturan, ...baru };
     document.getElementById("pengaturanStatus").textContent = "Tersimpan ✓";
     setTimeout(() => (document.getElementById("pengaturanStatus").textContent = ""), 2000);
-    renderHonor(); renderHonorMengajar();
+    await hitung();   // tarif berubah -> seluruh angka dihitung ulang
 }
 
 // ---------- Hitung ----------
@@ -442,6 +470,13 @@ try {
     document.getElementById("xlsHonor").addEventListener("click", xlsHonor);
     document.getElementById("pengaturanSimpan").addEventListener("click", simpanPengaturan);
     document.getElementById("tambahanSimpan").addEventListener("click", simpanTambahan);
+    document.getElementById("tarifMKTambah").addEventListener("click", () => {
+        const d = bacaTarifMK();
+        const t = d[d.length - 1];
+        if (t && t.max >= 999) t.max = t.min + 2;           // jenjang lama diberi batas atas
+        d.push({ min: t ? t.max + 1 : 0, max: 999, tarif: t ? t.tarif + 1000 : 20000 });
+        renderTarifMK(d);
+    });
     document.getElementById("liburTambah").addEventListener("click", tambahLibur);
 } catch (err) {
     console.error("Ada elemen halaman yang tidak ditemukan — kemungkinan HTML dan JS beda versi. Lakukan hard refresh (Ctrl+Shift+R).", err);

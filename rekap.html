@@ -6,7 +6,7 @@
 <title>Rekap — Guru Pengganti SMA Plus Merdeka Soreang</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20260916b" />
+<link rel="stylesheet" href="assets/style.css?v=20260916d" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 </head>
@@ -249,18 +249,12 @@
           <div class="field"><label for="pInsentifTM">Insentif Tatap Muka — per jam tatap muka (Rp)</label><input type="number" id="pInsentifTM" min="0" step="500" /></div>
           <div class="field"><label for="pKonsumsi">Konsumsi Kedatangan — per hari datang (Rp)</label><input type="number" id="pKonsumsi" min="0" step="1000" /></div>
           <div class="section-label" style="margin-top:14px">Honor mengajar per jam menurut masa kerja</div>
-          <div class="tarif-grid">
-            <label for="pTarifMK0">0–1 th</label><input type="number" id="pTarifMK0" min="0" step="500" />
-            <label for="pTarifMK2">2–4 th</label><input type="number" id="pTarifMK2" min="0" step="500" />
-            <label for="pTarifMK5">5–7 th</label><input type="number" id="pTarifMK5" min="0" step="500" />
-            <label for="pTarifMK8">8–10 th</label><input type="number" id="pTarifMK8" min="0" step="500" />
-            <label for="pTarifMK11">11–13 th</label><input type="number" id="pTarifMK11" min="0" step="500" />
-            <label for="pTarifMK14">14–16 th</label><input type="number" id="pTarifMK14" min="0" step="500" />
-            <label for="pTarifMK17">17–19 th</label><input type="number" id="pTarifMK17" min="0" step="500" />
-            <label for="pTarifMK20">20–22 th</label><input type="number" id="pTarifMK20" min="0" step="500" />
-            <label for="pTarifMK23">23–25 th</label><input type="number" id="pTarifMK23" min="0" step="500" />
-            <label for="pTarifMK26">26 th ke atas</label><input type="number" id="pTarifMK26" min="0" step="500" />
-          </div>
+          <table class="tabel-rekap tabel-tarif">
+            <thead><tr><th class="num">Dari (th)</th><th class="num">Sampai (th)</th><th class="num">Honor / jam (Rp)</th><th></th></tr></thead>
+            <tbody id="bodyTarifMK"></tbody>
+          </table>
+          <button type="button" id="tarifMKTambah" class="btn btn-ghost" style="margin-top:8px">+ Tambah jenjang</button>
+          <p class="tugas-note" style="margin-top:6px">Kosongkan kolom "Sampai" pada jenjang terakhir agar berlaku "ke atas".</p>
         </div>
 
         <div class="pengaturan-blok">
@@ -336,6 +330,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/rekap.js?v=20260916b"></script>
+<script type="module" src="scripts/rekap.js?v=20260916d"></script>
 </body>
 </html>

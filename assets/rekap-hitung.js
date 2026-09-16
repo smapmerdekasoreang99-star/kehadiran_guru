@@ -234,3 +234,27 @@ export function rekapHonorMengajar({ jadwal, ketidakhadiran, barisKehadiran, gur
     }, { jam: 0, honorGuru: 0, transport: 0, jamTM: 0, insentif: 0, hariDatang: 0, konsumsi: 0, jumlah: 0 });
     return { baris, total };
 }
+
+// ---------- Daftar tarif masa kerja yang bisa diubah pengguna ----------
+// Disimpan di kg_pengaturan sebagai teks: "0-1:20000;2-4:21000;26-:29000"
+// Batas atas kosong berarti "ke atas" (tanpa batas).
+export function uraiTarifMasaKerja(teks) {
+    if (!teks || !teks.trim()) return null;
+    const out = [];
+    for (const bagian of teks.split(";")) {
+        const t = bagian.trim(); if (!t) continue;
+        const m = t.match(/^(\d+)\s*-\s*(\d*)\s*:\s*(\d+)$/);
+        if (!m) continue;
+        out.push({ min: Number(m[1]), max: m[2] === "" ? 999 : Number(m[2]), tarif: Number(m[3]) });
+    }
+    out.sort((a, b) => a.min - b.min);
+    return out.length ? out : null;
+}
+
+export function susunTarifMasaKerja(daftar) {
+    return daftar
+        .slice()
+        .sort((a, b) => a.min - b.min)
+        .map((b) => `${b.min}-${b.max >= 999 ? "" : b.max}:${b.tarif}`)
+        .join(";");
+}

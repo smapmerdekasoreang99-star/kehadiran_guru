@@ -785,3 +785,101 @@ textarea {
 .tabel-tarif td { padding: 4px 6px; }
 .tabel-tarif input { width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--ink); text-align: right; }
 .tabel-tarif thead th { padding: 8px 6px; font-size: 11.5px; }
+
+/* =========================================================
+   Perapian halaman Rekapitulasi
+   ========================================================= */
+
+/* --- Tab: bisa membungkus rapi, tidak memaksa halaman melebar --- */
+.rekap-tabs { flex-wrap: wrap; row-gap: 6px; margin-bottom: 16px; }
+
+/* --- Baris alat: pencarian tidak lagi mendorong tombol ke bawah --- */
+#tab-kehadiran .toolbar, #tab-honormengajar .toolbar,
+#tab-wali .toolbar, #tab-pengganti .toolbar {
+    row-gap: 10px;
+}
+#tab-kehadiran .search-box, #tab-honormengajar .search-box, #tab-wali .search-box {
+    flex: 0 1 260px;
+}
+.toolbar-actions { margin-left: auto; }
+.toolbar-actions .tugas-note { max-width: 42ch; text-align: right; line-height: 1.35; }
+
+/* --- Tabel rekap: lebih padat, angka tidak terpotong --- */
+.tabel-rekap th, .tabel-rekap td { white-space: nowrap; }
+.tabel-rekap tbody td { padding: 9px 12px; }
+.tabel-rekap thead th { padding: 10px 12px; }
+.tabel-rekap td.nama {
+    white-space: normal;
+    min-width: 200px;
+    line-height: 1.3;
+}
+.tabel-rekap tbody tr:nth-child(even) td { background: #FCFAF3; }
+.tabel-rekap tbody tr:hover td { background: var(--gold-tint); }
+
+/* Lebar minimum agar kolom tidak saling menjepit; kartu boleh digulir mendatar */
+#tab-honormengajar table { min-width: 1080px; }
+#tab-kehadiran table, #tab-wali table { min-width: 880px; }
+#tab-pengganti #tabelRinci { min-width: 1000px; }
+
+/* --- Pengaturan: dua kolom + blok lebar --- */
+.pengaturan-grid { grid-template-columns: 1fr 1fr; gap: 28px; padding: 22px 22px 6px; }
+.pengaturan-blok h3, .pengaturan-lebar h3 {
+    font-size: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 14px;
+}
+.pengaturan-lebar { padding: 18px 22px; }
+.pengaturan-lebar + .pengaturan-lebar { border-top: 1px solid var(--line); }
+.pengaturan-blok .field input, .pengaturan-blok .field select { width: 100%; }
+.pengaturan-blok .field { margin-bottom: 12px; }
+
+/* Tabel jenjang tarif: lebar wajar, tidak melebar penuh */
+.tabel-tarif { max-width: 520px; min-width: 0; }
+.tabel-tarif thead th { background: transparent; border-bottom: 1px solid var(--line); }
+.tabel-tarif td { border: none; }
+.tabel-tarif tbody tr:nth-child(even) td { background: transparent; }
+.tabel-tarif tbody tr:hover td { background: transparent; }
+
+@media (max-width: 1000px) {
+    .pengaturan-grid { grid-template-columns: 1fr; gap: 20px; }
+    .toolbar-actions { margin-left: 0; }
+    .toolbar-actions .tugas-note { text-align: left; }
+}
+
+/* Halaman Rekap memerlukan ruang lebih lebar daripada halaman lain */
+main.lebar { max-width: 1480px; }
+#tab-honormengajar table { min-width: 1020px; }
+.tabel-rekap tbody td { padding: 9px 10px; }
+.tabel-rekap thead th { padding: 10px 10px; }
+/* Kolom terakhir (Jumlah) selalu terlihat walau tabel digulir mendatar */
+#tab-honormengajar table th:last-child,
+#tab-honormengajar table td:last-child {
+    position: sticky; right: 0;
+    background: var(--surface);
+    box-shadow: -6px 0 8px -6px rgba(43,38,32,.18);
+}
+#tab-honormengajar table thead th:last-child { background: #FAF6EA; z-index: 3; }
+#tab-honormengajar table tfoot td:last-child { background: #FAF6EA; }
+#tab-honormengajar tbody tr:nth-child(even) td:last-child { background: #FCFAF3; }
+#tab-honormengajar tbody tr:hover td:last-child { background: var(--gold-tint); }
+
+/* Pengaturan: tiga kolom untuk blok isian pendek, dua kolom untuk blok tabel */
+.pengaturan-grid { grid-template-columns: repeat(3, 1fr); gap: 26px; }
+.pengaturan-bawah {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 0;
+    border-top: 1px solid var(--line);
+    margin-top: 14px;
+}
+.pengaturan-bawah > .pengaturan-lebar + .pengaturan-lebar {
+    border-top: none;
+    border-left: 1px solid var(--line);
+}
+@media (max-width: 1200px) { .pengaturan-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1000px) {
+    .pengaturan-grid { grid-template-columns: 1fr; }
+    .pengaturan-bawah { grid-template-columns: 1fr; }
+    .pengaturan-bawah > .pengaturan-lebar + .pengaturan-lebar { border-left: none; border-top: 1px solid var(--line); }
+}

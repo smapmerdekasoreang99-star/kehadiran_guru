@@ -1,9 +1,9 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916b";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916b";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916b";
-import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260916b";
-import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260916b";
-import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260916b";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916d";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916d";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916d";
+import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260916d";
+import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260916d";
+import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260916d";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -69,9 +69,9 @@ async function boot() {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jam }] =
             await Promise.all([
                 supabaseClient.from("v_guru").select("id, nama, mapel_utama, is_piket, status_aktif").order("nama"),
-                supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
-                supabaseClient.from("kg_mapel").select("id, nama_mapel, rumpun_mapel").order("nama_mapel"),
-                supabaseClient.from("kg_jam_pelajaran").select("*").order("jam_ke"),
+                supabaseClient.from("kelas").select("id, nama_kelas, tingkat"),
+                supabaseClient.from("mapel").select("id, nama_mapel, rumpun_mapel").order("nama_mapel"),
+                supabaseClient.from("jam_pelajaran").select("*").order("jam_ke"),
             ]);
         state.guru = guru || [];
         state.kelas = urutkanKelas(kelas || []);
@@ -121,7 +121,7 @@ async function loadForDate() {
     if (isSupabaseConfigured) {
         const [{ data: jadwal }, { data: ketidakhadiran }, { data: piket }] = await Promise.all([
             supabaseClient
-                .from("kg_jadwal_kbm")
+                .from("jadwal_kbm")
                 .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id")
                 .eq("hari", state.hari)
                 .order("jam_ke"),
@@ -129,7 +129,7 @@ async function loadForDate() {
                 .from("kg_ketidakhadiran_guru")
                 .select("*")
                 .eq("tanggal", state.tanggal),
-            supabaseClient.from("kg_piket").select("*").eq("hari", state.hari),
+            supabaseClient.from("piket").select("*").eq("hari", state.hari),
         ]);
         state.jadwal = jadwal || [];
         state.ketidakhadiran = ketidakhadiran || [];

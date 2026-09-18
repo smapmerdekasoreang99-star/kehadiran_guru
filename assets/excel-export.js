@@ -109,10 +109,25 @@ function blokTandaTangan(ws, baris, { pengaturan, tanggal, kolomKiri, kolomKanan
 }
 
 async function ambilLogoBase64(url) {
-    try {
-        const res = await fetch(url); const blob = await res.blob();
-        return await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result.split(",")[1]); fr.readAsDataURL(blob); });
-    } catch { return null; }
+    // Mencoba beberapa nama berkas: logo-kecil.png lebih ringan, logo.png sebagai cadangan.
+    const kandidat = [url, "assets/logo.png"];
+    for (const u of kandidat) {
+        try {
+            const res = await fetch(u);
+            if (!res.ok) continue;                          // 404 dsb. -> coba kandidat berikutnya
+            const blob = await res.blob();
+            if (!blob.type.startsWith("image/")) continue;   // bukan gambar (mis. halaman error)
+            const b64 = await new Promise((ok, gagal) => {
+                const fr = new FileReader();
+                fr.onload = () => ok(fr.result.split(",")[1]);
+                fr.onerror = gagal;
+                fr.readAsDataURL(blob);
+            });
+            if (b64) return b64;
+        } catch { /* coba kandidat berikutnya */ }
+    }
+    console.error("Logo tidak dapat dimuat — periksa berkas assets/logo-kecil.png dan assets/logo.png di server.");
+    return null;
 }
 
 // =========================================================

@@ -1,7 +1,7 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916d";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916d";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916d";
-import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260916d";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916h";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916h";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916h";
+import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260916h";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -58,9 +58,9 @@ async function boot() {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jam }] =
             await Promise.all([
                 supabaseClient.from("v_guru").select("id, nama").order("nama"),
-                supabaseClient.from("kelas").select("id, nama_kelas, tingkat"),
-                supabaseClient.from("mapel").select("id, nama_mapel").order("nama_mapel"),
-                supabaseClient.from("jam_pelajaran").select("*").order("jam_ke"),
+                supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
+                supabaseClient.from("kg_mapel").select("id, nama_mapel").order("nama_mapel"),
+                supabaseClient.from("kg_jam_pelajaran").select("*").order("jam_ke"),
             ]);
         state.guru = guru || [];
         state.kelas = urutkanKelas(kelas || []);
@@ -110,7 +110,7 @@ async function loadForDate() {
     if (isSupabaseConfigured) {
         const [{ data: jadwal }, { data: ketidakhadiran }] = await Promise.all([
             supabaseClient
-                .from("jadwal_kbm")
+                .from("kg_jadwal_kbm")
                 .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id")
                 .eq("hari", state.hari)
                 .order("jam_ke"),

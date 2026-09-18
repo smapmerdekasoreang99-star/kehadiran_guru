@@ -883,3 +883,4 @@ main.lebar { max-width: 1480px; }
     .pengaturan-bawah { grid-template-columns: 1fr; }
     .pengaturan-bawah > .pengaturan-lebar + .pengaturan-lebar { border-left: none; border-top: 1px solid var(--line); }
 }
+.notice-peringatan { background: var(--flame-tint); border-color: var(--flame); color: #6E2415; margin: 16px 20px 0; }

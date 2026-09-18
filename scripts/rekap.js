@@ -78,16 +78,16 @@ async function boot() {
     if (isSupabaseConfigured) {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jadwal, error: eJ }] = await Promise.all([
             supabaseClient.from("v_guru").select("id, nama, tmt_sekolah").order("nama"),
-            supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
-            supabaseClient.from("kg_mapel").select("id, nama_mapel"),
-            supabaseClient.from("kg_jadwal_kbm").select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id").range(0, 999),
+            supabaseClient.from("kelas").select("id, nama_kelas, tingkat"),
+            supabaseClient.from("mapel").select("id, nama_mapel"),
+            supabaseClient.from("jadwal_kbm").select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id").range(0, 999),
         ]);
         if (eJ) { laporError("Gagal memuat jadwal", eJ); return; }
         state.guru = guru || []; state.kelas = urutkanKelas(kelas || []); state.mapel = mapel || [];
         // ambil sisa baris di atas batas 1.000
         state.jadwal = jadwal || [];
         for (let mulai = 1000; state.jadwal.length === mulai; mulai += 1000) {
-            const { data, error } = await supabaseClient.from("kg_jadwal_kbm")
+            const { data, error } = await supabaseClient.from("jadwal_kbm")
                 .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id").range(mulai, mulai + 999);
             if (error) { laporError("Gagal memuat sisa jadwal", error); break; }
             state.jadwal = state.jadwal.concat(data || []);

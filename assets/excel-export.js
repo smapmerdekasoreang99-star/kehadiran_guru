@@ -367,6 +367,7 @@ export async function bukuHonorMengajar({ ExcelJS, baris, total, tarif, pengatur
         selData(ws, r, 9, b.insentif, { fmt: "#,##0" });
         selData(ws, r, 10, b.hariDatang, { align: "center" });
         selData(ws, r, 11, b.konsumsi, { fmt: "#,##0" });
+        if (b.fingerprint) ws.getCell(r, 9).note = "Insentif Tatap Muka & Konsumsi Kedatangan dibayar akhir bulan dari fingerprint (kontrak kerja).";
         selData(ws, r, 12, b.jumlah, { fmt: RP, bold: true });
         selData(ws, r, 13, `${i + 1}. ……………………`, { align: "left" });
         ws.getRow(r).height = 30;

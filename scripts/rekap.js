@@ -2,8 +2,8 @@ import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.
 import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916h";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916h";
 import { urutkanKelas } from "../assets/kelas-order.js?v=20260916h";
-import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas, rekapHonorMengajar, TARIF_MASA_KERJA_DEFAULT, uraiTarifMasaKerja, susunTarifMasaKerja } from "../assets/rekap-hitung.js?v=20260916h";
-import { bukuHonor, bukuKehadiran, bukuPengganti, bukuHonorMengajar, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260916h";
+import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas, rekapHonorMengajar, TARIF_MASA_KERJA_DEFAULT, uraiTarifMasaKerja, susunTarifMasaKerja } from "../assets/rekap-hitung.js?v=20260919b";
+import { bukuHonor, bukuKehadiran, bukuPengganti, bukuHonorMengajar, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260919b";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260916h";
 
 try { initLockUI(() => { renderLibur(); renderPengaturan(); renderTambahan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
@@ -78,7 +78,7 @@ async function boot() {
 
     if (isSupabaseConfigured) {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jadwal, error: eJ }] = await Promise.all([
-            supabaseClient.from("v_guru").select("id, nama, tmt_sekolah, status_aktif, is_staf").order("nama"),
+            supabaseClient.from("v_guru").select("id, nama, tmt_sekolah, status_aktif, is_staf, insentif_fingerprint").order("nama"),
             supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
             supabaseClient.from("kg_mapel").select("id, nama_mapel"),
             supabaseClient.from("kg_jadwal_kbm").select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id").range(0, 999),
@@ -383,7 +383,9 @@ function renderHonorMengajar() {
     document.getElementById("bodyHonorMengajar").innerHTML = rows.map((r, i) => `
       <tr><td class="num">${i + 1}</td><td class="nama">${r.nama}</td>
       ${num(r.masaKerja === null ? "—" : r.masaKerja)}<td class="num" title="${r.jamTambahan ? "termasuk " + r.jamTambahan + " jam tugas tambahan: " + r.ketTambahan : ""}">${r.jam}${r.jamTambahan ? ` <span class="tugas-note" style="display:inline">(+${r.jamTambahan})</span>` : ""}</td>${num(rp(r.tarifJam))}${num(rp(r.honorGuru))}${num(rp(r.transport))}
-      ${num(r.jamTM)}${num(rp(r.insentif))}${num(r.hariDatang)}${num(rp(r.konsumsi))}
+      ${r.fingerprint
+        ? `<td class="num" colspan="4" title="Insentif Tatap Muka & Konsumsi Kedatangan dibayar akhir bulan dari fingerprint (kontrak kerja)"><span class="tugas-note" style="display:inline">lewat fingerprint</span></td>`
+        : `${num(r.jamTM)}${num(rp(r.insentif))}${num(r.hariDatang)}${num(rp(r.konsumsi))}`}
       <td class="num"><strong>${rp(r.jumlah)}</strong></td></tr>`).join("")
       || `<tr><td colspan="12" class="empty-state">Belum ada data pada rentang ini.</td></tr>`;
     const o = rows.reduce((t, r) => {
@@ -406,6 +408,7 @@ function renderHonorMengajar() {
     } else kotak.hidden = true;
     document.getElementById("footHonorMengajarTeks").textContent =
       (staf.length ? `${staf.length} pemegang tugas Staf tidak termasuk (dibayar berdasarkan jam kerja): ${staf.map((g) => g.nama).join(", ")}. ` : "") +
+      (rows.some((r) => r.fingerprint) ? `Insentif Tatap Muka & Konsumsi Kedatangan dibayar akhir bulan dari fingerprint untuk: ${rows.filter((r) => r.fingerprint).map((r) => r.nama).join(", ")}. ` : "") +
       `Terbilang: ${terbilang(o.jumlah)}. Tarif: transport ${rp(t.transport_berdiri)}/jam · insentif ${rp(t.insentif_tm)}/jam TM · konsumsi ${rp(t.konsumsi)}/hari. Masa kerja dihitung dari TMT sekolah sampai tanggal akhir periode. Honor Mengajar & Transport Berdiri memakai jam kontrak per minggu; Insentif Tatap Muka memakai jam hadir tatap muka; Konsumsi memakai hari kedatangan (hari yang guru datang, termasuk HTTM). Tarif diubah di tab Pengaturan.`;
 }
 

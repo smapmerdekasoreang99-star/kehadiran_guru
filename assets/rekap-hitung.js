@@ -211,10 +211,13 @@ export function rekapHonorMengajar({ jadwal, ketidakhadiran, barisKehadiran, gur
         const hadirTM = hadirMap.get(gid)?.hadirTM ?? 0;
         const hari = hariDatang.get(gid) || 0;
 
+        // Guru dengan insentif_fingerprint (kontrak kerja): Insentif Tatap Muka dan
+        // Konsumsi Kedatangan dibayar di akhir bulan dari fingerprint, bukan di sini.
+        const fingerprint = !!g?.insentif_fingerprint;
         const honorGuru  = jam * tarifJam;
         const transport  = jam * tarif.transport_berdiri;
-        const insentif   = hadirTM * tarif.insentif_tm;
-        const konsumsi   = hari * tarif.konsumsi;
+        const insentif   = fingerprint ? 0 : hadirTM * tarif.insentif_tm;
+        const konsumsi   = fingerprint ? 0 : hari * tarif.konsumsi;
         const tmb = tambahanMap.get(gid);
         baris.push({
             guru_id: gid, nama: g?.nama || gid,
@@ -222,8 +225,9 @@ export function rekapHonorMengajar({ jadwal, ketidakhadiran, barisKehadiran, gur
             jamTambahan: Number(tmb?.jam) || 0,
             ketTambahan: tmb?.keterangan || "",
             honorGuru, transport,
-            jamTM: hadirTM, insentif,
-            hariDatang: hari, konsumsi,
+            // jam TM & hari dinolkan juga, supaya jumlah di baris total sesuai yang dibayar di sini
+            jamTM: fingerprint ? 0 : hadirTM, insentif,
+            hariDatang: fingerprint ? 0 : hari, konsumsi, fingerprint,
             jumlah: honorGuru + transport + insentif + konsumsi,
         });
     }

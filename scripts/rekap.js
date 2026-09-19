@@ -124,52 +124,15 @@ async function muatPengaturan() {
 
 async function muatTambahan() {
     const { data, error } = await supabaseClient.from("kg_jam_tambahan").select("guru_id, jam, keterangan");
-    if (error) { laporError("Tabel kg_jam_tambahan belum ada — jalankan migrasi_jam_tambahan.sql (sementara jam tambahan dianggap kosong)", error); state.jamTambahan = []; return; }
+    if (error) { laporError("Gagal memuat jam tugas tambahan dari Data Induk (sementara jam tambahan dianggap kosong)", error); state.jamTambahan = []; return; }
     state.jamTambahan = data || [];
 }
 
+// Hanya tampilan: kg_jam_tambahan adalah view dari guru_tugas di Data Induk.
 function renderTambahan() {
-    const unlocked = isUnlocked();
-    const sel = document.getElementById("tambahanGuru");
-    if (sel && !sel.options.length) sel.innerHTML = state.guru.map((g) => `<option value="${g.id}">${g.nama}</option>`).join("");
-    for (const id of ["tambahanGuru", "tambahanJam", "tambahanKet", "tambahanSimpan"]) {
-        const el = document.getElementById(id); if (el) el.disabled = !unlocked;
-    }
     document.getElementById("bodyTambahan").innerHTML = state.jamTambahan
-        .map((t) => `<tr><td class="nama">${namaGuru(t.guru_id)}</td>${num(t.jam)}<td>${t.keterangan || ""}</td>
-            <td><button class="btn-danger-text" ${unlocked ? "" : "disabled"} data-hapus-tambahan="${t.guru_id}">Hapus</button></td></tr>`).join("")
-        || `<tr><td colspan="4" class="empty-state">Belum ada jam tugas tambahan.</td></tr>`;
-    document.querySelectorAll("[data-hapus-tambahan]").forEach((b) =>
-        b.addEventListener("click", () => hapusTambahan(b.dataset.hapusTambahan)));
-}
-
-async function simpanTambahan() {
-    const guru_id = document.getElementById("tambahanGuru").value;
-    const jam = Number(document.getElementById("tambahanJam").value) || 0;
-    const keterangan = document.getElementById("tambahanKet").value || null;
-    if (!guru_id || !jam) return;
-    if (isSupabaseConfigured) {
-        const { error } = await supabaseClient.from("kg_jam_tambahan").upsert({ guru_id, jam, keterangan }, { onConflict: "guru_id" });
-        if (error) { laporError("Gagal menyimpan jam tugas tambahan", error); return; }
-        await muatTambahan();
-    } else {
-        const i = demoTambahan.findIndex((t) => t.guru_id === guru_id);
-        if (i > -1) demoTambahan[i] = { guru_id, jam, keterangan }; else demoTambahan.push({ guru_id, jam, keterangan });
-    }
-    document.getElementById("tambahanJam").value = "";
-    document.getElementById("tambahanKet").value = "";
-    renderTambahan(); await hitung();
-}
-
-async function hapusTambahan(guru_id) {
-    if (isSupabaseConfigured) {
-        const { error } = await supabaseClient.from("kg_jam_tambahan").delete().eq("guru_id", guru_id);
-        if (error) { laporError("Gagal menghapus jam tugas tambahan", error); return; }
-        await muatTambahan();
-    } else {
-        const i = demoTambahan.findIndex((t) => t.guru_id === guru_id); if (i > -1) demoTambahan.splice(i, 1);
-    }
-    renderTambahan(); await hitung();
+        .map((t) => `<tr><td class="nama">${namaGuru(t.guru_id)}</td>${num(t.jam)}<td>${t.keterangan || ""}</td></tr>`).join("")
+        || `<tr><td colspan="3" class="empty-state">Belum ada jam tugas tambahan. Isi lewat Data Induk → Tugas Guru.</td></tr>`;
 }
 
 // View honor di database menyaring status_aktif = 'Aktif' persis. Nilai lain
@@ -503,7 +466,6 @@ try {
     document.getElementById("cariWali").addEventListener("input", (e) => { state.saringWali = e.target.value; renderWali(); });
     document.getElementById("xlsHonor").addEventListener("click", xlsHonor);
     document.getElementById("pengaturanSimpan").addEventListener("click", simpanPengaturan);
-    document.getElementById("tambahanSimpan").addEventListener("click", simpanTambahan);
     document.getElementById("tarifMKTambah").addEventListener("click", () => {
         const d = bacaTarifMK();
         const t = d[d.length - 1];

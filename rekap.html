@@ -278,16 +278,11 @@
 
       <div class="pengaturan-lebar">
         <h3>Jam tugas tambahan guru</h3>
-        <p class="tugas-note" style="margin:-6px 0 12px;">Jam di luar jadwal KBM yang tetap dihitung sebagai jam kontrak pada Honor Mengajar.</p>
-        <div class="date-field" style="flex-wrap:wrap;margin-bottom:12px;">
-          <select id="tambahanGuru" class="kelas-filter" style="min-width:240px"></select>
-          <input type="number" id="tambahanJam" class="kelas-filter" min="0" step="1" placeholder="Jam" style="width:90px" />
-          <input type="text" id="tambahanKet" class="kelas-filter" placeholder="Keterangan (mis. Wakasek Kurikulum)" style="min-width:260px" />
-          <button type="button" id="tambahanSimpan" class="btn btn-primary">Simpan</button>
-        </div>
+        <p class="tugas-note" style="margin:-6px 0 12px;">Jam di luar jadwal KBM yang tetap dihitung sebagai jam kontrak pada Honor Mengajar dan Transport Berdiri.
+          Diisi di <b>Data Induk → Tugas Guru</b> (jenis "Tugas Tambahan", kolom jam tambahan mengajar); di sini hanya ditampilkan.</p>
         <div class="table-scroll" style="max-height:none">
           <table class="tabel-rekap">
-            <thead><tr><th>Guru</th><th class="num">Jam</th><th>Keterangan</th><th></th></tr></thead>
+            <thead><tr><th>Guru</th><th class="num">Jam</th><th>Keterangan</th></tr></thead>
             <tbody id="bodyTambahan"></tbody>
           </table>
         </div>
@@ -341,6 +336,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/rekap.js?v=20260916h"></script>
+<script type="module" src="scripts/rekap.js?v=20260919a"></script>
 </body>
 </html>

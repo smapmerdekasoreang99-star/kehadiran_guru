@@ -1,19 +1,32 @@
 // =========================================================
 // Pengurutan kelas bersama — dipakai semua droplist & urutan baris tabel.
-// Kelas reguler dulu (X, XI, XII; nomor urut alami), lalu kelompok Tahsin
+// Kelas reguler dulu (X, XI, XII; nomor urut alami), lalu kelompok Matematika
+// Dasar (MD10-1, MD11-2, …; per tingkat lalu nomor), lalu kelompok Tahsin
 // (tingkat 0) mengikuti urutan jenjang: Mahir -> Pratahsin -> Qolqolah -> Harokat.
 // =========================================================
 
 const URUTAN_TAHSIN = ["Mahir", "Pratahsin", "Qolqolah", "Harokat"];
 
+// "reguler" | "md" (kelompok Matematika Dasar) | "tahsin" (kelompok Tahsin)
+export function jenisKelas(k) {
+    const nama = k.nama_kelas || k.id || "";
+    if (Number(k.tingkat) === 0 || /^tahsin/i.test(nama) || /^TH-/i.test(k.id || "")) return "tahsin";
+    if (/^MD\s*\d/i.test(nama)) return "md";
+    return "reguler";
+}
+
 function kunciKelas(k) {
     const nama = k.nama_kelas || k.id || "";
     const tingkat = Number(k.tingkat);
-    const isTahsin = tingkat === 0 || /^tahsin/i.test(nama) || /^TH-/i.test(k.id || "");
-    if (isTahsin) {
+    if (jenisKelas(k) === "tahsin") {
         const jenjang = URUTAN_TAHSIN.findIndex((j) => nama.toLowerCase().includes(j.toLowerCase()));
         const nomor = parseInt((nama.match(/(\d+)\s*$/) || [])[1] || "0", 10);
-        return [1, jenjang < 0 ? 99 : jenjang, nomor, nama];
+        return [2, jenjang < 0 ? 99 : jenjang, nomor, nama];
+    }
+    const md = nama.match(/^MD\s*(\d+)/i);
+    if (md) {
+        const nomor = parseInt((nama.match(/(\d+)\s*$/) || [])[1] || "0", 10);
+        return [1, tingkat || Number(md[1]), nomor, nama];
     }
     // reguler: tingkat (10/11/12) bila ada, kalau tidak tebak dari awalan romawi
     let t = tingkat;

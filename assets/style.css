@@ -884,3 +884,220 @@ main.lebar { max-width: 1480px; }
     .pengaturan-bawah > .pengaturan-lebar + .pengaturan-lebar { border-left: none; border-top: 1px solid var(--line); }
 }
 .notice-peringatan { background: var(--flame-tint); border-color: var(--flame); color: #6E2415; margin: 16px 20px 0; }
+
+/* ---------- Jadwal: pilihan tampilan Daftar / Matriks ---------- */
+.view-toggle {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+}
+.view-toggle button {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--ink-muted);
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.view-toggle button:hover { color: var(--ink); }
+.view-toggle button.active { background: var(--gold-tint); color: #6B4E10; }
+
+/* ---------- Jadwal: matriks (kolom = jam, baris = kelas / hari) ---------- */
+.matriks-scroll { overflow: auto; max-height: 75vh; }
+
+table.matriks {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.matriks thead th {
+    padding: 8px 4px;
+    text-align: center;
+    vertical-align: bottom;
+    background: #FAF6EA;
+    border-bottom: 1px solid var(--line);
+    z-index: 3;
+}
+.matriks thead th.m-sudut {
+    width: 88px;
+    left: 0;
+    z-index: 4;
+    text-align: left;
+    padding-left: 12px;
+    border-right: 1px solid var(--line);
+}
+.m-jam-ke {
+    display: block;
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--ink);
+}
+.m-jam-waktu { display: block; font-size: 10.5px; white-space: nowrap; font-weight: 500; color: var(--ink-muted); }
+.m-jam-ket {
+    display: inline-block;
+    margin-top: 3px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--gold-tint);
+    color: #6B4E10;
+    font-size: 10.5px;
+}
+.matriks thead th.sekarang { background: var(--ink); }
+.matriks thead th.sekarang .m-jam-ke { color: #F6EFDC; }
+.matriks thead th.sekarang .m-jam-waktu { color: var(--gold); }
+
+/* kolom sela = jeda istirahat antar-jam */
+.matriks .m-sela {
+    width: 12px;
+    padding: 0;
+    border-bottom: 1px solid var(--line);
+    background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(201, 154, 46, 0.2) 4px 5px), #FBF8F1;
+}
+
+.matriks tbody th.m-label {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    padding: 6px 8px 6px 12px;
+    text-align: left;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    font-size: 13.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.m-label span { display: block; overflow: hidden; text-overflow: ellipsis; }
+.m-label small { display: block; font-size: 10.5px; font-weight: 500; color: var(--ink-muted); }
+.matriks tr.aktif th.m-label { background: #FCF6E4; box-shadow: inset 3px 0 0 var(--gold); }
+
+.matriks tbody td.m-sel {
+    height: 62px;
+    padding: 3px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+}
+.matriks td.sekarang { background: rgba(201, 154, 46, 0.12); }
+.matriks td.bentrok { background: var(--flame-tint); }
+
+.m-blok {
+    height: 54px;
+    padding: 5px 4px 5px 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 6px;
+    border-left: 3px solid var(--blok-aksen);
+    background: var(--blok-bg);
+    transition: filter 0.12s, opacity 0.12s;
+}
+.m-blok + .m-blok { margin-top: 3px; }
+.m-utama {
+    font-size: 11.5px;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+    line-height: 1.22;
+    color: var(--ink);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.m-kedua {
+    font-size: 10.5px;
+    line-height: 1.3;
+    color: color-mix(in srgb, var(--blok-aksen) 75%, #000);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.matriks td.bentrok .m-blok { border-left-color: var(--flame); }
+
+/* jam berurutan dengan pelajaran & guru yang sama tampil sebagai satu blok */
+.m-blok.ke-kanan { margin-right: -3px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.m-blok.dari-kiri {
+    margin-left: -3px;
+    border-left: none;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.75);
+}
+.m-blok.dari-kiri > span { visibility: hidden; }
+
+.m-blok.redup { opacity: 0.25; filter: saturate(0.3); }
+
+.matriks.bisa-ubah .m-blok { cursor: pointer; }
+.matriks.bisa-ubah .m-blok:hover { filter: brightness(0.95); }
+.m-tambah {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed transparent;
+    border-radius: 6px;
+    color: transparent;
+    font-size: 18px;
+}
+.matriks.bisa-ubah td.kosong { cursor: pointer; }
+.matriks.bisa-ubah td.kosong:hover .m-tambah {
+    border-color: var(--gold);
+    background: #FCF6E4;
+    color: var(--gold-deep);
+}
+
+@media (max-width: 760px) {
+    .matriks thead th.m-sudut { width: 84px; }
+}
+
+/* teks blok awal sebuah rangkaian melebar sepanjang rangkaiannya */
+.m-blok.ke-kanan:not(.dari-kiri) { overflow: visible; }
+.m-blok.ke-kanan:not(.dari-kiri) > span {
+    position: relative;
+    z-index: 1;
+    width: calc(var(--rentang) * 100% + (var(--rentang) - 1) * 14px);
+}
+
+/* ---------- Jadwal: pilihan isi matriks (Kelas Reguler / MD / Tahsin) ---------- */
+.lingkup-toggle button { display: inline-flex; align-items: center; gap: 6px; }
+.lingkup-titik { width: 7px; height: 7px; border-radius: 50%; background: var(--titik); }
+.lingkup-toggle.dimmed button { opacity: 0.5; }
+
+/* baris ringkasan kelompok MD / Tahsin di matriks kelas reguler */
+.matriks tr.baris-grup th.m-label { background: #FAF6EA; }
+.matriks tr.baris-grup th.m-label span { font-family: "Fraunces", Georgia, serif; font-weight: 600; }
+.matriks tr:first-child.baris-grup td,
+.matriks tr:not(.baris-grup) + tr.baris-grup td,
+.matriks tr:not(.baris-grup) + tr.baris-grup th { border-top: 2px solid var(--line); }
+.m-blok.m-ringkas { cursor: pointer; }
+.m-blok.m-ringkas:hover { filter: brightness(0.95); }
+.m-blok.m-ringkas .m-kedua::after { content: " ›"; }
+
+/* banyak guru dalam satu sel: ditumpuk ringkas satu baris */
+.m-blok.rapat { height: 25px; padding-top: 2px; padding-bottom: 2px; }
+.m-blok.rapat + .m-blok.rapat { margin-top: 2px; }
+.m-blok.rapat .m-utama { -webkit-line-clamp: 1; }
+.m-blok.rapat .m-kedua { display: none; }
+
+/* sel beregu: di kolom lebar (matriks kelompok) blok berjajar, di kolom sempit menumpuk */
+.m-tumpuk { display: flex; flex-wrap: wrap; gap: 3px; }
+.m-tumpuk > .m-blok.rapat { flex: 1 1 120px; min-width: 0; }
+.m-tumpuk > .m-blok + .m-blok { margin-top: 0; }
+.matriks tr.baris-grup th.m-label { white-space: normal; line-height: 1.2; }
+.m-tumpuk { min-height: 54px; }
+.m-tumpuk > .m-blok.rapat { height: auto; min-height: 25px; }
+.matriks tbody th.m-label { white-space: normal; line-height: 1.2; }
+.matriks tr.baris-grup th.m-label span { font-size: 12px; overflow: visible; }
+/* matriks kelompok kolomnya sedikit — kolom nama kelompok boleh lebih lega */
+.matriks.kelompok thead th.m-sudut { width: 150px; }

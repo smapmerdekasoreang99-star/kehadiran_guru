@@ -6,7 +6,7 @@
 <title>Jadwal KBM — Guru Pengganti SMA Plus Merdeka Soreang</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20260916h" />
+<link rel="stylesheet" href="assets/style.css?v=20260919b" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -58,6 +58,17 @@
       </div>
       <div class="toolbar toolbar-days">
         <div id="dayTabs" class="day-tabs"></div>
+        <div class="toolbar-actions">
+          <div id="lingkupToggle" class="view-toggle lingkup-toggle" role="group" aria-label="Isi matriks" hidden>
+            <button type="button" data-lingkup="reguler">Kelas Reguler</button>
+            <button type="button" data-lingkup="md"><span class="lingkup-titik"></span>Matematika Dasar</button>
+            <button type="button" data-lingkup="tahsin"><span class="lingkup-titik"></span>Tahsin</button>
+          </div>
+          <div id="viewToggle" class="view-toggle" role="group" aria-label="Bentuk tampilan">
+            <button type="button" data-view="daftar">Daftar</button>
+            <button type="button" data-view="matriks">Matriks</button>
+          </div>
+        </div>
       </div>
 
       <div id="cariBanner" class="guru-banner" hidden>
@@ -67,7 +78,7 @@
         </div>
       </div>
 
-      <div class="table-scroll">
+      <div id="viewDaftar" class="table-scroll">
       <table>
         <thead>
           <tr>
@@ -81,6 +92,10 @@
         </thead>
         <tbody id="jadwalBody"></tbody>
       </table>
+      </div>
+
+      <div id="viewMatriks" class="matriks-scroll" hidden>
+        <table id="matriks" class="matriks"></table>
       </div>
 
       <div id="emptyState" class="empty-state" hidden>
@@ -154,6 +169,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/jadwal.js?v=20260916h"></script>
+<script type="module" src="scripts/jadwal.js?v=20260919b"></script>
 </body>
 </html>

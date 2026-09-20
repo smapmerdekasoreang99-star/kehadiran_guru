@@ -9,9 +9,10 @@
 // kolom `jenis`, karena bentuk datanya sama: satu petugas, satu tanggal,
 // hadir atau tidak.
 
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916h";
-import { demoData } from "../assets/demo-data.js?v=20260916h";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916h";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920b";
+import { demoData } from "../assets/demo-data.js?v=20260920b";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920b";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920b";
 
 try {
     initLockUI(() => render());
@@ -76,7 +77,7 @@ async function boot() {
 
     if (isSupabaseConfigured) {
         const [{ data: guru, error: eG }, { data: pengaturan }] = await Promise.all([
-            supabaseClient.from("v_guru").select("id, nama, status_aktif").order("nama"),
+            terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, status_aktif, tmt_sekolah")),
             supabaseClient.from("kg_pengaturan").select("kunci, nilai").eq("kunci", "tarif_parkiran"),
         ]);
         if (eG) { laporError("Gagal memuat data guru", eG); return; }
@@ -123,6 +124,9 @@ async function muatTanggal() {
     weekend.hidden = true;
     card.hidden = false;
 
+    // Daftar petugas mengikuti urutan masa kerja seperti daftar guru induknya.
+    const urut = peringkatGuru(state.guru);
+
     if (isSupabaseConfigured) {
         const [meja, unit, parkiran, catatan, libur] = await Promise.all([
             supabaseClient.from("kg_piket").select("guru_id, hari, jam_ke").eq("hari", state.hari),
@@ -144,12 +148,12 @@ async function muatTanggal() {
             if (!perGuru.has(p.guru_id)) perGuru.set(p.guru_id, { guru_id: p.guru_id, nama: namaGuru(p.guru_id), jam: [] });
             if (p.jam_ke != null) perGuru.get(p.guru_id).jam.push(p.jam_ke);
         }
-        state.petugasMeja = [...perGuru.values()].sort((a, b) => a.nama.localeCompare(b.nama, "id"));
+        state.petugasMeja = [...perGuru.values()].sort((a, b) => urut(a.guru_id) - urut(b.guru_id));
 
         // Tugas unit yang belum mulai atau sudah selesai pada tanggal ini tidak ikut.
         state.petugasUnit = (unit.data || [])
             .filter((u) => (!u.mulai || u.mulai <= state.tanggal) && (!u.selesai || u.selesai >= state.tanggal))
-            .sort((a, b) => String(a.unit).localeCompare(String(b.unit), "id") || a.nama.localeCompare(b.nama, "id"));
+            .sort((a, b) => String(a.unit).localeCompare(String(b.unit), "id") || urut(a.guru_id) - urut(b.guru_id));
 
         state.petugasParkiran = parkiran.data || [];
         state.catatan = catatan.data || [];
@@ -160,7 +164,7 @@ async function muatTanggal() {
             if (!perGuru.has(p.guru_id)) perGuru.set(p.guru_id, { guru_id: p.guru_id, nama: namaGuru(p.guru_id), jam: [] });
             perGuru.get(p.guru_id).jam.push(p.jam_ke);
         }
-        state.petugasMeja = [...perGuru.values()].sort((a, b) => a.nama.localeCompare(b.nama, "id"));
+        state.petugasMeja = [...perGuru.values()].sort((a, b) => urut(a.guru_id) - urut(b.guru_id));
         state.petugasUnit = [{ tugas_id: 9001, guru_id: demoData.guru[2]?.id, nama: demoData.guru[2]?.nama, unit: "Laboratorium IPA", jam_per_minggu: 4 }];
         state.petugasParkiran = [{ hari: state.hari, guru_id: demoData.guru[0]?.id, nama: demoData.guru[0]?.nama, catatan: null }];
         state.libur = null;

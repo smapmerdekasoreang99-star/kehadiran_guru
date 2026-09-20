@@ -1,10 +1,11 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916h";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916h";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916h";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260916h";
-import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas, rekapHonorMengajar, TARIF_MASA_KERJA_DEFAULT, uraiTarifMasaKerja, susunTarifMasaKerja } from "../assets/rekap-hitung.js?v=20260919b";
-import { bukuHonor, bukuKehadiran, bukuPengganti, bukuHonorMengajar, bukuPiket, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260920a";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260916h";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920b";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920b";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920b";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920b";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260920b";
+import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas, rekapHonorMengajar, TARIF_MASA_KERJA_DEFAULT, uraiTarifMasaKerja, susunTarifMasaKerja } from "../assets/rekap-hitung.js?v=20260920b";
+import { bukuHonor, bukuKehadiran, bukuPengganti, bukuHonorMengajar, bukuPiket, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260920b";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920b";
 
 try { initLockUI(() => { renderLibur(); renderPengaturan(); renderTambahan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
@@ -64,6 +65,17 @@ const tarif = () => ({ PT: Number(state.pengaturan.tarif_PT) || 0, GT: Number(st
 const tarifParkiran = () => Number(state.pengaturan?.tarif_parkiran) || 0;
 
 const namaGuru = (id) => state.guru.find((g) => g.id === id)?.nama || id;
+// Seluruh tabel rekap memakai urutan yang sama dengan daftar guru: masa kerja
+// terlama lebih dulu. Baris yang gurunya tidak dikenal jatuh ke belakang.
+let _peringkat = null, _peringkatDari = null;
+const peringkat = () => {
+    if (_peringkatDari !== state.guru) { _peringkatDari = state.guru; _peringkat = peringkatGuru(state.guru); }
+    return _peringkat;
+};
+const urutBaris = (a, b) => {
+    const urut = peringkat();
+    return urut(a.guru_id) - urut(b.guru_id) || String(a.nama || "").localeCompare(String(b.nama || ""), "id");
+};
 const namaKelas = (id) => state.kelas.find((k) => k.id === id)?.nama_kelas || id;
 const namaMapel = (id) => state.mapel.find((m) => m.id === id)?.nama_mapel || id;
 
@@ -82,7 +94,7 @@ async function boot() {
 
     if (isSupabaseConfigured) {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jadwal, error: eJ }] = await Promise.all([
-            supabaseClient.from("v_guru").select("id, nama, tmt_sekolah, status_aktif, is_staf, insentif_fingerprint").order("nama"),
+            terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, tmt_sekolah, status_aktif, is_staf, insentif_fingerprint")),
             supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
             supabaseClient.from("kg_mapel").select("id, nama_mapel"),
             supabaseClient.from("kg_jadwal_kbm").select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id").range(0, 999),
@@ -284,7 +296,7 @@ function rekapPiket() {
     }
     const rows = [...per.values()]
         .map((r) => ({ ...r, nama: namaGuru(r.guru_id), kompensasi: r.parkiran.jaga * tarifParkiran() }))
-        .sort((a, b) => a.nama.localeCompare(b.nama, "id"));
+        .sort(urutBaris);
     const total = { meja: { jaga: 0, absen: 0 }, unit: { jaga: 0, absen: 0 }, parkiran: { jaga: 0, absen: 0 }, kompensasi: 0 };
     for (const r of rows) {
         for (const k of ["meja", "unit", "parkiran"]) { total[k].jaga += r[k].jaga; total[k].absen += r[k].absen; }
@@ -325,7 +337,7 @@ function barisKehadiranTersaring() {
     return state.hasilKehadiran.baris
         .map((r) => ({ ...r, nama: namaGuru(r.guru_id) }))
         .filter((r) => !q || r.nama.toLowerCase().includes(q))
-        .sort((a, b) => a.nama.localeCompare(b.nama));
+        .sort(urutBaris);
 }
 
 function renderKehadiran() {
@@ -345,7 +357,7 @@ function renderKehadiran() {
 function barisWaliTersaring() {
     const q = state.saringWali.trim().toLowerCase();
     return (state.hasilWali?.baris || []).map((r) => ({ ...r, nama: namaGuru(r.guru_id) }))
-        .filter((r) => !q || r.nama.toLowerCase().includes(q)).sort((a, b) => a.nama.localeCompare(b.nama));
+        .filter((r) => !q || r.nama.toLowerCase().includes(q)).sort(urutBaris);
 }
 
 function renderWali() {
@@ -421,8 +433,8 @@ const rp = (v) => "Rp " + Math.round(v).toLocaleString("id-ID");
 
 function barisHonor() {
     const h = state.hasilPengganti; if (!h) return [];
-    return h.baris.map((r) => ({ nama: namaGuru(r.guru_id), PT: r.PT, GT: r.GT, Inf: r.Inf }))
-        .sort((a, b) => a.nama.localeCompare(b.nama));
+    return h.baris.map((r) => ({ guru_id: r.guru_id, nama: namaGuru(r.guru_id), PT: r.PT, GT: r.GT, Inf: r.Inf }))
+        .sort(urutBaris);
 }
 
 function renderHonor() {
@@ -447,7 +459,8 @@ function barisHonorMengajarTersaring() {
     const staf = kecualikanStaf() ? idStaf() : new Set();
     return (state.hasilHonorMengajar?.baris || [])
         .filter((r) => !staf.has(r.guru_id))
-        .filter((r) => !q || r.nama.toLowerCase().includes(q));
+        .filter((r) => !q || r.nama.toLowerCase().includes(q))
+        .sort(urutBaris);   // samakan dengan tab lain: menurut TMT, bukan masa kerja bulat
 }
 
 function renderHonorMengajar() {

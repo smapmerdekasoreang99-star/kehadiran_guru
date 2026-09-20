@@ -1,7 +1,8 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916h";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916h";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916h";
-import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260916h";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920b";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920b";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920b";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920b";
+import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260920b";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -57,7 +58,7 @@ async function boot() {
     if (isSupabaseConfigured) {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jam }] =
             await Promise.all([
-                supabaseClient.from("v_guru").select("id, nama").order("nama"),
+                terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, tmt_sekolah")),
                 supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
                 supabaseClient.from("kg_mapel").select("id, nama_mapel").order("nama_mapel"),
                 supabaseClient.from("kg_jam_pelajaran").select("*").order("jam_ke"),
@@ -380,7 +381,8 @@ function guruHariIni() {
         if (catatanUntuk(r.id)) g.absen += 1;
         map.set(r.guru_id, g);
     }
-    return [...map.values()].sort((a, b) => a.nama.localeCompare(b.nama));
+    const urut = peringkatGuru(state.guru);
+    return [...map.values()].sort((a, b) => urut(a.guru_id) - urut(b.guru_id));
 }
 
 function renderSaran() {

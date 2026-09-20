@@ -1,9 +1,10 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260916h";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260916h";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260916h";
-import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260916h";
-import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260916h";
-import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260919b";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920b";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920b";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920b";
+import { terapkanUrutan } from "../assets/guru-order.js?v=20260920b";
+import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260920b";
+import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920b";
+import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260920b";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -68,7 +69,7 @@ async function boot() {
     if (isSupabaseConfigured) {
         const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jam }] =
             await Promise.all([
-                supabaseClient.from("v_guru").select("id, nama, mapel_utama, is_piket, status_aktif").order("nama"),
+                terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, mapel_utama, is_piket, status_aktif, tmt_sekolah")),
                 supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
                 supabaseClient.from("kg_mapel").select("id, nama_mapel, rumpun_mapel").order("nama_mapel"),
                 supabaseClient.from("kg_jam_pelajaran").select("*").order("jam_ke"),

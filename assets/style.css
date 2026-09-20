@@ -1138,3 +1138,25 @@ tr.total td {
     border-top: 2px solid var(--garis-2);
     font-variant-numeric: tabular-nums;
 }
+
+/* ---- Tabel tugas wali kelas, dikelompokkan per komponen ----
+   Upacara dan Bimbingan Wali Kelas punya tarif honor sendiri-sendiri, jadi
+   keduanya dipisah dan masing-masing diberi barisan jumlahnya. Baris
+   jumlah itulah yang sebanding dengan tarif; total di kaki tabel hanya
+   menggambarkan beban tugas. */
+tr.kel-komponen td {
+    background: var(--emas-kabut);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--emas-teks);
+    border-top: 1px solid var(--garis-2);
+}
+tr.subtotal td {
+    font-weight: 700;
+    background: var(--kertas-3);
+    border-bottom: 1px solid var(--garis-2);
+    font-variant-numeric: tabular-nums;
+}
+td.komponen-sel { color: var(--tinta-2); font-size: 13px; white-space: nowrap; }

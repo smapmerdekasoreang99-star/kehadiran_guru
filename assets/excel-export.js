@@ -147,34 +147,75 @@ async function ambilLogoBase64(url) {
 // 2. REKAP KEHADIRAN GURU
 // =========================================================
 // baris: [{ nama, terjadwal, hadirTM, HTTM, ST, STT, IT, ITT, TK, hadir, persen }]
-export async function bukuKehadiran({ ExcelJS, baris, total, wali, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64, judul, namaSheet, catatan }) {
+export async function bukuKehadiran({ ExcelJS, baris, total, wali, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64, judul, namaSheet, catatan, perKomponen }) {
     const wb = new ExcelJS.Workbook();
     tulisSheetKehadiran(wb, namaSheet || "Kehadiran Guru", judul || "REKAPITULASI KEHADIRAN GURU (JAM MENGAJAR)", baris, total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64,
-        catatan: catatan ?? "Upacara dan Bimbingan Wali Kelas (Senin jam 1-2) tidak termasuk; direkap terpisah." });
+        catatan: catatan ?? "Upacara dan Bimbingan Wali Kelas (Senin jam 1-2) tidak termasuk; direkap terpisah.", perKomponen });
     if (wali) tulisSheetKehadiran(wb, "Tugas Wali Kelas", "REKAPITULASI KEHADIRAN TUGAS WALI KELAS", wali.baris, wali.total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64,
         catatan: "Upacara & Bimbingan Wali Kelas, Senin jam 1-2." });
     return wb;
 }
 
-function tulisSheetKehadiran(wb, namaSheet, judul, baris, total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64, catatan }) {
+/* Satu penulis untuk dua bentuk tabel kehadiran.
+
+   Tanpa `perKomponen`: satu daftar lurus, seperti rekap jam mengajar.
+   Dengan `perKomponen`: daftar dipecah per komponen tugas wali kelas,
+   masing-masing diberi barisan jumlahnya sendiri, dan satu kolom KOMPONEN
+   disisipkan sesudah nama. Pemecahan itu wajib ada di berkas ini, bukan
+   hanya di layar — berkas inilah yang dipakai menghitung honor, dan tarif
+   Upacara berbeda dari tarif Bimbingan Wali Kelas. Satu angka gabungan
+   tidak bisa dikalikan tarif mana pun tanpa menjadi keliru. */
+function tulisSheetKehadiran(wb, namaSheet, judul, baris, total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64, catatan, perKomponen }) {
     const ws = wb.addWorksheet(namaSheet);
-    const KOL = 12;
-    ws.columns = [{ width: 5 }, { width: 34 }, { width: 10 }, { width: 8 }, { width: 7 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 10 }, { width: 10 }];
+    const pecah = Array.isArray(perKomponen) && perKomponen.length > 0;
+    const KOL = pecah ? 13 : 12;
+    const c0 = pecah ? 4 : 3;              // kolom angka pertama
+    ws.columns = pecah
+        ? [{ width: 5 }, { width: 32 }, { width: 22 }, { width: 10 }, { width: 8 }, { width: 7 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 10 }, { width: 10 }]
+        : [{ width: 5 }, { width: 34 }, { width: 10 }, { width: 8 }, { width: 7 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 10 }, { width: 10 }];
     let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul, sub: `${labelPeriode(awal, akhir).replace(" :", ":")}  ·  ${jumlahHariKerja} hari kerja`, kolomTerakhir: KOL });
-    kepalaTabel(ws, r, ["NO", "NAMA GURU", "TERJADWAL (JP)", "HADIR", "HTTM", "ST", "STT", "IT", "ITT", "TK", "HADIR (BOBOT)", "% HADIR"], { tinggi: 30 });
+    kepalaTabel(ws, r, pecah
+        ? ["NO", "NAMA GURU", "KOMPONEN", "TERJADWAL (JP)", "HADIR", "HTTM", "ST", "STT", "IT", "ITT", "TK", "HADIR (BOBOT)", "% HADIR"]
+        : ["NO", "NAMA GURU", "TERJADWAL (JP)", "HADIR", "HTTM", "ST", "STT", "IT", "ITT", "TK", "HADIR (BOBOT)", "% HADIR"], { tinggi: 30 });
     r += 1;
-    baris.forEach((b, i) => {
-        selData(ws, r, 1, i + 1, { align: "center" }); selData(ws, r, 2, b.nama);
-        [b.terjadwal, b.hadirTM, b.HTTM, b.ST, b.STT, b.IT, b.ITT, b.TK].forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center" }));
-        selData(ws, r, 11, b.hadir, { fmt: "0.00", align: "center" });
-        selData(ws, r, 12, b.persen === null ? "" : b.persen / 100, { fmt: "0.00%", align: "center", bold: true });
-        ws.getRow(r).height = 30;
-        r += 1;
-    });
-    selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
-    [total.terjadwal, total.hadirTM, total.HTTM, total.ST, total.STT, total.IT, total.ITT, total.TK].forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", bold: true, fill: true }));
-    selData(ws, r, 11, total.hadir, { fmt: "0.00", align: "center", bold: true, fill: true });
-    selData(ws, r, 12, total.persen === null ? "" : total.persen / 100, { fmt: "0.00%", align: "center", bold: true, fill: true });
+
+    const tulisAngka = (b, opsi = {}) => {
+        [b.terjadwal, b.hadirTM, b.HTTM, b.ST, b.STT, b.IT, b.ITT, b.TK]
+            .forEach((v, j) => selData(ws, r, c0 + j, v, { align: "center", ...opsi }));
+        selData(ws, r, c0 + 8, b.hadir, { fmt: "0.00", align: "center", ...opsi });
+        selData(ws, r, c0 + 9, b.persen === null || b.persen === undefined ? "" : b.persen / 100,
+                { fmt: "0.00%", align: "center", bold: true, ...opsi });
+    };
+
+    if (pecah) {
+        for (const g of perKomponen) {
+            if (!g.baris.length) continue;
+            g.baris.forEach((b, i) => {
+                selData(ws, r, 1, i + 1, { align: "center" });
+                selData(ws, r, 2, b.nama);
+                selData(ws, r, 3, g.nama);
+                tulisAngka(b);
+                ws.getRow(r).height = 26;
+                r += 1;
+            });
+            selData(ws, r, 1, `JUMLAH ${g.nama.toUpperCase()}`, { bold: true, fill: true });
+            ws.mergeCells(r, 1, r, 3);
+            tulisAngka(g.total, { bold: true, fill: true });
+            r += 1;
+        }
+        selData(ws, r, 1, "TOTAL SELURUH TUGAS WALI KELAS", { bold: true, fill: true });
+        ws.mergeCells(r, 1, r, 3);
+        tulisAngka(total, { bold: true, fill: true });
+    } else {
+        baris.forEach((b, i) => {
+            selData(ws, r, 1, i + 1, { align: "center" }); selData(ws, r, 2, b.nama);
+            tulisAngka(b);
+            ws.getRow(r).height = 30;
+            r += 1;
+        });
+        selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
+        tulisAngka(total, { bold: true, fill: true });
+    }
     r += 2;
     ws.getCell(r, 1).value = `Bobot kehadiran: HTTM ${bobot.HTTM * 100}% · ST ${bobot.ST * 100}% · STT ${bobot.STT * 100}% · IT ${bobot.IT * 100}% · ITT ${bobot.ITT * 100}% · TK ${bobot.TK * 100}%.  % Hadir = (Hadir + jumlah berbobot) ÷ Terjadwal.  ${catatan || ""}`;
     ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true }; ws.mergeCells(r, 1, r, KOL);

@@ -428,3 +428,103 @@ export async function bukuHonorMengajar({ ExcelJS, baris, total, tarif, pengatur
     ws.pageSetup.printTitlesRow = `${t0}:${t1}`;
     return wb;
 }
+
+// =========================================================
+// 5. PELAKSANAAN PIKET + KOMPENSASI PIKET PARKIRAN
+// =========================================================
+// baris: [{ nama, meja:{jaga,absen}, unit:{jaga,absen}, parkiran:{jaga,absen}, kompensasi }]
+// Dua sheet: rekap pelaksanaan untuk kurikulum, dan daftar penerimaan
+// kompensasi parkiran yang bisa langsung ditandatangani bendahara.
+export async function bukuPiket({ ExcelJS, baris, total, tarifParkiran, pengaturan, awal, akhir, logoBase64 }) {
+    const wb = new ExcelJS.Workbook();
+    const RP = '"Rp" #,##0';
+
+    // ---- Sheet 1: rekap pelaksanaan
+    const ws = wb.addWorksheet("Pelaksanaan Piket");
+    const KOL = 9;
+    ws.columns = [{ width: 5 }, { width: 34 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 18 }];
+    let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan,
+        judul: "REKAPITULASI PELAKSANAAN TUGAS PIKET",
+        sub: labelPeriode(awal, akhir).replace(" :", ":"), kolomTerakhir: KOL });
+
+    kepalaTabel(ws, r, ["NO", "NAMA", "MEJA SEKOLAH JAGA", "MEJA SEKOLAH ABSEN", "UNIT JAGA", "UNIT ABSEN",
+                        "PARKIRAN JAGA", "PARKIRAN ABSEN", "KOMPENSASI PARKIRAN"], { tinggi: 34 });
+    r += 1;
+    baris.forEach((b, i) => {
+        selData(ws, r, 1, i + 1, { align: "center" });
+        selData(ws, r, 2, b.nama);
+        [b.meja.jaga, b.meja.absen, b.unit.jaga, b.unit.absen, b.parkiran.jaga, b.parkiran.absen]
+            .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center" }));
+        selData(ws, r, 9, b.kompensasi, { fmt: RP });
+        r += 1;
+    });
+    selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
+    [total.meja.jaga, total.meja.absen, total.unit.jaga, total.unit.absen, total.parkiran.jaga, total.parkiran.absen]
+        .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", bold: true, fill: true }));
+    selData(ws, r, 9, total.kompensasi, { fmt: RP, bold: true, fill: true });
+    r += 2;
+    ws.getCell(r, 1).value = '"Jaga" dihitung per hari, termasuk hari saat yang bersangkutan menggantikan petugas lain. '
+        + '"Absen" adalah hari terjadwal yang tidak dijalankan sendiri, baik karena tidak hadir maupun karena digantikan.';
+    ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true }; ws.mergeCells(r, 1, r, KOL);
+    r += 2;
+    blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 8, kolomTerakhir: KOL });
+    pengaturanCetak(ws, "landscape");
+    ws.pageSetup.printTitlesRow = "6:6";
+
+    // ---- Sheet 2: daftar penerimaan kompensasi parkiran
+    const penerima = baris.filter((b) => b.parkiran.jaga > 0);
+    const ws2 = wb.addWorksheet("Kompensasi Parkiran");
+    const KOL2 = 7;
+    ws2.columns = [{ width: 5 }, { width: 34 }, { width: 12 }, { width: 14 }, { width: 17 }, { width: 19 }, { width: 19 }];
+    let r2 = tulisKop(ws2, { ExcelJS, wb, logoBase64, pengaturan,
+        judul: "DAFTAR PENERIMAAN KOMPENSASI PIKET PARKIRAN",
+        sub: `TAHUN AJARAN ${pengaturan.tahun_ajaran}`, kolomTerakhir: KOL2 });
+    ws2.getCell(r2, 5).value = labelPeriode(awal, akhir);
+    ws2.getCell(r2, 5).font = { name: FONT, size: 10, bold: true };
+    ws2.mergeCells(r2, 5, r2, KOL2);
+    r2 += 1;
+
+    kepalaTabel(ws2, r2, ["NO", "NAMA", "HARI JAGA", "TARIF/HARI", "JUMLAH", "TANDA TANGAN", ""]);
+    ws2.mergeCells(r2, 6, r2, 7);
+    r2 += 1;
+    let totJaga = 0, totJumlah = 0;
+    penerima.forEach((b, i) => {
+        totJaga += b.parkiran.jaga; totJumlah += b.kompensasi;
+        selData(ws2, r2, 1, i + 1, { align: "center" });
+        selData(ws2, r2, 2, b.nama);
+        selData(ws2, r2, 3, b.parkiran.jaga, { align: "center" });
+        selData(ws2, r2, 4, tarifParkiran, { fmt: "#,##0" });
+        selData(ws2, r2, 5, b.kompensasi, { fmt: RP, bold: true });
+        const kiri = i % 2 === 0;
+        selData(ws2, r2, 6, kiri ? `${i + 1}. ……………………` : "", { align: "left" });
+        selData(ws2, r2, 7, kiri ? "" : `${i + 1}. ……………………`, { align: "left" });
+        ws2.getRow(r2).height = 30;
+        r2 += 1;
+    });
+    if (!penerima.length) {
+        selData(ws2, r2, 1, "Belum ada petugas parkiran yang berjaga pada periode ini.", { align: "center" });
+        ws2.mergeCells(r2, 1, r2, KOL2);
+        r2 += 1;
+    }
+    selData(ws2, r2, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws2.mergeCells(r2, 1, r2, 2);
+    selData(ws2, r2, 3, totJaga, { align: "center", bold: true, fill: true });
+    selData(ws2, r2, 4, "", { fill: true });
+    selData(ws2, r2, 5, totJumlah, { fmt: RP, bold: true, fill: true });
+    selData(ws2, r2, 6, "", { fill: true }); selData(ws2, r2, 7, "", { fill: true });
+    ws2.mergeCells(r2, 6, r2, 7);
+    r2 += 1;
+    selData(ws2, r2, 1, "Terbilang:", { bold: true }); ws2.mergeCells(r2, 1, r2, 2);
+    selData(ws2, r2, 3, terbilang(totJumlah), { wrap: true }); ws2.mergeCells(r2, 3, r2, KOL2);
+    ws2.getCell(r2, 3).font = { name: FONT, size: 10, italic: true };
+    ws2.getRow(r2).height = 22;
+    r2 += 2;
+    r2 = blokTandaTangan(ws2, r2, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 5, kolomTerakhir: KOL2 });
+    ws2.getCell(r2, 2).value = `Keterangan: kompensasi dihitung per hari petugas benar-benar berjaga, ${'Rp ' + Number(tarifParkiran || 0).toLocaleString("id-ID")} per hari. `
+        + "Hari saat petugas digantikan dibayarkan kepada penggantinya.";
+    ws2.getCell(r2, 2).font = { name: FONT, size: 9, italic: true };
+    ws2.mergeCells(r2, 2, r2, KOL2);
+    pengaturanCetak(ws2, "portrait");
+    ws2.pageSetup.printTitlesRow = "7:7";
+
+    return wb;
+}

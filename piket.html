@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pelaksanaan Piket — Guru Pengganti SMA Plus Merdeka Soreang</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=20260916h" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="assets/logo.png" alt="Lambang SMA Plus Merdeka Soreang" />
+      <div class="name">SMA Plus<br/>Merdeka Soreang</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="index.html">Beranda</a>
+      <a href="jadwal.html">Jadwal KBM</a>
+      <a href="ketidakhadiran.html">Ketidakhadiran Guru</a>
+      <a href="penugasan.html">Penugasan Pengganti</a>
+      <a href="piket.html" class="active">Pelaksanaan Piket</a>
+      <a href="rekap.html">Rekap</a>
+    </nav>
+
+    <div class="sidebar-foot">Sistem Guru Pengganti<br/>Tahun Ajaran 2026/2027</div>
+  </aside>
+
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Pelaksanaan Piket</h1>
+        <p>Catat siapa yang benar-benar menjalankan piket hari itu — meja sekolah, unit, dan parkiran.</p>
+      </div>
+      <div class="page-head-actions">
+        <div class="date-field">
+          <label for="tanggalPicker">Tanggal</label>
+          <input type="date" id="tanggalPicker" />
+          <span class="hari-badge">Hari: <span id="hariLabel">—</span></span>
+        </div>
+        <button id="lockToggle" class="btn-lock">🔒 Buka Kunci Edit</button>
+      </div>
+    </div>
+
+    <div id="notice" class="notice" hidden>
+      Mode pratinjau — belum terhubung ke Supabase. Menampilkan petugas contoh; catatan kehadiran
+      hanya tersimpan sementara di halaman ini.
+    </div>
+
+    <div id="weekendNotice" class="weekend-notice" hidden>
+      Tidak ada piket pada hari ini (Sabtu/Minggu). Pilih tanggal hari kerja (Senin–Jumat).
+    </div>
+
+    <div id="liburNotice" class="weekend-notice" hidden></div>
+
+    <div id="mainCard">
+      <div class="rekap-tabs">
+        <button type="button" class="rekap-tab active" data-tab="meja">Piket Meja Sekolah</button>
+        <button type="button" class="rekap-tab" data-tab="unit">Piket Unit</button>
+        <button type="button" class="rekap-tab" data-tab="parkiran">Piket Parkiran</button>
+      </div>
+
+      <!-- TAB: meja sekolah -->
+      <section id="tab-meja" class="card">
+        <div class="toolbar">
+          <span id="ringkasMeja" class="tugas-note"></span>
+          <div class="toolbar-actions">
+            <button type="button" id="semuaHadirMeja" class="btn btn-primary">Tandai semua hadir</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="tabel-rekap">
+            <thead>
+              <tr>
+                <th>Petugas</th>
+                <th style="width:150px">Jam jaga</th>
+                <th style="width:210px">Status</th>
+                <th style="width:220px">Pengganti</th>
+                <th>Catatan</th>
+              </tr>
+            </thead>
+            <tbody id="bodyMeja"></tbody>
+          </table>
+        </div>
+        <div id="kosongMeja" class="empty-state" hidden>Tidak ada petugas piket meja sekolah pada hari ini. Jadwalnya diatur di Data Induk → Piket &amp; Honor.</div>
+        <div class="table-foot">Dasar jadwalnya adalah jadwal piket meja sekolah. Satu baris per petugas per hari, bukan per jam pelajaran.</div>
+      </section>
+
+      <!-- TAB: unit -->
+      <section id="tab-unit" class="card" hidden>
+        <div class="toolbar">
+          <span id="ringkasUnit" class="tugas-note"></span>
+          <div class="toolbar-actions">
+            <button type="button" id="semuaHadirUnit" class="btn btn-primary">Tandai semua hadir</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="tabel-rekap">
+            <thead>
+              <tr>
+                <th>Penanggung jawab</th>
+                <th style="width:190px">Unit</th>
+                <th style="width:210px">Status</th>
+                <th style="width:220px">Pengganti</th>
+                <th>Catatan</th>
+              </tr>
+            </thead>
+            <tbody id="bodyUnit"></tbody>
+          </table>
+        </div>
+        <div id="kosongUnit" class="empty-state" hidden>Belum ada guru diperbantukan pada tahun ajaran ini. Dicatat di Data Induk → Tugas Guru, jenis "Diperbantukan".</div>
+        <div class="table-foot">Guru yang diperbantukan menjaga unitnya (mis. Lab IPA, Perpustakaan) pada jam piket unit yang tercatat di Data Induk.</div>
+      </section>
+
+      <!-- TAB: parkiran -->
+      <section id="tab-parkiran" class="card" hidden>
+        <div class="toolbar">
+          <span id="ringkasParkiran" class="tugas-note"></span>
+        </div>
+        <div class="table-scroll">
+          <table class="tabel-rekap">
+            <thead>
+              <tr>
+                <th>Petugas</th>
+                <th style="width:210px">Status</th>
+                <th style="width:220px">Pengganti</th>
+                <th style="width:150px" class="num">Kompensasi</th>
+                <th>Catatan</th>
+              </tr>
+            </thead>
+            <tbody id="bodyParkiran"></tbody>
+          </table>
+        </div>
+        <div id="kosongParkiran" class="empty-state" hidden>Belum ada petugas parkiran untuk hari ini. Tetapkan di Data Induk → Piket &amp; Honor → Piket parkiran.</div>
+        <div class="table-foot" id="footParkiran"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- Modal: PIN (satu kali per sesi browser) -->
+<div id="pinModal" class="modal-backdrop" hidden>
+  <div class="modal" style="max-width:360px;">
+    <h2>Buka Kunci Edit</h2>
+    <p style="margin:-8px 0 16px;color:#6E6455;font-size:13.5px;">Masukkan PIN untuk mencatat pelaksanaan piket.</p>
+    <form id="pinForm">
+      <div class="field">
+        <label for="pinInput">PIN</label>
+        <input type="password" id="pinInput" inputmode="text" autocomplete="off" required />
+        <p id="pinError" hidden style="color:#A8432E;font-size:12.5px;margin:6px 0 0;">PIN salah, coba lagi.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="pinCancel" class="btn btn-ghost">Batal</button>
+        <button type="submit" class="btn btn-primary">Konfirmasi</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script type="module" src="scripts/piket.js?v=20260920a"></script>
+</body>
+</html>

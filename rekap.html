@@ -24,6 +24,7 @@
       <a href="jadwal.html">Jadwal KBM</a>
       <a href="ketidakhadiran.html">Ketidakhadiran Guru</a>
       <a href="penugasan.html">Penugasan Pengganti</a>
+      <a href="piket.html">Pelaksanaan Piket</a>
       <a href="rekap.html" class="active">Rekap</a>
     </nav>
 
@@ -58,6 +59,7 @@
       <button type="button" class="rekap-tab" data-tab="wali">Tugas Wali Kelas</button>
       <button type="button" class="rekap-tab" data-tab="pengganti">Guru Pengganti</button>
       <button type="button" class="rekap-tab" data-tab="honor">Honor Pengganti</button>
+      <button type="button" class="rekap-tab" data-tab="piket">Piket</button>
       <button type="button" class="rekap-tab" data-tab="libur">Hari Libur</button>
       <button type="button" class="rekap-tab" data-tab="pengaturan">Pengaturan</button>
     </div>
@@ -235,6 +237,38 @@
       <div class="table-foot" id="footHonorTeks"></div>
     </section>
 
+    <!-- TAB: Piket -->
+    <section id="tab-piket" class="card" hidden>
+      <div class="toolbar">
+        <span id="ringkasPiket" class="tugas-note"></span>
+        <div class="toolbar-actions">
+          <button type="button" id="xlsPiket" class="btn btn-primary">⬇ Unduh Excel</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="tabel-rekap">
+          <thead>
+            <tr>
+              <th rowspan="2">No</th><th rowspan="2">Nama</th>
+              <th colspan="2">Meja Sekolah</th>
+              <th colspan="2">Unit</th>
+              <th colspan="2">Parkiran</th>
+              <th rowspan="2" class="num">Kompensasi Parkiran</th>
+            </tr>
+            <tr>
+              <th class="num">Jaga</th><th class="num">Absen</th>
+              <th class="num">Jaga</th><th class="num">Absen</th>
+              <th class="num">Jaga</th><th class="num">Absen</th>
+            </tr>
+          </thead>
+          <tbody id="bodyPiket"></tbody>
+          <tfoot id="footPiket"></tfoot>
+        </table>
+      </div>
+      <div id="kosongPiket" class="empty-state" hidden>Belum ada catatan pelaksanaan piket pada rentang tanggal ini. Diisi di halaman Pelaksanaan Piket.</div>
+      <div class="table-foot" id="footPiketTeks"></div>
+    </section>
+
     <!-- TAB: Pengaturan -->
     <section id="tab-pengaturan" class="card" hidden>
       <div class="pengaturan-grid">
@@ -243,6 +277,8 @@
           <div class="field"><label for="pTarifPT">PT — Piket diTugaskan (Rp)</label><input type="number" id="pTarifPT" min="0" step="500" /></div>
           <div class="field"><label for="pTarifGT">GT — Guru diTugaskan (Rp)</label><input type="number" id="pTarifGT" min="0" step="500" /></div>
           <div class="field"><label for="pTarifInf">Inf — Infaler (Rp)</label><input type="number" id="pTarifInf" min="0" step="500" /></div>
+          <div class="field"><label for="pTarifParkiran">Piket parkiran — per hari jaga (Rp)</label><input type="number" id="pTarifParkiran" min="0" step="500" />
+            <p class="field-hint">Bukan per jam. Dihitung per hari petugas benar-benar berjaga; rosternya di Data Induk → Piket &amp; Honor.</p></div>
         </div>
         <div class="pengaturan-blok">
           <h3>Tarif honor mengajar</h3>
@@ -336,6 +372,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/rekap.js?v=20260919b"></script>
+<script type="module" src="scripts/rekap.js?v=20260920a"></script>
 </body>
 </html>

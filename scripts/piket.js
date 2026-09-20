@@ -9,10 +9,10 @@
 // kolom `jenis`, karena bentuk datanya sama: satu petugas, satu tanggal,
 // hadir atau tidak.
 
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920b";
-import { demoData } from "../assets/demo-data.js?v=20260920b";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920b";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920b";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920h";
+import { demoData } from "../assets/demo-data.js?v=20260920h";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920h";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920h";
 
 try {
     initLockUI(() => render());
@@ -38,7 +38,6 @@ function laporError(konteks, error) {
 const HARI_LIST = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
 const HARI_FROM_JS_DAY = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const JENIS = { meja: "Meja Sekolah", unit: "Unit", parkiran: "Parkiran" };
-const TARIF_PARKIRAN_BAWAAN = 10000;
 
 function todayISO() {
     const d = new Date();
@@ -47,7 +46,6 @@ function todayISO() {
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const rp = (n) => "Rp " + Number(n || 0).toLocaleString("id-ID");
 
 let state = {
     tanggal: isSupabaseConfigured ? todayISO() : "2026-09-14",
@@ -59,7 +57,6 @@ let state = {
     petugasParkiran: [],  // [{ guru_id, nama, catatan }]
     catatan: [],          // baris kg_pelaksanaan_piket pada tanggal ini
     libur: null,
-    tarifParkiran: TARIF_PARKIRAN_BAWAAN,
 };
 
 const namaGuru = (id) => state.guru.find((g) => g.id === id)?.nama || id;
@@ -76,14 +73,10 @@ async function boot() {
     document.getElementById("notice").hidden = isSupabaseConfigured;
 
     if (isSupabaseConfigured) {
-        const [{ data: guru, error: eG }, { data: pengaturan }] = await Promise.all([
-            terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, status_aktif, tmt_sekolah")),
-            supabaseClient.from("kg_pengaturan").select("kunci, nilai").eq("kunci", "tarif_parkiran"),
-        ]);
+        const { data: guru, error: eG } = await terapkanUrutan(
+            supabaseClient.from("v_guru").select("id, nama, status_aktif, tmt_sekolah"));
         if (eG) { laporError("Gagal memuat data guru", eG); return; }
         state.guru = guru || [];
-        const t = Number((pengaturan || [])[0]?.nilai);
-        state.tarifParkiran = Number.isFinite(t) && t > 0 ? t : TARIF_PARKIRAN_BAWAAN;
     } else {
         state.guru = demoData.guru.map((g) => ({ ...g, status_aktif: "Aktif" }));
     }
@@ -101,8 +94,10 @@ async function boot() {
         for (const t of ["meja", "unit", "parkiran"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
     }));
 
-    for (const tab of ["meja", "unit", "parkiran"])
+    for (const tab of ["meja", "unit", "parkiran"]) {
         document.getElementById(idSimpan(tab)).addEventListener("click", () => simpanBelumTercatat(tab));
+        document.getElementById(idBatal(tab)).addEventListener("click", () => batalkanSemua(tab));
+    }
 
     await muatTanggal();
 }
@@ -182,6 +177,22 @@ async function muatTanggal() {
 // ---------- Render ----------
 const besar = (tab) => tab[0].toUpperCase() + tab.slice(1);
 const idSimpan = (tab) => "simpan" + besar(tab);
+const idBatal = (tab) => "batal" + besar(tab);
+
+const BULAN_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                  "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+function tglIndo(iso) {
+    const d = new Date(iso + "T00:00:00");
+    return `${d.getDate()} ${BULAN_ID[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// Seluruh catatan satu jenis pada tanggal yang sedang dibuka. Sengaja
+// dihitung dari state.catatan, bukan dari baris yang tampil: bila jadwal
+// piketnya diubah SESUDAH pelaksanaannya dicatat, catatan petugas lama
+// tetap ada di database walau namanya tidak lagi muncul di tabel. Kalau
+// dihitung dari tabel, catatan itu tertinggal dan diam-diam ikut terhitung
+// di Induk Pembiayaan.
+const catatanJenis = (tab) => state.catatan.filter((c) => c.jenis === JENIS[tab]);
 
 function render() {
     renderTabel("meja");
@@ -239,9 +250,6 @@ function renderTabel(tab) {
         const kolomTengah = tab === "meja"
             ? `<td>${p.jam.length ? "jam ke-" + ringkasJam(p.jam) : '<span class="tugas-note">—</span>'}</td>`
             : tab === "unit" ? `<td>${esc(p.unit || "—")}</td>` : "";
-        const kolomUang = tab === "parkiran"
-            ? `<td class="num">${status && status !== "Tidak Hadir" ? rp(state.tarifParkiran) : '<span class="tugas-note">—</span>'}</td>`
-            : "";
         return `<tr data-guru="${esc(p.guru_id)}" data-tugas="${tugasId == null ? "" : esc(tugasId)}" data-jenis="${esc(jenis)}"
                     class="${c ? "" : "belum"}">
             <td class="nama">${esc(p.nama)}${status === "Digantikan"
@@ -250,7 +258,6 @@ function renderTabel(tab) {
             ${kolomTengah}
             <td>${selStatus(status, unlocked, !c)}</td>
             <td>${selPengganti(p.guru_id, c?.pengganti_id, unlocked, perluPengganti)}</td>
-            ${kolomUang}
             <td><input type="text" class="kelas-filter" data-aksi="catatan" style="min-width:160px"
                  value="${esc(c?.catatan || "")}" placeholder="opsional" ${unlocked ? "" : "disabled"}></td>
           </tr>`;
@@ -265,6 +272,18 @@ function renderTabel(tab) {
     const tombol = document.getElementById(idSimpan(tab));
     tombol.disabled = !unlocked || !belum;
     tombol.textContent = belum ? `Simpan ${belum} yang belum tercatat` : "Semua sudah tercatat";
+
+    /* Jalan keluar bila ternyata salah — misalnya tanggalnya keliru dan
+       sehari penuh terlanjur tercatat. Membatalkan satu per satu lewat
+       pilihan "— batalkan catatan —" di kolom status tetap bisa, tetapi
+       untuk 20-an baris itu menyiksa. Tombolnya hanya muncul kalau memang
+       ada yang bisa dibatalkan, supaya tidak menggoda saat tidak perlu. */
+    const sudah = catatanJenis(tab).length;
+    const batal = document.getElementById(idBatal(tab));
+    batal.hidden = !sudah;
+    batal.disabled = !unlocked;
+    batal.textContent = `Batalkan ${sudah} catatan tanggal ini`;
+    batal.title = unlocked ? "" : "Buka kunci edit dahulu";
 
     renderRingkas(tab);
 }
@@ -291,9 +310,8 @@ function renderRingkas(tab) {
     if (tab === "parkiran") {
         const terlaksana = n("Hadir") + n("Digantikan");
         document.getElementById("footParkiran").textContent =
-            `Kompensasi ${rp(state.tarifParkiran)} per hari, dihitung untuk petugas yang benar-benar berjaga`
-            + ` (bila digantikan, jatuh ke penggantinya). Hari ini: ${terlaksana ? rp(terlaksana * state.tarifParkiran) : rp(0)}.`
-            + " Tarifnya diubah di Rekap → Pengaturan.";
+            `${terlaksana} hari jaga terhitung pada tanggal ini. Bila petugas digantikan, harinya `
+            + "jatuh ke penggantinya. Besaran kompensasinya dihitung di aplikasi Induk Pembiayaan.";
     }
 }
 
@@ -403,6 +421,55 @@ async function simpanBelumTercatat(tab) {
     if (tertunda) laporError("Sebagian belum tersimpan",
         { message: `${tertunda} baris berstatus Digantikan belum menyebut penggantinya.` });
     renderTabel(tab);
+}
+
+/* Membatalkan SELURUH catatan satu jenis pada tanggal yang sedang dibuka.
+   Kasus yang ditangani: tanggalnya keliru, lalu sehari penuh terlanjur
+   tercatat. Membatalkan satu per satu lewat pilihan "— batalkan catatan —"
+   di kolom status tetap bisa dan tetap berguna untuk memperbaiki satu
+   orang; yang ini untuk sekali hapus.
+
+   Penghapusannya tidak bisa dikembalikan, jadi jumlah, jenis, dan
+   tanggalnya disebut lengkap lebih dulu. Memakai confirm bawaan peramban
+   dan bukan dialog buatan sendiri — dialog buatan sendiri pernah tertimbun
+   toolbar sehingga tombolnya tidak bisa ditekan; confirm bawaan digambar
+   oleh peramban, di luar jangkauan lapisan halaman. */
+async function batalkanSemua(tab) {
+    if (!isUnlocked()) return;
+    const baris = catatanJenis(tab);
+    if (!baris.length) return;
+
+    const setuju = confirm(
+        `Batalkan ${baris.length} catatan piket ${JENIS[tab]} pada ${tglIndo(state.tanggal)}?\n\n`
+        + `Seluruh petugas pada tanggal itu kembali berstatus "belum dicatat", `
+        + `dan tanggal ini tidak lagi terhitung di Induk Pembiayaan.\n\n`
+        + `Yang dibatalkan tidak bisa dikembalikan — harus dicatat ulang.`);
+    if (!setuju) return;
+
+    if (isSupabaseConfigured) {
+        const { error } = await supabaseClient.from("kg_pelaksanaan_piket")
+            .delete().in("id", baris.map((c) => c.id));
+        if (error) { laporError("Gagal membatalkan catatan piket", error); return; }
+    }
+    state.catatan = state.catatan.filter((c) => c.jenis !== JENIS[tab]);
+    renderTabel(tab);
+    kabar(`${baris.length} catatan piket ${JENIS[tab]} pada ${tglIndo(state.tanggal)} dibatalkan. `
+        + `Petugasnya kembali berstatus belum dicatat.`);
+}
+
+/* Kabar hasil tindakan yang berhasil. Bentuknya sama dengan banner galat
+   dan letaknya sama, supaya hasil sebuah tindakan selalu dicari di satu
+   tempat — hanya warnanya netral, dan hilang sendiri setelah beberapa detik. */
+function kabar(pesan) {
+    document.getElementById("kabarBanner")?.remove();
+    const box = document.createElement("div");
+    box.id = "kabarBanner";
+    box.className = "error-banner kabar";
+    box.innerHTML = `${esc(pesan)}<button type="button" class="error-close" aria-label="Tutup">×</button>`;
+    const main = document.querySelector("main");
+    main.insertBefore(box, main.firstChild);
+    box.querySelector(".error-close").addEventListener("click", () => box.remove());
+    setTimeout(() => { if (box.isConnected) box.remove(); }, 9000);
 }
 
 boot().catch((err) => laporError("Gagal memuat halaman", err));

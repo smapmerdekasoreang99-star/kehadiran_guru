@@ -45,29 +45,34 @@ export function terbilang(n) {
     return terbilangInner(n).replace(/\s+/g, " ").trim() + " Rupiah";
 }
 
-// ---------- Kop surat bersama ----------
+/* Penjaga: bila assets/kop-dokumen.js tidak termuat, unduhan gagal dengan
+   pesan yang bisa ditindaklanjuti, bukan "undefined". */
+function kopBersama() {
+  if (!window.KopDokumen) throw new Error(
+    'Berkas assets/kop-dokumen.js belum termuat, sehingga kop dokumen tidak bisa dibuat. '
+    + 'Muat ulang halaman; bila tetap gagal, laporkan ke operator.');
+  return window.KopDokumen;
+}
+
+/* ---------- Kop surat bersama ----------
+   Susunan dan letaknya tidak ditentukan di sini melainkan di
+   assets/kop-dokumen.js — berkas yang sama persis di keempat aplikasi dan
+   membaca tata letak yang diatur operator di Data Induk → Profil Dokumen.
+   Dimuat sebagai skrip biasa di rekap.html, jadi tersedia sebagai
+   window.KopDokumen sebelum modul ini dijalankan. */
 function tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul, sub, kolomTerakhir }) {
-    if (logoBase64) {
-        const imgId = wb.addImage({ base64: logoBase64, extension: "png" });
-        // penjangkaran dua sel (twoCellAnchor): paling luas didukung penampil (Excel, LibreOffice, Google Sheets, WPS)
-        ws.addImage(imgId, { tl: { col: 0.1, row: 0.1 }, br: { col: 1.12, row: 2.7 }, editAs: "oneCell" });
-    }
-    // Nama & alamat sekolah rata kiri, mulai kolom C (di samping logo); judul tetap di tengah
-    ws.getCell(1, 2).value = pengaturan.nama_sekolah;
-    ws.getCell(1, 2).font = { name: FONT, size: 12, bold: true };
-    ws.getCell(2, 2).value = pengaturan.alamat_sekolah;
-    ws.getCell(2, 2).font = { name: FONT, size: 9 };
-    ws.mergeCells(1, 2, 1, kolomTerakhir); ws.mergeCells(2, 2, 2, kolomTerakhir);
-    // indentasi agar teks mulai tepat di sebelah kanan logo (logo menjorok ke awal kolom B)
-    ws.getCell(1, 2).alignment = { horizontal: "left", vertical: "bottom", indent: 2 };
-    ws.getCell(2, 2).alignment = { horizontal: "left", vertical: "top", indent: 2 };
-    ws.getCell(4, 1).value = judul;
-    ws.getCell(4, 1).font = { name: FONT, size: 12, bold: true };
-    ws.getCell(5, 1).value = sub || "";
-    ws.getCell(5, 1).font = { name: FONT, size: 10 };
-    for (const r of [4, 5]) { ws.mergeCells(r, 1, r, kolomTerakhir); ws.getCell(r, 1).alignment = { horizontal: "center", vertical: "middle" }; }
-    ws.getRow(1).height = 24; ws.getRow(2).height = 16; ws.getRow(3).height = 12;
-    return 6; // baris berikutnya yang kosong
+    return kopBersama().kopExcel(ws, {
+        wb,
+        logo: logoBase64 ? { base64: logoBase64 } : null,
+        // profil = baris v_penanda_tangan apa adanya; bila belum terbaca,
+        // disusun dari nilai bawaan supaya kop tetap terbentuk.
+        profil: pengaturan.profil || { nama_sekolah: pengaturan.nama_sekolah,
+                                       alamat: pengaturan.alamat_sekolah,
+                                       kota: pengaturan.tempat },
+        judul, sub: sub || "",
+        kolomAkhir: kolomTerakhir,
+        font: FONT
+    });
 }
 
 function kepalaTabel(ws, baris, labels, opsi = {}) {
@@ -97,12 +102,20 @@ function pengaturanCetak(ws, orientasi = "portrait") {
     ws.views = [{ showGridLines: false }];
 }
 
+/* Blok tanda tangan. Aturannya: yang menandatangani adalah pejabat yang
+   berwenang atas ISI dokumen — untuk aplikasi ini Wakasek Kurikulum, karena
+   kehadiran guru adalah ranah kurikulum — dan Kepala Sekolah mengetahui.
+   Karena itu "Mengetahui," selalu di kiri di atas Kepala Sekolah, dan
+   pejabat penanggung jawabnya di kanan sejajar dengan tanggal. */
 function blokTandaTangan(ws, baris, { pengaturan, tanggal, kolomKiri, kolomKanan, kolomTerakhir }) {
     const tgl = `${pengaturan.tempat}, ${tglIndo(tanggal)}`;
     const set = (r, c, v, bold = false) => { const cell = ws.getCell(r, c); cell.value = v; cell.font = { name: FONT, size: 10, bold }; cell.alignment = { horizontal: "center" }; };
+    set(baris, kolomKiri, "Mengetahui,");
     set(baris, kolomKanan, tgl);
-    set(baris + 1, kolomKiri, "Kepala Sekolah,"); set(baris + 1, kolomKanan, "Bendahara,");
-    set(baris + 6, kolomKiri, pengaturan.kepala_sekolah, true); set(baris + 6, kolomKanan, pengaturan.bendahara, true);
+    set(baris + 1, kolomKiri, "Kepala Sekolah,");
+    set(baris + 1, kolomKanan, "Wakasek Kurikulum,");
+    set(baris + 6, kolomKiri, pengaturan.kepala_sekolah || "……………………", true);
+    set(baris + 6, kolomKanan, pengaturan.kurikulum || "……………………", true);
     ws.getCell(baris + 6, kolomKiri).font = { name: FONT, size: 10, bold: true, underline: true };
     ws.getCell(baris + 6, kolomKanan).font = { name: FONT, size: 10, bold: true, underline: true };
     return baris + 8;
@@ -128,72 +141,6 @@ async function ambilLogoBase64(url) {
     }
     console.error("Logo tidak dapat dimuat — periksa berkas assets/logo-kecil.png dan assets/logo.png di server.");
     return null;
-}
-
-// =========================================================
-// 1. HONOR / TRANSPORT GURU PENGGANTI (format keuangan)
-// =========================================================
-// baris: [{ nama, PT, GT, Inf }]  tarif: { PT, GT, Inf }
-export async function bukuHonor({ ExcelJS, baris, tarif, pengaturan, awal, akhir, logoBase64 }) {
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Honor Pengganti");
-    const KOL = 11; // A..K
-    ws.columns = [{ width: 5 }, { width: 34 }, { width: 6 }, { width: 13 }, { width: 6 }, { width: 13 }, { width: 6 }, { width: 13 }, { width: 17 }, { width: 19 }, { width: 19 }];
-
-    let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul: "DAFTAR PENERIMAAN TRANSPORT GURU PENGGANTI", sub: `TAHUN AJARAN ${pengaturan.tahun_ajaran}`, kolomTerakhir: KOL });
-    ws.getCell(r, 9).value = labelPeriode(awal, akhir); ws.getCell(r, 9).font = { name: FONT, size: 10, bold: true }; ws.mergeCells(r, 9, r, KOL);
-    r += 1;
-
-    kepalaTabel(ws, r, ["NO", "NAMA", "PT", "HONOR", "GT", "HONOR", "INF", "HONOR", "JUMLAH", "TANDA TANGAN", ""]);
-    ws.mergeCells(r, 10, r, 11);
-    r += 1;
-
-    const RP = '"Rp" #,##0';
-    let tot = { PT: 0, GT: 0, Inf: 0, jumlah: 0 };
-    baris.forEach((b, i) => {
-        const jumlah = b.PT * tarif.PT + b.GT * tarif.GT + b.Inf * tarif.Inf;
-        tot.PT += b.PT; tot.GT += b.GT; tot.Inf += b.Inf; tot.jumlah += jumlah;
-        selData(ws, r, 1, i + 1, { align: "center" });
-        selData(ws, r, 2, b.nama);
-        selData(ws, r, 3, b.PT, { align: "center" }); selData(ws, r, 4, tarif.PT, { fmt: "#,##0" });
-        selData(ws, r, 5, b.GT, { align: "center" }); selData(ws, r, 6, tarif.GT, { fmt: "#,##0" });
-        selData(ws, r, 7, b.Inf, { align: "center" }); selData(ws, r, 8, tarif.Inf, { fmt: "#,##0" });
-        selData(ws, r, 9, jumlah, { fmt: RP, bold: true });
-        // tanda tangan bergantian kiri/kanan seperti format asli
-        const kiri = i % 2 === 0;
-        selData(ws, r, 10, kiri ? `${i + 1}. ……………………` : "", { align: "left" });
-        selData(ws, r, 11, kiri ? "" : `${i + 1}. ……………………`, { align: "left" });
-        ws.getRow(r).height = 30;
-        r += 1;
-    });
-    // jumlah
-    selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
-    selData(ws, r, 3, tot.PT, { bold: true, align: "center", fill: true }); selData(ws, r, 4, tot.PT * tarif.PT, { fmt: RP, bold: true, fill: true });
-    selData(ws, r, 5, tot.GT, { bold: true, align: "center", fill: true }); selData(ws, r, 6, tot.GT * tarif.GT, { fmt: RP, bold: true, fill: true });
-    selData(ws, r, 7, tot.Inf, { bold: true, align: "center", fill: true }); selData(ws, r, 8, tot.Inf * tarif.Inf, { fmt: RP, bold: true, fill: true });
-    selData(ws, r, 9, tot.jumlah, { fmt: RP, bold: true, fill: true });
-    selData(ws, r, 10, "", { fill: true }); selData(ws, r, 11, "", { fill: true });
-    ws.mergeCells(r, 10, r, 11);
-    r += 1;
-    selData(ws, r, 1, "Terbilang:", { bold: true }); ws.mergeCells(r, 1, r, 2);
-    selData(ws, r, 3, terbilang(tot.jumlah), { wrap: true }); ws.mergeCells(r, 3, r, KOL);
-    ws.getCell(r, 3).font = { name: FONT, size: 10, italic: true };
-    ws.getRow(r).height = 22;
-    r += 2;
-
-    r = blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 9, kolomTerakhir: KOL });
-
-    // keterangan tarif
-    ws.getCell(r, 2).value = "Keterangan:"; ws.getCell(r, 2).font = { name: FONT, size: 9, bold: true };
-    const ket = [["PT", "Piket yang ditugaskan", tarif.PT], ["GT", "Guru yang ditugaskan", tarif.GT], ["Inf", "Infaler yang ditugaskan", tarif.Inf]];
-    ket.forEach(([k, l, t], i) => {
-        ws.getCell(r + 1 + i, 2).value = `${k} = ${l}`; ws.getCell(r + 1 + i, 2).font = { name: FONT, size: 9 };
-        ws.getCell(r + 1 + i, 4).value = t; ws.getCell(r + 1 + i, 4).numFmt = RP; ws.getCell(r + 1 + i, 4).font = { name: FONT, size: 9 };
-    });
-
-    pengaturanCetak(ws, "portrait");
-    ws.pageSetup.printTitlesRow = "7:7";
-    return wb;
 }
 
 // =========================================================
@@ -292,176 +239,33 @@ export async function unduhWorkbook(wb, namaFile) {
 export { ambilLogoBase64 };
 
 // =========================================================
-// HONOR / GAJI GURU (mengajar) — tata letak mengikuti format sekolah
+// 4. PELAKSANAAN PIKET
 // =========================================================
-export async function bukuHonorMengajar({ ExcelJS, baris, total, tarif, pengaturan, awal, akhir, logoBase64 }) {
-    const FONT2 = '"Public Sans", Arial, sans-serif';
+// baris: [{ nama, meja:{jaga,absen}, unit:{jaga,absen}, parkiran:{jaga,absen} }]
+// Hanya jumlah hari. Nilai rupiahnya dihitung di Induk Pembiayaan, supaya
+// tarif dan cara menghitungnya hanya ada di satu tempat.
+export async function bukuPiket({ ExcelJS, baris, total, pengaturan, awal, akhir, logoBase64 }) {
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Honor Mengajar");
-    const KOL = 13; // A..M
-    ws.columns = [
-        { width: 5 },   // NO
-        { width: 32 },  // Nama
-        { width: 9 },   // Masa kerja
-        { width: 8 },   // Jam
-        { width: 12 },  // Tarif/jam
-        { width: 15 },  // Honor mengajar
-        { width: 16 },  // Transport berdiri
-        { width: 8 },   // Jam TM
-        { width: 15 },  // Insentif TM
-        { width: 7 },   // Hari
-        { width: 15 },  // Konsumsi
-        { width: 17 },  // Jumlah
-        { width: 20 },  // Tanda tangan
-    ];
-
-    let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan,
-        judul: "HONOR / GAJI GURU", sub: `TAHUN PELAJARAN ${pengaturan.tahun_ajaran}`, kolomTerakhir: KOL });
-    ws.getCell(r, 10).value = labelPeriode(awal, akhir);
-    ws.getCell(r, 10).font = { name: FONT, size: 10, bold: true };
-    ws.mergeCells(r, 10, r, KOL);
-    r += 1;
-
-    // kepala tabel dua tingkat
-    const t0 = r, t1 = r + 1;
-    const judulKolom = [
-        [1, "NO"], [2, "NAMA GURU"], [3, "MASA KERJA"], [4, "JUMLAH JAM"], [5, "STANDAR HONOR / JAM"],
-        [12, "JUMLAH PENERIMAAN"], [13, "TANDA TANGAN"],
-    ];
-    for (const [c, t] of judulKolom) {
-        ws.mergeCells(t0, c, t1, c);
-        const cell = ws.getCell(t0, c);
-        cell.value = t; cell.font = { name: FONT, size: 10, bold: true };
-        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-        cell.border = BORDER; cell.fill = HEAD_FILL;
-    }
-    const grup = [[6, 7, "NOMINAL"], [8, 9, "TATAP MUKA"], [10, 11, "KEDATANGAN"]];
-    for (const [a, b, t] of grup) {
-        ws.mergeCells(t0, a, t0, b);
-        const cell = ws.getCell(t0, a);
-        cell.value = t; cell.font = { name: FONT, size: 10, bold: true };
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-        cell.border = BORDER; cell.fill = HEAD_FILL;
-    }
-    const sub = [[6, "Honor Mengajar"], [7, "Transport Berdiri"], [8, "Jam"], [9, "Insentif"], [10, "Hari"], [11, "Konsumsi"]];
-    for (const [c, t] of sub) {
-        const cell = ws.getCell(t1, c);
-        cell.value = t; cell.font = { name: FONT, size: 9.5, bold: true };
-        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-        cell.border = BORDER; cell.fill = HEAD_FILL;
-    }
-    ws.getRow(t0).height = 20; ws.getRow(t1).height = 30;
-    r = t1 + 1;
-
-    const RP = '"Rp" #,##0';
-    baris.forEach((b, i) => {
-        selData(ws, r, 1, i + 1, { align: "center" });
-        selData(ws, r, 2, b.nama);
-        selData(ws, r, 3, b.masaKerja === null ? "—" : b.masaKerja, { align: "center" });
-        selData(ws, r, 4, b.jam, { align: "center" });
-        if (b.jamTambahan) ws.getCell(r, 4).note = `Termasuk ${b.jamTambahan} jam tugas tambahan${b.ketTambahan ? ": " + b.ketTambahan : ""}`;
-        selData(ws, r, 5, b.tarifJam, { fmt: "#,##0" });
-        selData(ws, r, 6, b.honorGuru, { fmt: "#,##0" });
-        selData(ws, r, 7, b.transport, { fmt: "#,##0" });
-        selData(ws, r, 8, b.jamTM, { align: "center" });
-        selData(ws, r, 9, b.insentif, { fmt: "#,##0" });
-        selData(ws, r, 10, b.hariDatang, { align: "center" });
-        selData(ws, r, 11, b.konsumsi, { fmt: "#,##0" });
-        if (b.fingerprint) ws.getCell(r, 9).note = "Insentif Tatap Muka & Konsumsi Kedatangan dibayar akhir bulan dari fingerprint (kontrak kerja).";
-        selData(ws, r, 12, b.jumlah, { fmt: RP, bold: true });
-        selData(ws, r, 13, `${i + 1}. ……………………`, { align: "left" });
-        ws.getRow(r).height = 30;
-        r += 1;
-    });
-
-    selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 3);
-    selData(ws, r, 4, total.jam, { bold: true, align: "center", fill: true });
-    selData(ws, r, 5, "", { fill: true });
-    selData(ws, r, 6, total.honorGuru, { fmt: RP, bold: true, fill: true });
-    selData(ws, r, 7, total.transport, { fmt: RP, bold: true, fill: true });
-    selData(ws, r, 8, total.jamTM, { bold: true, align: "center", fill: true });
-    selData(ws, r, 9, total.insentif, { fmt: RP, bold: true, fill: true });
-    selData(ws, r, 10, total.hariDatang, { bold: true, align: "center", fill: true });
-    selData(ws, r, 11, total.konsumsi, { fmt: RP, bold: true, fill: true });
-    selData(ws, r, 12, total.jumlah, { fmt: RP, bold: true, fill: true });
-    selData(ws, r, 13, "", { fill: true });
-    r += 1;
-
-    selData(ws, r, 1, "Terbilang:", { bold: true }); ws.mergeCells(r, 1, r, 3);
-    selData(ws, r, 4, terbilang(total.jumlah), { wrap: true }); ws.mergeCells(r, 4, r, KOL);
-    ws.getCell(r, 4).font = { name: FONT, size: 10, italic: true };
-    ws.getRow(r).height = 22;
-    r += 2;
-
-    // tanda tangan: Setuju dibayar (Kepsek) - Lunas dibayar (Bendahara)
-    const set = (row, col, v, bold = false, underline = false) => {
-        const c = ws.getCell(row, col); c.value = v;
-        c.font = { name: FONT, size: 10, bold, underline };
-        c.alignment = { horizontal: "center" };
-    };
-    set(r, 2, "Setuju dibayar :"); set(r, 11, "Lunas dibayar :");
-    set(r + 1, 11, `${pengaturan.tempat}, ${tglIndo(akhir)}`);
-    set(r + 2, 2, "Kepala Sekolah,"); set(r + 2, 11, "Bendahara,");
-    set(r + 7, 2, pengaturan.kepala_sekolah, true, true);
-    set(r + 7, 11, pengaturan.bendahara, true, true);
-    r += 9;
-
-    // keterangan tarif
-    ws.getCell(r, 2).value = "Keterangan tarif:";
-    ws.getCell(r, 2).font = { name: FONT, size: 9, bold: true };
-    const ket = [
-        ["Transport Berdiri", `${tarif.transport_berdiri.toLocaleString("id-ID")} / jam mengajar`],
-        ["Insentif Tatap Muka", `${tarif.insentif_tm.toLocaleString("id-ID")} / jam tatap muka`],
-        ["Konsumsi Kedatangan", `${tarif.konsumsi.toLocaleString("id-ID")} / hari kedatangan`],
-        ["Honor Mengajar", "menurut masa kerja: " + tarif.masaKerja.map((b) => `${b.min}-${b.max > 900 ? "dst" : b.max} th Rp${b.tarif.toLocaleString("id-ID")}`).join("  ·  ")],
-    ];
-    ket.forEach(([k, v], i) => {
-        ws.getCell(r + 1 + i, 2).value = k;
-        ws.getCell(r + 1 + i, 2).font = { name: FONT, size: 9 };
-        ws.getCell(r + 1 + i, 4).value = ": Rp " + v;
-        ws.getCell(r + 1 + i, 4).font = { name: FONT, size: 9 };
-        ws.mergeCells(r + 1 + i, 4, r + 1 + i, KOL);
-        ws.getCell(r + 1 + i, 4).alignment = { horizontal: "left" };
-    });
-
-    pengaturanCetak(ws, "landscape");
-    ws.pageSetup.printTitlesRow = `${t0}:${t1}`;
-    return wb;
-}
-
-// =========================================================
-// 5. PELAKSANAAN PIKET + KOMPENSASI PIKET PARKIRAN
-// =========================================================
-// baris: [{ nama, meja:{jaga,absen}, unit:{jaga,absen}, parkiran:{jaga,absen}, kompensasi }]
-// Dua sheet: rekap pelaksanaan untuk kurikulum, dan daftar penerimaan
-// kompensasi parkiran yang bisa langsung ditandatangani bendahara.
-export async function bukuPiket({ ExcelJS, baris, total, tarifParkiran, pengaturan, awal, akhir, logoBase64 }) {
-    const wb = new ExcelJS.Workbook();
-    const RP = '"Rp" #,##0';
-
-    // ---- Sheet 1: rekap pelaksanaan
     const ws = wb.addWorksheet("Pelaksanaan Piket");
-    const KOL = 9;
-    ws.columns = [{ width: 5 }, { width: 34 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 18 }];
+    const KOL = 8;
+    ws.columns = [{ width: 5 }, { width: 34 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }];
     let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan,
         judul: "REKAPITULASI PELAKSANAAN TUGAS PIKET",
         sub: labelPeriode(awal, akhir).replace(" :", ":"), kolomTerakhir: KOL });
 
     kepalaTabel(ws, r, ["NO", "NAMA", "MEJA SEKOLAH JAGA", "MEJA SEKOLAH ABSEN", "UNIT JAGA", "UNIT ABSEN",
-                        "PARKIRAN JAGA", "PARKIRAN ABSEN", "KOMPENSASI PARKIRAN"], { tinggi: 34 });
+                        "PARKIRAN JAGA", "PARKIRAN ABSEN"], { tinggi: 34 });
     r += 1;
     baris.forEach((b, i) => {
         selData(ws, r, 1, i + 1, { align: "center" });
         selData(ws, r, 2, b.nama);
         [b.meja.jaga, b.meja.absen, b.unit.jaga, b.unit.absen, b.parkiran.jaga, b.parkiran.absen]
             .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center" }));
-        selData(ws, r, 9, b.kompensasi, { fmt: RP });
         r += 1;
     });
     selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
     [total.meja.jaga, total.meja.absen, total.unit.jaga, total.unit.absen, total.parkiran.jaga, total.parkiran.absen]
         .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", bold: true, fill: true }));
-    selData(ws, r, 9, total.kompensasi, { fmt: RP, bold: true, fill: true });
     r += 2;
     ws.getCell(r, 1).value = '"Jaga" dihitung per hari, termasuk hari saat yang bersangkutan menggantikan petugas lain. '
         + '"Absen" adalah hari terjadwal yang tidak dijalankan sendiri, baik karena tidak hadir maupun karena digantikan.';
@@ -471,60 +275,6 @@ export async function bukuPiket({ ExcelJS, baris, total, tarifParkiran, pengatur
     pengaturanCetak(ws, "landscape");
     ws.pageSetup.printTitlesRow = "6:6";
 
-    // ---- Sheet 2: daftar penerimaan kompensasi parkiran
-    const penerima = baris.filter((b) => b.parkiran.jaga > 0);
-    const ws2 = wb.addWorksheet("Kompensasi Parkiran");
-    const KOL2 = 7;
-    ws2.columns = [{ width: 5 }, { width: 34 }, { width: 12 }, { width: 14 }, { width: 17 }, { width: 19 }, { width: 19 }];
-    let r2 = tulisKop(ws2, { ExcelJS, wb, logoBase64, pengaturan,
-        judul: "DAFTAR PENERIMAAN KOMPENSASI PIKET PARKIRAN",
-        sub: `TAHUN AJARAN ${pengaturan.tahun_ajaran}`, kolomTerakhir: KOL2 });
-    ws2.getCell(r2, 5).value = labelPeriode(awal, akhir);
-    ws2.getCell(r2, 5).font = { name: FONT, size: 10, bold: true };
-    ws2.mergeCells(r2, 5, r2, KOL2);
-    r2 += 1;
-
-    kepalaTabel(ws2, r2, ["NO", "NAMA", "HARI JAGA", "TARIF/HARI", "JUMLAH", "TANDA TANGAN", ""]);
-    ws2.mergeCells(r2, 6, r2, 7);
-    r2 += 1;
-    let totJaga = 0, totJumlah = 0;
-    penerima.forEach((b, i) => {
-        totJaga += b.parkiran.jaga; totJumlah += b.kompensasi;
-        selData(ws2, r2, 1, i + 1, { align: "center" });
-        selData(ws2, r2, 2, b.nama);
-        selData(ws2, r2, 3, b.parkiran.jaga, { align: "center" });
-        selData(ws2, r2, 4, tarifParkiran, { fmt: "#,##0" });
-        selData(ws2, r2, 5, b.kompensasi, { fmt: RP, bold: true });
-        const kiri = i % 2 === 0;
-        selData(ws2, r2, 6, kiri ? `${i + 1}. ……………………` : "", { align: "left" });
-        selData(ws2, r2, 7, kiri ? "" : `${i + 1}. ……………………`, { align: "left" });
-        ws2.getRow(r2).height = 30;
-        r2 += 1;
-    });
-    if (!penerima.length) {
-        selData(ws2, r2, 1, "Belum ada petugas parkiran yang berjaga pada periode ini.", { align: "center" });
-        ws2.mergeCells(r2, 1, r2, KOL2);
-        r2 += 1;
-    }
-    selData(ws2, r2, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws2.mergeCells(r2, 1, r2, 2);
-    selData(ws2, r2, 3, totJaga, { align: "center", bold: true, fill: true });
-    selData(ws2, r2, 4, "", { fill: true });
-    selData(ws2, r2, 5, totJumlah, { fmt: RP, bold: true, fill: true });
-    selData(ws2, r2, 6, "", { fill: true }); selData(ws2, r2, 7, "", { fill: true });
-    ws2.mergeCells(r2, 6, r2, 7);
-    r2 += 1;
-    selData(ws2, r2, 1, "Terbilang:", { bold: true }); ws2.mergeCells(r2, 1, r2, 2);
-    selData(ws2, r2, 3, terbilang(totJumlah), { wrap: true }); ws2.mergeCells(r2, 3, r2, KOL2);
-    ws2.getCell(r2, 3).font = { name: FONT, size: 10, italic: true };
-    ws2.getRow(r2).height = 22;
-    r2 += 2;
-    r2 = blokTandaTangan(ws2, r2, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 5, kolomTerakhir: KOL2 });
-    ws2.getCell(r2, 2).value = `Keterangan: kompensasi dihitung per hari petugas benar-benar berjaga, ${'Rp ' + Number(tarifParkiran || 0).toLocaleString("id-ID")} per hari. `
-        + "Hari saat petugas digantikan dibayarkan kepada penggantinya.";
-    ws2.getCell(r2, 2).font = { name: FONT, size: 9, italic: true };
-    ws2.mergeCells(r2, 2, r2, KOL2);
-    pengaturanCetak(ws2, "portrait");
-    ws2.pageSetup.printTitlesRow = "7:7";
 
     return wb;
 }

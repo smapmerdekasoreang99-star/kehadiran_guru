@@ -1,13 +1,17 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920b";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920b";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920b";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920b";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260920b";
-import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas, rekapHonorMengajar, TARIF_MASA_KERJA_DEFAULT, uraiTarifMasaKerja, susunTarifMasaKerja } from "../assets/rekap-hitung.js?v=20260920b";
-import { bukuHonor, bukuKehadiran, bukuPengganti, bukuHonorMengajar, bukuPiket, unduhWorkbook, ambilLogoBase64, terbilang } from "../assets/excel-export.js?v=20260920b";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920b";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920h";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920h";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920h";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920h";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260920h";
+import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920h";
+import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920h";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920h";
 
-try { initLockUI(() => { renderLibur(); renderPengaturan(); renderTambahan(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
+// Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
+// mengajar, honor pengganti, dan transport — pindah ke aplikasi Induk
+// Pembiayaan, begitu pula pengaturan tarifnya. Identitas dokumen dibaca dari
+// profil_dokumen milik Data Induk, tidak lagi disalin ke kg_pengaturan.
+try { initLockUI(() => renderLibur()); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
 function laporError(konteks, error) {
     console.error(konteks, error);
@@ -26,43 +30,27 @@ const HARI_FROM_JS_DAY = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat",
 
 // Penyimpanan hari libur di mode pratinjau
 const demoLibur = [];
-const demoTambahan = [];
-
 let state = {
     awal: "", akhir: "",
     guru: [], kelas: [], mapel: [], jadwal: [], libur: [],
     ketidakhadiran: [], penugasan: [],
     hasilKehadiran: null, hasilWali: null, hasilPengganti: null, jamWaliDikecualikan: 0,
-    saring: "", saringWali: "", saringHM: "", viewPengganti: "ringkas",
-    hasilHonorMengajar: null, jamTambahan: [],
-    pengaturan: null,
+    saring: "", saringWali: "", viewPengganti: "ringkas",
+    profil: null,
     piket: [], hasilPiket: null,
 };
 
-const PENGATURAN_DEFAULT = {
-    tarif_PT: "6000", tarif_GT: "9000", tarif_Inf: "12000",
-    nama_sekolah: 'SMA Plus "Merdeka" Soreang', alamat_sekolah: "Jl. Citaliktik-Sindang Wargi Soreang Kab. Bandung",
-    tahun_ajaran: "2026/2027", tempat: "Soreang", kepala_sekolah: "", bendahara: "",
-    transport_berdiri: "40000", insentif_tm: "2000", konsumsi: "16000",
-    tarif_masa_kerja: "",
-    kecualikan_staf: "1",
-    tarif_parkiran: "10000",
+/* Identitas kop berkas Excel, dibaca dari v_penanda_tangan milik Data Induk —
+   satu sumber untuk semua aplikasi. Nama Wakasek Kurikulum di sana diturunkan
+   dari jabatan aktif di Tugas Guru, bukan diketik ulang. Kuncinya dipetakan ke
+   bentuk yang sudah dipakai excel-export.js supaya berkasnya tidak berubah. */
+const PROFIL_BAWAAN = {
+    nama_sekolah: 'SMA Plus "Merdeka" Soreang',
+    alamat_sekolah: "Jl. Citaliktik-Sindang Wargi Soreang Kab. Bandung",
+    tahun_ajaran: "2026/2027", tempat: "Soreang",
+    kepala_sekolah: "", kurikulum: "",
 };
-const FIELD_PENGATURAN = { tarif_PT: "pTarifPT", tarif_GT: "pTarifGT", tarif_Inf: "pTarifInf", nama_sekolah: "pNamaSekolah", alamat_sekolah: "pAlamat", tahun_ajaran: "pTahunAjaran", tempat: "pTempat", kepala_sekolah: "pKepsek", bendahara: "pBendahara",
-    transport_berdiri: "pTransportBerdiri", insentif_tm: "pInsentifTM", konsumsi: "pKonsumsi",
-    tarif_parkiran: "pTarifParkiran" };
-const demoPengaturan = { ...PENGATURAN_DEFAULT, kepala_sekolah: "Mohamad Gunawan, S.Si.", bendahara: "Dra. Ida Susana" };
-const tarifMengajar = () => {
-    const n = (k, d) => Number(state.pengaturan?.[k] ?? d) || 0;
-    return {
-        transport_berdiri: n("transport_berdiri", 40000),
-        insentif_tm: n("insentif_tm", 2000),
-        konsumsi: n("konsumsi", 16000),
-        masaKerja: uraiTarifMasaKerja(state.pengaturan?.tarif_masa_kerja) || TARIF_MASA_KERJA_DEFAULT,
-    };
-};
-const tarif = () => ({ PT: Number(state.pengaturan.tarif_PT) || 0, GT: Number(state.pengaturan.tarif_GT) || 0, Inf: Number(state.pengaturan.tarif_Inf) || 0 });
-const tarifParkiran = () => Number(state.pengaturan?.tarif_parkiran) || 0;
+const demoProfil = { ...PROFIL_BAWAAN, kepala_sekolah: "Mohamad Gunawan, S.Si.", kurikulum: "Yuyun Wahyuni, S.Pd." };
 
 const namaGuru = (id) => state.guru.find((g) => g.id === id)?.nama || id;
 // Seluruh tabel rekap memakai urutan yang sama dengan daftar guru: masa kerja
@@ -111,13 +99,12 @@ async function boot() {
             if (!data || data.length < 1000) break;
         }
         await muatLibur();
-        await muatPengaturan();
-        await muatTambahan();
+        await muatProfil();
     } else {
         state.guru = demoData.guru; state.kelas = urutkanKelas(demoData.kelas); state.mapel = demoData.mapel; state.jadwal = demoData.jadwal;
-        state.libur = demoLibur; state.pengaturan = { ...demoPengaturan }; state.jamTambahan = demoTambahan;
+        state.libur = demoLibur; state.profil = { ...demoProfil };
     }
-    renderLibur(); renderPengaturan(); renderTambahan();
+    renderLibur();
     await hitung();
 }
 
@@ -131,94 +118,32 @@ async function muatLibur() {
     state.libur = data || [];
 }
 
-async function muatPengaturan() {
-    state.pengaturan = { ...PENGATURAN_DEFAULT };
-    const { data, error } = await supabaseClient.from("kg_pengaturan").select("kunci, nilai");
-    if (error) { laporError("Tabel kg_pengaturan belum ada — jalankan migrasi_pengaturan.sql (sementara memakai tarif & identitas bawaan)", error); return; }
-    for (const r of data || []) state.pengaturan[r.kunci] = r.nilai;
+/* Identitas kop berkas Excel dibaca dari Data Induk, tidak lagi disalin ke
+   kg_pengaturan. Tahun ajaran pun diambil dari tabel tahun_ajaran yang
+   sedang aktif — satu sumber, sehingga kop semua aplikasi tidak bisa lagi
+   berbeda tanpa ada yang menyadari. */
+async function muatProfil() {
+    state.profil = { ...PROFIL_BAWAAN };
+    const [{ data: p, error: eP }, { data: ta }] = await Promise.all([
+        // Seluruh kolom: kop juga memerlukan npsn, catatan kaki, dan tata letaknya.
+        supabaseClient.from("v_penanda_tangan").select("*").limit(1),
+        supabaseClient.from("tahun_ajaran").select("kode, aktif").eq("aktif", true).limit(1),
+    ]);
+    if (eP) { laporError("Profil dokumen tidak terbaca dari Data Induk (kop memakai nilai bawaan)", eP); return; }
+    const d = (p || [])[0];
+    if (!d) return;
+    state.profil = {
+        nama_sekolah: d.nama_sekolah || PROFIL_BAWAAN.nama_sekolah,
+        alamat_sekolah: d.alamat || "",
+        tempat: d.kota || PROFIL_BAWAAN.tempat,
+        kepala_sekolah: d.kepala_sekolah || "",
+        kurikulum: d.kurikulum || "",
+        tahun_ajaran: ((ta || [])[0] || {}).kode || PROFIL_BAWAAN.tahun_ajaran,
+        // Baris apa adanya, dipakai penulis kop untuk tata letaknya.
+        profil: d,
+    };
 }
 
-async function muatTambahan() {
-    const { data, error } = await supabaseClient.from("kg_jam_tambahan").select("guru_id, jam, keterangan");
-    if (error) { laporError("Gagal memuat jam tugas tambahan dari Data Induk (sementara jam tambahan dianggap kosong)", error); state.jamTambahan = []; return; }
-    state.jamTambahan = data || [];
-}
-
-// Hanya tampilan: kg_jam_tambahan adalah view dari guru_tugas di Data Induk.
-function renderTambahan() {
-    document.getElementById("bodyTambahan").innerHTML = state.jamTambahan
-        .map((t) => `<tr><td class="nama">${namaGuru(t.guru_id)}</td>${num(t.jam)}<td>${t.keterangan || ""}</td></tr>`).join("")
-        || `<tr><td colspan="3" class="empty-state">Belum ada jam tugas tambahan. Isi lewat Data Induk → Tugas Guru.</td></tr>`;
-}
-
-// View honor di database menyaring status_aktif = 'Aktif' persis. Nilai lain
-// (true/1/Y/kosong) membuat guru hilang dari view tanpa pesan galat, jadi
-// keadaan itu ditampilkan, bukan dibiarkan ikut terhitung diam-diam.
-function statusMeragukan() {
-    return state.guru.filter((g) => {
-        const v = g.status_aktif;
-        return v === null || v === undefined || !["Aktif", "Nonaktif"].includes(String(v));
-    });
-}
-
-function daftarTarifMK() {
-    return uraiTarifMasaKerja(state.pengaturan?.tarif_masa_kerja) || TARIF_MASA_KERJA_DEFAULT;
-}
-
-function renderTarifMK(daftar = daftarTarifMK()) {
-    const unlocked = isUnlocked();
-    const dis = unlocked ? "" : "disabled";
-    document.getElementById("bodyTarifMK").innerHTML = daftar.map((b, i) => `
-      <tr>
-        <td><input type="number" min="0" step="1" value="${b.min}" data-tarif="min" data-i="${i}" ${dis}></td>
-        <td><input type="number" min="0" step="1" value="${b.max >= 999 ? "" : b.max}" placeholder="ke atas" data-tarif="max" data-i="${i}" ${dis}></td>
-        <td><input type="number" min="0" step="500" value="${b.tarif}" data-tarif="tarif" data-i="${i}" ${dis}></td>
-        <td><button class="btn-danger-text" ${dis} data-hapus-tarif="${i}">Hapus</button></td>
-      </tr>`).join("");
-    document.getElementById("tarifMKTambah").disabled = !unlocked;
-    document.querySelectorAll("[data-hapus-tarif]").forEach((b) =>
-        b.addEventListener("click", () => {
-            const d = bacaTarifMK(); d.splice(Number(b.dataset.hapusTarif), 1); renderTarifMK(d);
-        }));
-}
-
-function bacaTarifMK() {
-    const rows = [...document.querySelectorAll("#bodyTarifMK tr")];
-    return rows.map((tr) => {
-        const v = (k) => tr.querySelector(`[data-tarif="${k}"]`).value;
-        return { min: Number(v("min")) || 0, max: v("max") === "" ? 999 : Number(v("max")), tarif: Number(v("tarif")) || 0 };
-    });
-}
-
-function renderPengaturan() {
-    if (!state.pengaturan) return;
-    for (const [k, id] of Object.entries(FIELD_PENGATURAN)) document.getElementById(id).value = state.pengaturan[k] ?? "";
-    const unlocked = isUnlocked();
-    for (const id of Object.values(FIELD_PENGATURAN)) document.getElementById(id).disabled = !unlocked;
-    document.getElementById("pengaturanSimpan").disabled = !unlocked;
-    document.getElementById("pengaturanStatus").textContent = unlocked ? "" : "Buka kunci untuk mengubah.";
-    renderTarifMK();
-    const cb = document.getElementById("pKecualikanStaf");
-    if (cb) { cb.checked = kecualikanStaf(); cb.disabled = !unlocked; }
-}
-
-async function simpanPengaturan() {
-    const baru = {};
-    for (const [k, id] of Object.entries(FIELD_PENGATURAN)) baru[k] = document.getElementById(id).value.trim();
-    baru.tarif_masa_kerja = susunTarifMasaKerja(bacaTarifMK());
-    baru.kecualikan_staf = document.getElementById("pKecualikanStaf").checked ? "1" : "0";
-    if (isSupabaseConfigured) {
-        const rows = Object.entries(baru).map(([kunci, nilai]) => ({ kunci, nilai }));
-        const { error } = await supabaseClient.from("kg_pengaturan").upsert(rows, { onConflict: "kunci" });
-        if (error) { laporError("Gagal menyimpan pengaturan", error); return; }
-    }
-    state.pengaturan = { ...state.pengaturan, ...baru };
-    document.getElementById("pengaturanStatus").textContent = "Tersimpan ✓";
-    setTimeout(() => (document.getElementById("pengaturanStatus").textContent = ""), 2000);
-    await hitung();   // tarif berubah -> seluruh angka dihitung ulang
-}
-
-// ---------- Hitung ----------
 async function hitung() {
     state.awal = document.getElementById("tglAwal").value;
     state.akhir = document.getElementById("tglAkhir").value;
@@ -251,13 +176,8 @@ async function hitung() {
     const semuaPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: state.ketidakhadiran, jadwal: state.jadwal, awal: state.awal, akhir: state.akhir });
     state.hasilPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: ketMengajar, jadwal: mengajar, awal: state.awal, akhir: state.akhir });
     state.jamWaliDikecualikan = semuaPengganti.rincian.length - state.hasilPengganti.rincian.length;
-    state.hasilHonorMengajar = rekapHonorMengajar({
-        jadwal: mengajar, ketidakhadiran: ketMengajar, barisKehadiran: state.hasilKehadiran.baris,
-        guruList: state.guru, awal: state.awal, akhir: state.akhir, liburSet, tarif: tarifMengajar(),
-        jamTambahan: state.jamTambahan,
-    });
     state.hasilPiket = rekapPiket();
-    renderKehadiran(); renderPengganti(); renderHonor(); renderHonorMengajar(); renderPiket();
+    renderKehadiran(); renderPengganti(); renderPiket();
 }
 
 async function muatPiket() {
@@ -274,8 +194,9 @@ async function muatPiket() {
 // ---------- Rekap pelaksanaan piket ----------
 // Yang dihitung "jaga" adalah orang yang benar-benar berjaga hari itu: kalau
 // petugas terjadwal digantikan, hari itu masuk ke penggantinya, dan petugas
-// terjadwalnya tercatat absen. Jadi kompensasi parkiran tidak pernah jatuh
-// ke orang yang tidak datang.
+// terjadwalnya tercatat absen — supaya yang terbaca benar-benar siapa yang
+// menjalankan tugasnya. Nilai rupiahnya dihitung di Induk Pembiayaan, bukan
+// di sini; halaman ini hanya melaporkan jumlah harinya.
 const KUNCI_JENIS = { "Meja Sekolah": "meja", "Unit": "unit", "Parkiran": "parkiran" };
 
 function rekapPiket() {
@@ -295,13 +216,11 @@ function rekapPiket() {
         }
     }
     const rows = [...per.values()]
-        .map((r) => ({ ...r, nama: namaGuru(r.guru_id), kompensasi: r.parkiran.jaga * tarifParkiran() }))
+        .map((r) => ({ ...r, nama: namaGuru(r.guru_id) }))
         .sort(urutBaris);
-    const total = { meja: { jaga: 0, absen: 0 }, unit: { jaga: 0, absen: 0 }, parkiran: { jaga: 0, absen: 0 }, kompensasi: 0 };
-    for (const r of rows) {
+    const total = { meja: { jaga: 0, absen: 0 }, unit: { jaga: 0, absen: 0 }, parkiran: { jaga: 0, absen: 0 } };
+    for (const r of rows)
         for (const k of ["meja", "unit", "parkiran"]) { total[k].jaga += r[k].jaga; total[k].absen += r[k].absen; }
-        total.kompensasi += r.kompensasi;
-    }
     return { baris: rows, total };
 }
 
@@ -313,18 +232,18 @@ function renderPiket() {
       <tr>
         <td class="num">${i + 1}</td><td class="nama">${r.nama}</td>
         ${num(r.meja.jaga)}${num(r.meja.absen)}${num(r.unit.jaga)}${num(r.unit.absen)}${num(r.parkiran.jaga)}${num(r.parkiran.absen)}
-        <td class="num">${r.kompensasi ? rp(r.kompensasi) : "—"}</td>
       </tr>`).join("");
     const t = h.total;
     document.getElementById("footPiket").innerHTML = rows.length ? `
       <tr class="total"><td></td><td>Total (${rows.length} petugas)</td>
         ${num(t.meja.jaga)}${num(t.meja.absen)}${num(t.unit.jaga)}${num(t.unit.absen)}${num(t.parkiran.jaga)}${num(t.parkiran.absen)}
-        <td class="num">${rp(t.kompensasi)}</td></tr>` : "";
+      </tr>` : "";
     document.getElementById("ringkasPiket").textContent =
         `${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)} · ${state.piket.length} catatan pelaksanaan`;
     document.getElementById("footPiketTeks").textContent =
-        `"Jaga" dihitung per hari, termasuk hari saat yang bersangkutan menggantikan orang lain; "Absen" adalah hari terjadwal yang tidak dijalankan sendiri. `
-        + `Kompensasi parkiran ${rp(tarifParkiran())} per hari jaga; terbilang ${terbilang(t.kompensasi)}. Tarif diubah di tab Pengaturan.`;
+        `"Jaga" dihitung per hari, termasuk hari saat yang bersangkutan menggantikan orang lain; `
+        + `"Absen" adalah hari terjadwal yang tidak dijalankan sendiri. `
+        + `Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan.`;
 }
 
 // ---------- Render kehadiran ----------
@@ -429,77 +348,6 @@ async function hapusLibur(tanggal) {
 }
 
 // ---------- Honor ----------
-const rp = (v) => "Rp " + Math.round(v).toLocaleString("id-ID");
-
-function barisHonor() {
-    const h = state.hasilPengganti; if (!h) return [];
-    return h.baris.map((r) => ({ guru_id: r.guru_id, nama: namaGuru(r.guru_id), PT: r.PT, GT: r.GT, Inf: r.Inf }))
-        .sort(urutBaris);
-}
-
-function renderHonor() {
-    if (!state.hasilPengganti || !state.pengaturan) return;
-    const t = tarif(); const rows = barisHonor();
-    let tot = { PT: 0, GT: 0, Inf: 0, jumlah: 0 };
-    document.getElementById("bodyHonor").innerHTML = rows.map((b, i) => {
-        const jumlah = b.PT * t.PT + b.GT * t.GT + b.Inf * t.Inf;
-        tot.PT += b.PT; tot.GT += b.GT; tot.Inf += b.Inf; tot.jumlah += jumlah;
-        return `<tr><td class="num">${i + 1}</td><td>${b.nama}</td>${num(b.PT)}${num(rp(t.PT))}${num(b.GT)}${num(rp(t.GT))}${num(b.Inf)}${num(rp(t.Inf))}<td class="num"><strong>${rp(jumlah)}</strong></td></tr>`;
-    }).join("") || `<tr><td colspan="9" class="empty-state">Belum ada penugasan pada rentang ini.</td></tr>`;
-    document.getElementById("footHonor").innerHTML = `<tr class="total"><td colspan="2">JUMLAH (${rows.length} guru)</td>${num(tot.PT)}${num(rp(tot.PT * t.PT))}${num(tot.GT)}${num(rp(tot.GT * t.GT))}${num(tot.Inf)}${num(rp(tot.Inf * t.Inf))}<td class="num"><strong>${rp(tot.jumlah)}</strong></td></tr>`;
-    document.getElementById("ringkasHonor").textContent = `${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)} · tarif PT ${rp(t.PT)} · GT ${rp(t.GT)} · Inf ${rp(t.Inf)} per jam`;
-    document.getElementById("footHonorTeks").textContent = `Terbilang: ${terbilang(tot.jumlah)}. Tarif diubah di tab Pengaturan.` + (state.jamWaliDikecualikan ? ` Penggantian tugas wali kelas (Upacara/Bimbingan) sebanyak ${state.jamWaliDikecualikan} jam tidak termasuk — honornya dihitung terpisah.` : "");
-}
-
-const kecualikanStaf = () => state.pengaturan?.kecualikan_staf !== "0";
-const idStaf = () => new Set(state.guru.filter((g) => g.is_staf).map((g) => g.id));
-
-function barisHonorMengajarTersaring() {
-    const q = state.saringHM.trim().toLowerCase();
-    const staf = kecualikanStaf() ? idStaf() : new Set();
-    return (state.hasilHonorMengajar?.baris || [])
-        .filter((r) => !staf.has(r.guru_id))
-        .filter((r) => !q || r.nama.toLowerCase().includes(q))
-        .sort(urutBaris);   // samakan dengan tab lain: menurut TMT, bukan masa kerja bulat
-}
-
-function renderHonorMengajar() {
-    const h = state.hasilHonorMengajar; if (!h) return;
-    const rows = barisHonorMengajarTersaring();
-    const t = tarifMengajar();
-    document.getElementById("bodyHonorMengajar").innerHTML = rows.map((r, i) => `
-      <tr><td class="num">${i + 1}</td><td class="nama">${r.nama}</td>
-      ${num(r.masaKerja === null ? "—" : r.masaKerja)}<td class="num" title="${r.jamTambahan ? "termasuk " + r.jamTambahan + " jam tugas tambahan: " + r.ketTambahan : ""}">${r.jam}${r.jamTambahan ? ` <span class="tugas-note" style="display:inline">(+${r.jamTambahan})</span>` : ""}</td>${num(rp(r.tarifJam))}${num(rp(r.honorGuru))}${num(rp(r.transport))}
-      ${r.fingerprint
-        ? `<td class="num" colspan="4" title="Insentif Tatap Muka & Konsumsi Kedatangan dibayar akhir bulan dari fingerprint (kontrak kerja)"><span class="tugas-note" style="display:inline">lewat fingerprint</span></td>`
-        : `${num(r.jamTM)}${num(rp(r.insentif))}${num(r.hariDatang)}${num(rp(r.konsumsi))}`}
-      <td class="num"><strong>${rp(r.jumlah)}</strong></td></tr>`).join("")
-      || `<tr><td colspan="12" class="empty-state">Belum ada data pada rentang ini.</td></tr>`;
-    const o = rows.reduce((t, r) => {
-        for (const k of ["jam", "honorGuru", "transport", "jamTM", "insentif", "hariDatang", "konsumsi", "jumlah"]) t[k] += r[k];
-        return t;
-    }, { jam: 0, honorGuru: 0, transport: 0, jamTM: 0, insentif: 0, hariDatang: 0, konsumsi: 0, jumlah: 0 });
-    document.getElementById("footHonorMengajar").innerHTML =
-      `<tr class="total"><td colspan="3">JUMLAH (${rows.length} guru)</td>${num(o.jam)}<td></td>${num(rp(o.honorGuru))}${num(rp(o.transport))}${num(o.jamTM)}${num(rp(o.insentif))}${num(o.hariDatang)}${num(rp(o.konsumsi))}<td class="num"><strong>${rp(o.jumlah)}</strong></td></tr>`;
-    document.getElementById("ringkasHonorMengajar").textContent =
-      `${rows.length} guru · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
-    const staf = kecualikanStaf() ? state.guru.filter((g) => g.is_staf) : [];
-    const ragu = statusMeragukan();
-    const kotak = document.getElementById("peringatanHM");
-    if (ragu.length) {
-        kotak.hidden = false;
-        kotak.innerHTML = `<strong>Perlu diperiksa — ${ragu.length} guru berstatus tidak baku.</strong> ` +
-            `Nilai status_aktif selain "Aktif"/"Nonaktif" membuat guru hilang dari view honor di database, ` +
-            `sementara di aplikasi tetap tampil. Seragamkan dulu sebelum angka ini dipakai membayar: ` +
-            ragu.map((g) => `${g.nama} (${g.status_aktif ?? "kosong"})`).join(", ") + ".";
-    } else kotak.hidden = true;
-    document.getElementById("footHonorMengajarTeks").textContent =
-      (staf.length ? `${staf.length} pemegang tugas Staf tidak termasuk (dibayar berdasarkan jam kerja): ${staf.map((g) => g.nama).join(", ")}. ` : "") +
-      (rows.some((r) => r.fingerprint) ? `Insentif Tatap Muka & Konsumsi Kedatangan dibayar akhir bulan dari fingerprint untuk: ${rows.filter((r) => r.fingerprint).map((r) => r.nama).join(", ")}. ` : "") +
-      `Terbilang: ${terbilang(o.jumlah)}. Tarif: transport ${rp(t.transport_berdiri)}/jam · insentif ${rp(t.insentif_tm)}/jam TM · konsumsi ${rp(t.konsumsi)}/hari. Masa kerja dihitung dari TMT sekolah sampai tanggal akhir periode. Honor Mengajar & Transport Berdiri memakai jam kontrak per minggu; Insentif Tatap Muka memakai jam hadir tatap muka; Konsumsi memakai hari kedatangan (hari yang guru datang, termasuk HTTM). Tarif diubah di tab Pengaturan.`;
-}
-
-// ---------- Ekspor Excel ----------
 let logoCache = null;
 async function logo() { if (logoCache === null) logoCache = (await ambilLogoBase64("assets/logo-kecil.png")) || false; return logoCache || null; }
 const ExcelJSLib = () => { if (!window.ExcelJS) throw new Error("Pustaka ExcelJS belum termuat (periksa koneksi internet), coba muat ulang halaman."); return window.ExcelJS; };
@@ -507,38 +355,27 @@ const bungkus = (fn) => async () => { try { await fn(); } catch (err) { laporErr
 
 const xlsKehadiran = bungkus(async () => {
     const h = state.hasilKehadiran; if (!h) return;
-    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisKehadiranTersaring(), total: h.total, wali: null, pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
+    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisKehadiranTersaring(), total: h.total, wali: null, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Kehadiran Guru ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsWali = bungkus(async () => {
     const w = state.hasilWali; if (!w) return;
-    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisWaliTersaring(), total: w.total, wali: null, judul: "REKAPITULASI KEHADIRAN TUGAS WALI KELAS", namaSheet: "Tugas Wali Kelas", catatan: "Upacara & Bimbingan Wali Kelas, Senin jam 1-2 (terpisah dari jam mengajar).", pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, jumlahHariKerja: w.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
+    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisWaliTersaring(), total: w.total, wali: null, judul: "REKAPITULASI KEHADIRAN TUGAS WALI KELAS", namaSheet: "Tugas Wali Kelas", catatan: "Upacara & Bimbingan Wali Kelas, Senin jam 1-2 (terpisah dari jam mengajar).", pengaturan: state.profil, awal: state.awal, akhir: state.akhir, jumlahHariKerja: w.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Tugas Wali Kelas ${state.awal} sd ${state.akhir}.xlsx`);
-});
-const xlsHonorMengajar = bungkus(async () => {
-    const h = state.hasilHonorMengajar; if (!h) return;
-    const wb = await bukuHonorMengajar({ ExcelJS: ExcelJSLib(), baris: barisHonorMengajarTersaring(), total: h.total,
-        tarif: tarifMengajar(), pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
-    await unduhWorkbook(wb, `Honor Mengajar Guru ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsPengganti = bungkus(async () => {
     const h = state.hasilPengganti; if (!h) return;
     const wb = await bukuPengganti({ ExcelJS: ExcelJSLib(),
         ringkas: h.baris.map((r) => ({ nama: namaGuru(r.guru_id), GT: r.GT, PT: r.PT, Inf: r.Inf, total: r.total })),
         rincian: h.rincian.map((r) => ({ tanggal: r.tanggal, jam_ke: r.jam_ke, kelas: namaKelas(r.kelas_id), mapel: namaMapel(r.mapel_id), guru: namaGuru(r.guru_id), status: r.status, pengganti: r.pengganti_id ? namaGuru(r.pengganti_id) : "", kode: r.kode })),
-        tanpaPengganti: h.tanpaPengganti, pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
+        tanpaPengganti: h.tanpaPengganti, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Guru Pengganti ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsPiket = bungkus(async () => {
     const h = state.hasilPiket; if (!h) return;
     const wb = await bukuPiket({ ExcelJS: ExcelJSLib(), baris: h.baris, total: h.total,
-        tarifParkiran: tarifParkiran(), pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
+        pengaturan: state.profil, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Pelaksanaan Piket ${state.awal} sd ${state.akhir}.xlsx`);
-});
-const xlsHonor = bungkus(async () => {
-    if (!state.hasilPengganti) return;
-    const wb = await bukuHonor({ ExcelJS: ExcelJSLib(), baris: barisHonor(), tarif: tarif(), pengaturan: state.pengaturan, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
-    await unduhWorkbook(wb, `Honor Guru Pengganti ${state.awal} sd ${state.akhir}.xlsx`);
 });
 
 // ---------- Wiring ----------
@@ -546,7 +383,7 @@ try {
     document.getElementById("rekapBtn").addEventListener("click", hitung);
     document.querySelectorAll(".rekap-tab").forEach((b) => b.addEventListener("click", () => {
         document.querySelectorAll(".rekap-tab").forEach((x) => x.classList.toggle("active", x === b));
-        for (const t of ["kehadiran", "honormengajar", "wali", "pengganti", "honor", "piket", "libur", "pengaturan"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
+        for (const t of ["kehadiran", "wali", "pengganti", "piket", "libur"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
     }));
     document.querySelectorAll("#tab-pengganti .day-tabs button").forEach((b) => b.addEventListener("click", () => {
         state.viewPengganti = b.dataset.view;
@@ -554,22 +391,11 @@ try {
         renderPengganti();
     }));
     document.getElementById("cariKehadiran").addEventListener("input", (e) => { state.saring = e.target.value; renderKehadiran(); });
+    document.getElementById("cariWali").addEventListener("input", (e) => { state.saringWali = e.target.value; renderWali(); });
     document.getElementById("xlsKehadiran").addEventListener("click", xlsKehadiran);
     document.getElementById("xlsPengganti").addEventListener("click", xlsPengganti);
     document.getElementById("xlsWali").addEventListener("click", xlsWali);
-    document.getElementById("xlsHonorMengajar").addEventListener("click", xlsHonorMengajar);
-    document.getElementById("cariHonorMengajar").addEventListener("input", (e) => { state.saringHM = e.target.value; renderHonorMengajar(); });
-    document.getElementById("cariWali").addEventListener("input", (e) => { state.saringWali = e.target.value; renderWali(); });
-    document.getElementById("xlsHonor").addEventListener("click", xlsHonor);
     document.getElementById("xlsPiket").addEventListener("click", xlsPiket);
-    document.getElementById("pengaturanSimpan").addEventListener("click", simpanPengaturan);
-    document.getElementById("tarifMKTambah").addEventListener("click", () => {
-        const d = bacaTarifMK();
-        const t = d[d.length - 1];
-        if (t && t.max >= 999) t.max = t.min + 2;           // jenjang lama diberi batas atas
-        d.push({ min: t ? t.max + 1 : 0, max: 999, tarif: t ? t.tarif + 1000 : 20000 });
-        renderTarifMK(d);
-    });
     document.getElementById("liburTambah").addEventListener("click", tambahLibur);
 } catch (err) {
     console.error("Ada elemen halaman yang tidak ditemukan — kemungkinan HTML dan JS beda versi. Lakukan hard refresh (Ctrl+Shift+R).", err);

@@ -6,7 +6,7 @@
 <title>Pelaksanaan Piket — Guru Pengganti SMA Plus Merdeka Soreang</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20260920b" />
+<link rel="stylesheet" href="assets/style.css?v=20260920h" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -71,6 +71,7 @@
         <div class="toolbar">
           <span id="ringkasMeja" class="tugas-note"></span>
           <div class="toolbar-actions">
+            <button type="button" id="batalMeja" class="btn btn-danger-text" hidden></button>
             <button type="button" id="simpanMeja" class="btn btn-primary">Simpan yang belum tercatat</button>
           </div>
         </div>
@@ -97,6 +98,7 @@
         <div class="toolbar">
           <span id="ringkasUnit" class="tugas-note"></span>
           <div class="toolbar-actions">
+            <button type="button" id="batalUnit" class="btn btn-danger-text" hidden></button>
             <button type="button" id="simpanUnit" class="btn btn-primary">Simpan yang belum tercatat</button>
           </div>
         </div>
@@ -123,6 +125,7 @@
         <div class="toolbar">
           <span id="ringkasParkiran" class="tugas-note"></span>
           <div class="toolbar-actions">
+            <button type="button" id="batalParkiran" class="btn btn-danger-text" hidden></button>
             <button type="button" id="simpanParkiran" class="btn btn-primary">Simpan yang belum tercatat</button>
           </div>
         </div>
@@ -133,7 +136,6 @@
                 <th>Petugas</th>
                 <th style="width:210px">Status</th>
                 <th style="width:220px">Pengganti</th>
-                <th style="width:150px" class="num">Kompensasi</th>
                 <th>Catatan</th>
               </tr>
             </thead>
@@ -166,6 +168,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/piket.js?v=20260920b"></script>
+<script type="module" src="scripts/piket.js?v=20260920h"></script>
 </body>
 </html>

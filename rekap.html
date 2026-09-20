@@ -6,7 +6,7 @@
 <title>Rekap — Guru Pengganti SMA Plus Merdeka Soreang</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20260920b" />
+<link rel="stylesheet" href="assets/style.css?v=20260920h" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 </head>
@@ -55,13 +55,10 @@
 
     <div class="rekap-tabs">
       <button type="button" class="rekap-tab active" data-tab="kehadiran">Kehadiran Guru</button>
-      <button type="button" class="rekap-tab" data-tab="honormengajar">Honor Mengajar</button>
       <button type="button" class="rekap-tab" data-tab="wali">Tugas Wali Kelas</button>
       <button type="button" class="rekap-tab" data-tab="pengganti">Guru Pengganti</button>
-      <button type="button" class="rekap-tab" data-tab="honor">Honor Pengganti</button>
       <button type="button" class="rekap-tab" data-tab="piket">Piket</button>
       <button type="button" class="rekap-tab" data-tab="libur">Hari Libur</button>
-      <button type="button" class="rekap-tab" data-tab="pengaturan">Pengaturan</button>
     </div>
 
     <!-- TAB: Kehadiran -->
@@ -102,41 +99,6 @@
     </section>
 
     <!-- TAB: Honor Mengajar -->
-    <section id="tab-honormengajar" class="card" hidden>
-      <div class="toolbar">
-        <div class="search-box">
-          <svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="12.8" y1="12.8" x2="17" y2="17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <input id="cariHonorMengajar" type="search" placeholder="Saring nama guru…" autocomplete="off" />
-        </div>
-        <div class="toolbar-actions">
-          <span id="ringkasHonorMengajar" class="tugas-note"></span>
-          <button type="button" id="xlsHonorMengajar" class="btn btn-primary">⬇ Unduh Excel</button>
-        </div>
-      </div>
-      <div id="peringatanHM" class="notice notice-peringatan" hidden></div>
-      <div class="table-scroll">
-        <table class="tabel-rekap">
-          <thead>
-            <tr>
-              <th>No</th><th>Nama Guru</th>
-              <th class="num" title="Masa kerja (tahun), dihitung dari TMT sekolah">M.Kerja</th>
-              <th class="num" title="Jam mengajar per minggu (kontrak)">Jam</th>
-              <th class="num" title="Tarif honor per jam menurut masa kerja">Tarif</th>
-              <th class="num" title="Tarif menurut masa kerja x jam kontrak">Honor</th>
-              <th class="num" title="Transport Berdiri — tarif tetap x jam kontrak">Transport</th>
-              <th class="num" title="Jam hadir tatap muka">Jam TM</th>
-              <th class="num" title="Insentif Tatap Muka">Insentif</th>
-              <th class="num" title="Hari guru datang ke sekolah">Hari</th>
-              <th class="num">Konsumsi</th>
-              <th class="num">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody id="bodyHonorMengajar"></tbody>
-          <tfoot id="footHonorMengajar"></tfoot>
-        </table>
-      </div>
-      <div class="table-foot" id="footHonorMengajarTeks"></div>
-    </section>
 
     <!-- TAB: Tugas Wali Kelas -->
     <section id="tab-wali" class="card" hidden>
@@ -212,30 +174,6 @@
     </section>
 
     <!-- TAB: Honor -->
-    <section id="tab-honor" class="card" hidden>
-      <div class="toolbar">
-        <span id="ringkasHonor" class="tugas-note"></span>
-        <div class="toolbar-actions">
-          <button type="button" id="xlsHonor" class="btn btn-primary">⬇ Unduh Excel (format keuangan)</button>
-        </div>
-      </div>
-      <div class="table-scroll">
-        <table class="tabel-rekap">
-          <thead>
-            <tr>
-              <th>No</th><th>Nama</th>
-              <th class="num">PT</th><th class="num">Honor</th>
-              <th class="num">GT</th><th class="num">Honor</th>
-              <th class="num">Inf</th><th class="num">Honor</th>
-              <th class="num">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody id="bodyHonor"></tbody>
-          <tfoot id="footHonor"></tfoot>
-        </table>
-      </div>
-      <div class="table-foot" id="footHonorTeks"></div>
-    </section>
 
     <!-- TAB: Piket -->
     <section id="tab-piket" class="card" hidden>
@@ -253,7 +191,6 @@
               <th colspan="2">Meja Sekolah</th>
               <th colspan="2">Unit</th>
               <th colspan="2">Parkiran</th>
-              <th rowspan="2" class="num">Kompensasi Parkiran</th>
             </tr>
             <tr>
               <th class="num">Jaga</th><th class="num">Absen</th>
@@ -270,67 +207,6 @@
     </section>
 
     <!-- TAB: Pengaturan -->
-    <section id="tab-pengaturan" class="card" hidden>
-      <div class="pengaturan-grid">
-        <div class="pengaturan-blok">
-          <h3>Tarif honor per jam pelajaran</h3>
-          <div class="field"><label for="pTarifPT">PT — Piket diTugaskan (Rp)</label><input type="number" id="pTarifPT" min="0" step="500" /></div>
-          <div class="field"><label for="pTarifGT">GT — Guru diTugaskan (Rp)</label><input type="number" id="pTarifGT" min="0" step="500" /></div>
-          <div class="field"><label for="pTarifInf">Inf — Infaler (Rp)</label><input type="number" id="pTarifInf" min="0" step="500" /></div>
-          <div class="field"><label for="pTarifParkiran">Piket parkiran — per hari jaga (Rp)</label><input type="number" id="pTarifParkiran" min="0" step="500" />
-            <p class="field-hint">Bukan per jam. Dihitung per hari petugas benar-benar berjaga; rosternya di Data Induk → Piket &amp; Honor.</p></div>
-        </div>
-        <div class="pengaturan-blok">
-          <h3>Tarif honor mengajar</h3>
-          <div class="field"><label for="pTransportBerdiri">Transport Berdiri — per jam mengajar (Rp)</label><input type="number" id="pTransportBerdiri" min="0" step="1000" /></div>
-          <div class="field"><label for="pInsentifTM">Insentif Tatap Muka — per jam tatap muka (Rp)</label><input type="number" id="pInsentifTM" min="0" step="500" /></div>
-          <div class="field"><label for="pKonsumsi">Konsumsi Kedatangan — per hari datang (Rp)</label><input type="number" id="pKonsumsi" min="0" step="1000" /></div>
-          <div class="field terapkan-semua" style="margin-top:14px">
-            <label class="check-row"><input type="checkbox" id="pKecualikanStaf" /><span>Kecualikan pemegang tugas Staf dari Honor Mengajar</span></label>
-            <p class="field-hint">Staf dibayar berdasarkan jam kerja (fingerprint). Jam mengajar, piket, dan tugas wali kelasnya tetap tercatat penuh di tab lain.</p>
-          </div>
-        </div>
-
-        <div class="pengaturan-blok">
-          <h3>Identitas pada dokumen</h3>
-          <div class="field"><label for="pNamaSekolah">Nama sekolah</label><input type="text" id="pNamaSekolah" /></div>
-          <div class="field"><label for="pAlamat">Alamat</label><input type="text" id="pAlamat" /></div>
-          <div class="field"><label for="pTahunAjaran">Tahun ajaran</label><input type="text" id="pTahunAjaran" /></div>
-          <div class="field"><label for="pTempat">Tempat tanda tangan</label><input type="text" id="pTempat" /></div>
-          <div class="field"><label for="pKepsek">Kepala Sekolah</label><input type="text" id="pKepsek" /></div>
-          <div class="field"><label for="pBendahara">Bendahara</label><input type="text" id="pBendahara" /></div>
-        </div>
-      </div>
-      <div class="pengaturan-bawah">
-      <div class="pengaturan-lebar">
-        <h3>Honor mengajar per jam menurut masa kerja</h3>
-          <table class="tabel-rekap tabel-tarif">
-            <thead><tr><th class="num">Dari (th)</th><th class="num">Sampai (th)</th><th class="num">Honor / jam (Rp)</th><th></th></tr></thead>
-            <tbody id="bodyTarifMK"></tbody>
-          </table>
-          <button type="button" id="tarifMKTambah" class="btn btn-ghost" style="margin-top:8px">+ Tambah jenjang</button>
-          <p class="tugas-note" style="margin-top:6px">Kosongkan kolom "Sampai" pada jenjang terakhir agar berlaku "ke atas".</p>
-      </div>
-
-      <div class="pengaturan-lebar">
-        <h3>Jam tugas tambahan guru</h3>
-        <p class="tugas-note" style="margin:-6px 0 12px;">Jam di luar jadwal KBM yang tetap dihitung sebagai jam kontrak pada Honor Mengajar dan Transport Berdiri.
-          Diisi di <b>Data Induk → Tugas Guru</b> (jenis "Tugas Tambahan", kolom jam tambahan mengajar); di sini hanya ditampilkan.</p>
-        <div class="table-scroll" style="max-height:none">
-          <table class="tabel-rekap">
-            <thead><tr><th>Guru</th><th class="num">Jam</th><th>Keterangan</th></tr></thead>
-            <tbody id="bodyTambahan"></tbody>
-          </table>
-        </div>
-      </div>
-
-      </div>
-
-      <div class="toolbar" style="border-top:1px solid var(--line);border-bottom:none;justify-content:flex-end;">
-        <span id="pengaturanStatus" class="tugas-note"></span>
-        <button type="button" id="pengaturanSimpan" class="btn btn-primary">Simpan pengaturan</button>
-      </div>
-    </section>
 
     <!-- TAB: Hari libur -->
     <section id="tab-libur" class="card" hidden>
@@ -357,7 +233,7 @@
 <div id="pinModal" class="modal-backdrop" hidden>
   <div class="modal" style="max-width:360px;">
     <h2>Buka Kunci Edit</h2>
-    <p style="margin:-8px 0 16px;color:#6E6455;font-size:13.5px;">Masukkan PIN untuk mengubah hari libur dan pengaturan.</p>
+    <p style="margin:-8px 0 16px;color:#6E6455;font-size:13.5px;">Masukkan PIN untuk mengubah hari libur.</p>
     <form id="pinForm">
       <div class="field">
         <label for="pinInput">PIN</label>
@@ -372,6 +248,7 @@
   </div>
 </div>
 
-<script type="module" src="scripts/rekap.js?v=20260920b"></script>
+<script src="assets/kop-dokumen.js?v=1"></script>
+<script type="module" src="scripts/rekap.js?v=20260920h"></script>
 </body>
 </html>

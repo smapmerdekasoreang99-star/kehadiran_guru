@@ -21,6 +21,19 @@
 
     --radius: 8px;
     --shadow-card: 0 1px 2px rgba(43, 38, 32, 0.06), 0 1px 12px rgba(43, 38, 32, 0.05);
+
+    /* Tingkat lapisan, dinyatakan sekali di sini.
+       Dulu setiap bagian memilih angka z-index sendiri-sendiri di tengah
+       berkas, dan dialog PIN kebagian 20 sementara toolbar 60 — akibatnya
+       tombol "Simpan yang belum tercatat" tampil DI ATAS dialog dan
+       merebut klik yang ditujukan ke tombol Batal/Konfirmasi.
+       Dialog harus selalu di atas seluruh isi halaman. */
+    /* Kepala dan kolom tabel yang melekat saat digulung memakai 1–4 apa
+       adanya: itu tingkatan di dalam satu tabel, semuanya jauh di bawah
+       toolbar, jadi tidak ikut diberi nama di sini. */
+    --lapis-toolbar: 60;   /* baris tombol di atas tabel */
+    --lapis-saran: 70;     /* kotak saran pencarian, menjulur ke bawah toolbar */
+    --lapis-dialog: 200;   /* dialog PIN dan sejenisnya — paling atas */
 }
 
 * { box-sizing: border-box; }
@@ -504,7 +517,7 @@ textarea {
     align-items: center;
     justify-content: center;
     padding: 20px;
-    z-index: 20;
+    z-index: var(--lapis-dialog);
 }
 
 
@@ -560,9 +573,9 @@ textarea {
 }
 
 /* ---------- Pencarian guru (halaman Ketidakhadiran) ---------- */
-.toolbar { position: relative; z-index: 60; }
+.toolbar { position: relative; z-index: var(--lapis-toolbar); }
 .toolbar-days { position: relative; z-index: 0; }  /* selalu di bawah kotak saran pencarian */
-.search-box { z-index: 61; }
+.search-box { z-index: calc(var(--lapis-toolbar) + 1); }
 
 .search-box {
     position: relative;
@@ -623,7 +636,7 @@ textarea {
     box-shadow: 0 12px 32px rgba(43, 38, 32, 0.14);
     max-height: 340px;
     overflow-y: auto;
-    z-index: 70;
+    z-index: var(--lapis-saran);
 }
 
 .suggest-item {
@@ -700,6 +713,15 @@ textarea {
     margin-bottom: 20px;
     word-break: break-word;
 }
+/* Bentuk yang sama, warna netral: dipakai untuk mengabarkan hasil sebuah
+   tindakan yang berhasil — bukan galat. Diletakkan di tempat yang sama
+   supaya hasil tindakan selalu dicari di satu tempat. */
+.error-banner.kabar {
+    background: var(--gold-tint);
+    border-color: var(--gold);
+    color: #6B4E10;
+}
+
 .error-close {
     position: absolute;
     top: 8px;

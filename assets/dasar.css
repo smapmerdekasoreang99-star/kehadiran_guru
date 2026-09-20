@@ -1,0 +1,165 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Public+Sans:wght@400;500;600;700&display=swap');
+
+/* =====================================================================
+   Dasar tampilan bersama — Sistem Informasi SMA Plus Merdeka Soreang
+   =====================================================================
+   Berkas ini SALINAN SERUPA di lima repositori:
+     data_induk/assets/  kehadiran_guru/assets/  absen_ekskul/assets/
+     induk_pembiayaan/assets/  Tryout_Guru/assets/
+   Bila diubah di satu tempat, salin ke empat tempat lainnya. Perintah
+   pembandingnya ditulis tanpa tanda bintang-garis miring, karena urutan
+   itu MENUTUP komentar CSS dan membuat sisa keterangan ini terbaca sebagai
+   aturan:
+
+     md5sum  tiap-aplikasi/assets/dasar.css   # kelimanya harus sama
+
+   Isinya sengaja HANYA token dan dasar yang benar-benar sama di semua
+   aplikasi. Nama kelas komponen berbeda-beda antar aplikasi (.tbl di
+   Absensi Ekskul, .btn di Data Induk), jadi komponennya tetap ditulis di
+   style.css masing-masing — tetapi warna, jarak, dan lapisannya wajib
+   mengambil dari sini. Dengan begitu mengubah palet cukup sekali, dan
+   tidak ada aplikasi yang diam-diam menyimpang seperti dulu terjadi pada
+   tarif dan nama penanda tangan.
+
+   Dimuat SEBELUM style.css aplikasi:
+     <link rel="stylesheet" href="assets/dasar.css?v=1">
+     <link rel="stylesheet" href="assets/style.css?v=...">
+
+   ---------------------------------------------------------------------
+   Empat aturan yang berlaku di seluruh aplikasi
+   ---------------------------------------------------------------------
+   1. Tidak ada angka lepas. Warna, jarak, sudut, bayang, ukuran huruf,
+      dan tingkat lapisan semuanya bernama di sini, lalu dipakai lewat
+      var(). Angka lepas yang tersebar adalah asal-mula tampilan yang
+      tidak rapi — dan, pada kasus lapisan, asal-mula dialog yang
+      tertimbun toolbar sampai tombolnya tidak bisa ditekan.
+
+   2. Jarak berirama kelipatan 4 px, diambil dari satu tangga jarak,
+      supaya unsur yang sejajar benar-benar sejajar.
+
+   3. Warna selalu berarti sesuatu, tidak pernah menjadi hiasan. Emas dari
+      lambang sekolah adalah aksen utama — penanda "di sini kamu berada"
+      dan "ini tindakan utamanya". Selebihnya hanya dua macam makna:
+
+        keadaan    hijau hadir · merah tidak hadir · biru sakit · emas izin
+        pekerjaan  hijau mencatat · biru membaca · emas mengelola
+
+      Tidak ada rona ketujuh yang ditambahkan supaya tampak ramai —
+      deretan warna tanpa arti membuat yang penting tenggelam.
+
+   4. Setiap pasangan tulisan dan latar wajib memenuhi ambang keterbacaan
+      WCAG (4,5:1 untuk teks biasa). Itulah sebabnya ada DUA emas: yang
+      terang untuk bidang, yang gelap untuk tulisan kecil.
+   ===================================================================== */
+
+:root{
+  /* ---- Warna dasar: diturunkan dari lambang sekolah, dilembutkan ---- */
+  --kertas:#FAF7F0;            /* latar halaman */
+  --kertas-2:#FFFFFF;          /* permukaan kartu */
+  --kertas-3:#F6F2E8;          /* permukaan kedua: kepala tabel, baris jumlah */
+  --gelap:#221E17;             /* topbar dan bilah samping */
+  --gelap-2:#3A3328;           /* garis di atas latar gelap */
+
+  --tinta:#221E17;             /* teks utama */
+  --tinta-2:#5E5548;           /* teks keterangan */
+  --tinta-3:#8B8173;           /* teks paling redup */
+  --tinta-terang:#F7F3E9;      /* teks di atas latar gelap */
+  --tinta-terang-2:#BDB3A0;
+
+  --garis:#E7E0D1;             /* garis pemisah */
+  --garis-2:#D6CCB6;           /* garis yang perlu lebih tegas */
+
+  /* ---- Aksen tunggal: emas lambang ---- */
+  --emas:#C29433;              /* bidang: tombol utama, penanda terpilih */
+  --emas-tua:#A67C1E;          /* tepi, dan teks di atas emas muda */
+  --emas-teks:#8F6B1A;         /* emas untuk TULISAN KECIL di latar terang.
+                                  Emas terang hanya 2,3:1 dengan putih dan
+                                  emas tua 3,8:1 — keduanya di bawah ambang.
+                                  Ini yang paling terang yang masih lolos,
+                                  jadi tetap terbaca emas, bukan cokelat. */
+  --emas-muda:#FFF6D2;       /* Sengaja dimudakan dari #F6E8C6: dengan yang lama,
+                                  --emas-teks di atasnya hanya 4,03:1 — di bawah
+                                  ambang. Sekarang 4,52:1. Warna ini menjadi latar
+                                  lencana dan pesan, jadi tulisannya harus terbaca. */
+  --emas-kabut:#FBF5E6;
+
+  /* ---- Tindakan utama ----
+     Latar DAN warna tulisan di atasnya selalu berpasangan. Tanpa ini,
+     aplikasi yang dulu berlatar hijau tua dengan tulisan putih akan
+     mewarisi tulisan putih di atas emas terang — 2,3:1, tidak terbaca. */
+  --utama:var(--emas);
+  --utama-tua:var(--emas-tua);
+  --utama-teks:#2A2114;
+
+  /* ---- Warna keadaan: status kehadiran ---- */
+  --hadir:#3F6B4F;   --hadir-muda:#E4EFE7;   --hadir-tua:#2B4B37;
+  --absen:#A8432E;   --absen-muda:#F7E4DF;   --absen-tua:#7C2F1F;
+  --sakit:#2F5D7C;   --sakit-muda:#E3EDF3;   --sakit-tua:#234A63;
+  --netral-muda:#EDE8DD;
+
+  /* ---- Warna pekerjaan: jenis tindakan sebuah halaman atau tombol ----
+     Sengaja memakai rona YANG SAMA dengan warna keadaan di atas. Palet
+     tetap berisi tiga warna; yang bertambah hanya maknanya. */
+  --kerja-catat:var(--hadir);      /* mengisi atau mengubah data  */
+  --kerja-baca:var(--sakit);       /* melihat, merekap, mengunduh */
+  --kerja-kelola:var(--emas-teks); /* mengelola daftar induk      */
+
+  /* ---- Tangga jarak: kelipatan 4 px ---- */
+  --j1:4px; --j2:8px; --j3:12px; --j4:16px; --j5:24px; --j6:32px; --j7:48px;
+
+  /* ---- Sudut ---- */
+  --r1:8px;    /* isian, tombol kecil */
+  --r2:10px;   /* tombol */
+  --r3:14px;   /* kartu */
+  --r-bulat:999px;
+
+  /* ---- Bayang: sangat tipis, hanya untuk memisahkan permukaan ---- */
+  --bayang-1:0 1px 2px rgba(34,30,23,.05);
+  --bayang-2:0 1px 2px rgba(34,30,23,.06), 0 6px 18px rgba(34,30,23,.05);
+  --bayang-atas:0 -4px 14px rgba(34,30,23,.07);
+
+  /* ---- Ukuran huruf ---- */
+  --h-xs:12px; --h-s:13px; --h-m:14px; --h-n:15px; --h-b:16px;
+  --h-judul-s:18px; --h-judul:23px; --h-judul-b:26px;
+
+  /* ---- Ukuran sentuh terkecil (pedoman aksesibilitas) ---- */
+  --sentuh:44px;
+
+  /* ---- Tingkat lapisan ----
+     Satu tangga untuk seluruh aplikasi. Urutannya mutlak: pesan di atas
+     tirai, tirai di atas navigasi, navigasi di atas isi. Angka z-index
+     yang dipilih sendiri-sendiri di tengah berkas pernah membuat dialog
+     PIN kebagian 20 sementara toolbar 60 — tombol Batal di dalam dialog
+     tertimbun dan tidak bisa ditekan.
+
+     Di DALAM satu tabel yang melekat saat digulung, tingkat 1–4 dipakai
+     apa adanya: itu urutan antar-sel sebuah tabel (isi < kolom kiri <
+     kepala < sudut kiri-atas), bukan urutan antar-bagian halaman.
+     Semuanya jauh di bawah topbar, jadi tidak ikut diberi nama. */
+  --lapis-isi:2;               /* unsur kecil di atas isi kartunya */
+  --lapis-topbar:30;
+  --lapis-bar:35;              /* bilah aksi mengambang */
+  --lapis-nav:40;
+  --lapis-saran:70;            /* kotak saran pencarian */
+  --lapis-tirai:200;           /* dialog, layar kunci */
+  --lapis-sibuk:250;           /* tirai "sedang bekerja" — menutupi dialog */
+  --lapis-pesan:300;           /* pesan sekilas — selalu paling atas */
+}
+
+/* ---------------------------------------------------------------------
+   Dasar yang sama di semua aplikasi
+   --------------------------------------------------------------------- */
+*{box-sizing:border-box}
+
+/* Satu cincin fokus untuk seluruh sistem. Tidak pernah dihilangkan:
+   sebagian pengguna memakai papan ketik, dan tanpa cincin ini mereka
+   kehilangan jejak posisi di halaman. */
+:where(a,button,input,select,textarea,summary,[tabindex]):focus-visible{
+  outline:3px solid rgba(194,148,51,.45);
+  outline-offset:2px;
+}
+
+/* Angka pada kolom jumlah, rupiah, dan jam ditulis dengan lebar yang sama
+   supaya kolomnya berbaris lurus ke bawah; tanpa ini digit 1 lebih sempit
+   dan deretan angkanya terlihat bergelombang. */
+.angka,.rp,.jumlah,td.angka,th.angka{font-variant-numeric:tabular-nums}

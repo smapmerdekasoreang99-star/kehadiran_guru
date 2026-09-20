@@ -100,8 +100,8 @@ async function boot() {
         for (const t of ["meja", "unit", "parkiran"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
     }));
 
-    document.getElementById("semuaHadirMeja").addEventListener("click", () => tandaiSemuaHadir("meja"));
-    document.getElementById("semuaHadirUnit").addEventListener("click", () => tandaiSemuaHadir("unit"));
+    for (const tab of ["meja", "unit", "parkiran"])
+        document.getElementById(idSimpan(tab)).addEventListener("click", () => simpanBelumTercatat(tab));
 
     await muatTanggal();
 }
@@ -176,11 +176,13 @@ async function muatTanggal() {
 }
 
 // ---------- Render ----------
+const besar = (tab) => tab[0].toUpperCase() + tab.slice(1);
+const idSimpan = (tab) => "simpan" + besar(tab);
+
 function render() {
     renderTabel("meja");
     renderTabel("unit");
     renderTabel("parkiran");
-    for (const id of ["semuaHadirMeja", "semuaHadirUnit"]) document.getElementById(id).disabled = !isUnlocked();
 }
 
 function daftarPetugas(tab) {
@@ -189,10 +191,21 @@ function daftarPetugas(tab) {
     return state.petugasParkiran;
 }
 
-function selStatus(nilai, aktif) {
-    const opsi = [["", "— belum dicatat —"], ["Hadir", "Hadir"], ["Tidak Hadir", "Tidak hadir"], ["Digantikan", "Digantikan"]];
+// Petugas piket umumnya hadir, jadi "Hadir" sudah terpilih sejak awal dan
+// yang perlu diubah hanya yang menyimpang. Pilihannya belum tersimpan sampai
+// ada tindakan: kalau kehadiran ikut tertulis begitu halaman dibuka, tanggal
+// yang tidak pernah dibuka siapa pun akan terbaca seolah semua orang hadir —
+// dan untuk parkiran itu berarti uang yang tidak pernah dikonfirmasi.
+function selStatus(nilai, aktif, draf) {
+    // Pada hari libur biasanya memang tidak ada piket, jadi di situ tidak ada
+    // yang dianggap hadir lebih dulu — kalau tidak, satu klik bisa mencatat
+    // sehari penuh kehadiran yang tidak pernah terjadi.
+    const bawaan = draf ? (state.libur ? "" : "Hadir") : (nilai || "");
+    const opsi = [["Hadir", "Hadir"], ["Tidak Hadir", "Tidak hadir"], ["Digantikan", "Digantikan"]];
+    if (draf) { if (state.libur) opsi.unshift(["", "— tidak ada piket —"]); }
+    else opsi.push(["", "— batalkan catatan —"]);
     return `<select class="kelas-filter" data-aksi="status" ${aktif ? "" : "disabled"} style="min-width:190px">${
-        opsi.map(([v, t]) => `<option value="${v}" ${v === (nilai || "") ? "selected" : ""}>${t}</option>`).join("")
+        opsi.map(([v, t]) => `<option value="${v}" ${v === bawaan ? "selected" : ""}>${t}</option>`).join("")
     }</select>`;
 }
 
@@ -210,8 +223,8 @@ function renderTabel(tab) {
     const jenis = JENIS[tab];
     const unlocked = isUnlocked();
     const daftar = daftarPetugas(tab);
-    const body = document.getElementById("body" + tab[0].toUpperCase() + tab.slice(1));
-    const kosong = document.getElementById("kosong" + tab[0].toUpperCase() + tab.slice(1));
+    const body = document.getElementById("body" + besar(tab));
+    const kosong = document.getElementById("kosong" + besar(tab));
 
     kosong.hidden = daftar.length > 0;
     body.innerHTML = daftar.map((p) => {
@@ -225,11 +238,13 @@ function renderTabel(tab) {
         const kolomUang = tab === "parkiran"
             ? `<td class="num">${status && status !== "Tidak Hadir" ? rp(state.tarifParkiran) : '<span class="tugas-note">—</span>'}</td>`
             : "";
-        return `<tr data-guru="${esc(p.guru_id)}" data-tugas="${tugasId == null ? "" : esc(tugasId)}" data-jenis="${esc(jenis)}">
+        return `<tr data-guru="${esc(p.guru_id)}" data-tugas="${tugasId == null ? "" : esc(tugasId)}" data-jenis="${esc(jenis)}"
+                    class="${c ? "" : "belum"}">
             <td class="nama">${esc(p.nama)}${status === "Digantikan"
-                ? `<br><span class="tugas-note">digantikan ${esc(namaGuru(c.pengganti_id))}</span>` : ""}</td>
+                ? `<br><span class="tugas-note">digantikan ${esc(namaGuru(c.pengganti_id))}</span>`
+                : c ? "" : '<br><span class="tugas-note">belum disimpan</span>'}</td>
             ${kolomTengah}
-            <td>${selStatus(status, unlocked)}</td>
+            <td>${selStatus(status, unlocked, !c)}</td>
             <td>${selPengganti(p.guru_id, c?.pengganti_id, unlocked, perluPengganti)}</td>
             ${kolomUang}
             <td><input type="text" class="kelas-filter" data-aksi="catatan" style="min-width:160px"
@@ -238,6 +253,15 @@ function renderTabel(tab) {
     }).join("");
 
     pasangAksi(body, tab);
+
+    // Tombolnya menyebut berapa baris yang masih tertunda, supaya jelas ada
+    // yang belum tersimpan tanpa perlu menghitung sendiri.
+    const belum = [...body.querySelectorAll("tr.belum")]
+        .filter((tr) => tr.querySelector('[data-aksi="status"]').value).length;
+    const tombol = document.getElementById(idSimpan(tab));
+    tombol.disabled = !unlocked || !belum;
+    tombol.textContent = belum ? `Simpan ${belum} yang belum tercatat` : "Semua sudah tercatat";
+
     renderRingkas(tab);
 }
 
@@ -255,7 +279,7 @@ function renderRingkas(tab) {
     const daftar = daftarPetugas(tab);
     const n = (s) => daftar.filter((p) => cariCatatan(jenis, p.guru_id, tab === "unit" ? p.tugas_id : null)?.status === s).length;
     const belum = daftar.length - n("Hadir") - n("Tidak Hadir") - n("Digantikan");
-    const el = document.getElementById("ringkas" + tab[0].toUpperCase() + tab.slice(1));
+    const el = document.getElementById("ringkas" + besar(tab));
     el.textContent = daftar.length
         ? `${daftar.length} petugas terjadwal · ${n("Hadir")} hadir · ${n("Digantikan")} digantikan · ${n("Tidak Hadir")} tidak hadir · ${belum} belum dicatat`
         : "";
@@ -345,19 +369,35 @@ async function hapusCatatan(baris) {
     state.catatan = state.catatan.filter((c) => c !== baris);
 }
 
-async function tandaiSemuaHadir(tab) {
+// Menyimpan baris yang statusnya sudah terpilih di layar tetapi belum tercatat
+// di database — umumnya seluruhnya "Hadir". Yang sudah tercatat tidak ditimpa,
+// dan baris "Digantikan" yang penggantinya belum dipilih dilewati supaya tidak
+// tersimpan berbeda dari yang terbaca di layar.
+async function simpanBelumTercatat(tab) {
     if (!isUnlocked()) return;
     const jenis = JENIS[tab];
-    for (const p of daftarPetugas(tab)) {
-        const tugasId = tab === "unit" ? p.tugas_id : null;
-        if (cariCatatan(jenis, p.guru_id, tugasId)) continue;   // yang sudah dicatat tidak ditimpa
-        const isi = { tanggal: state.tanggal, jenis, guru_id: p.guru_id, tugas_id: tugasId,
-                      status: "Hadir", pengganti_id: null, catatan: null };
-        if (!isSupabaseConfigured) { state.catatan.push({ id: "D" + Date.now() + p.guru_id, ...isi }); continue; }
+    const body = document.getElementById("body" + besar(tab));
+    let tertunda = 0;
+
+    for (const tr of [...body.querySelectorAll("tr.belum")]) {
+        const guruId = tr.dataset.guru;
+        const tugasId = tr.dataset.tugas === "" ? null : Number(tr.dataset.tugas);
+        if (cariCatatan(jenis, guruId, tugasId)) continue;
+        const status = tr.querySelector('[data-aksi="status"]').value;
+        if (!status) continue;
+        const pengganti = tr.querySelector('[data-aksi="pengganti"]').value;
+        if (status === "Digantikan" && !pengganti) { tertunda += 1; continue; }
+
+        const isi = { tanggal: state.tanggal, jenis, guru_id: guruId, tugas_id: tugasId, status,
+                      pengganti_id: status === "Digantikan" ? pengganti : null,
+                      catatan: tr.querySelector('[data-aksi="catatan"]').value.trim() || null };
+        if (!isSupabaseConfigured) { state.catatan.push({ id: "D" + Date.now() + guruId, ...isi }); continue; }
         const { data, error } = await supabaseClient.from("kg_pelaksanaan_piket").insert(isi).select().single();
-        if (error) { laporError("Gagal menandai hadir", error); break; }
+        if (error) { laporError("Gagal menyimpan catatan piket", error); break; }
         state.catatan.push(data);
     }
+    if (tertunda) laporError("Sebagian belum tersimpan",
+        { message: `${tertunda} baris berstatus Digantikan belum menyebut penggantinya.` });
     renderTabel(tab);
 }
 

@@ -1101,3 +1101,7 @@ table.matriks {
 .matriks tr.baris-grup th.m-label span { font-size: 12px; overflow: visible; }
 /* matriks kelompok kolomnya sedikit — kolom nama kelompok boleh lebih lega */
 .matriks.kelompok thead th.m-sudut { width: 150px; }
+
+/* Pelaksanaan piket: baris yang pilihannya sudah terisi tetapi belum tersimpan */
+#mainCard tr.belum td { background: #FCFAF3; }
+#mainCard tr.belum td.nama { box-shadow: inset 3px 0 0 var(--gold); }

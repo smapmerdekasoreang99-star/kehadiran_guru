@@ -6,7 +6,7 @@
 <title>Pelaksanaan Piket — Guru Pengganti SMA Plus Merdeka Soreang</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20260916h" />
+<link rel="stylesheet" href="assets/style.css?v=20260920a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -34,7 +34,9 @@
     <div class="page-head">
       <div>
         <h1>Pelaksanaan Piket</h1>
-        <p>Catat siapa yang benar-benar menjalankan piket hari itu — meja sekolah, unit, dan parkiran.</p>
+        <p>Catat siapa yang benar-benar menjalankan piket hari itu — meja sekolah, unit, dan parkiran.
+          Semuanya sudah terisi <b>Hadir</b> karena umumnya memang hadir: ubah yang menyimpang,
+          lalu simpan sisanya sekaligus.</p>
       </div>
       <div class="page-head-actions">
         <div class="date-field">
@@ -69,7 +71,7 @@
         <div class="toolbar">
           <span id="ringkasMeja" class="tugas-note"></span>
           <div class="toolbar-actions">
-            <button type="button" id="semuaHadirMeja" class="btn btn-primary">Tandai semua hadir</button>
+            <button type="button" id="simpanMeja" class="btn btn-primary">Simpan yang belum tercatat</button>
           </div>
         </div>
         <div class="table-scroll">
@@ -95,7 +97,7 @@
         <div class="toolbar">
           <span id="ringkasUnit" class="tugas-note"></span>
           <div class="toolbar-actions">
-            <button type="button" id="semuaHadirUnit" class="btn btn-primary">Tandai semua hadir</button>
+            <button type="button" id="simpanUnit" class="btn btn-primary">Simpan yang belum tercatat</button>
           </div>
         </div>
         <div class="table-scroll">
@@ -120,6 +122,9 @@
       <section id="tab-parkiran" class="card" hidden>
         <div class="toolbar">
           <span id="ringkasParkiran" class="tugas-note"></span>
+          <div class="toolbar-actions">
+            <button type="button" id="simpanParkiran" class="btn btn-primary">Simpan yang belum tercatat</button>
+          </div>
         </div>
         <div class="table-scroll">
           <table class="tabel-rekap">
@@ -161,6 +166,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/piket.js?v=20260920a"></script>
+<script type="module" src="scripts/piket.js?v=20260920b"></script>
 </body>
 </html>

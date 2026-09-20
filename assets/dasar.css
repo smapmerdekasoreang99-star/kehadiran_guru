@@ -57,14 +57,24 @@
   --kertas:#FAF7F0;            /* latar halaman */
   --kertas-2:#FFFFFF;          /* permukaan kartu */
   --kertas-3:#F6F2E8;          /* permukaan kedua: kepala tabel, baris jumlah */
-  --gelap:#221E17;             /* topbar dan bilah samping */
-  --gelap-2:#3A3328;           /* garis di atas latar gelap */
+  /* ---- Chrome gelap: topbar, bilah samping, bilah aksi, kendali terpilih ----
+     Sengaja TERPISAH dari --tinta walau dulu nilainya kebetulan sama.
+     Keduanya peran yang berbeda: yang satu latar perkakas, yang satu warna
+     tulisan. Menyatukannya membuat warna header tidak bisa diubah tanpa
+     ikut mengubah warna seluruh tulisan. */
+  --gelap:#1D2A3A;             /* biru tua: topbar dan bilah samping */
+  --gelap-2:#33445A;           /* garis dan sorotan di atas chrome gelap */
 
   --tinta:#221E17;             /* teks utama */
   --tinta-2:#5E5548;           /* teks keterangan */
   --tinta-3:#8B8173;           /* teks paling redup */
-  --tinta-terang:#F7F3E9;      /* teks di atas latar gelap */
-  --tinta-terang-2:#BDB3A0;
+  --tinta-terang:#F7F3E9;      /* teks utama di atas chrome gelap */
+  --tinta-terang-2:#BDB3A0;    /* teks keterangan di atas chrome gelap */
+  --tinta-terang-3:#978F80;    /* teks paling redup di atas chrome gelap.
+                                  Ada tersendiri karena --tinta-3 adalah abu
+                                  untuk latar TERANG: dipakai di atas chrome
+                                  gelap rasionya cuma 3,8:1, di bawah ambang.
+                                  Ini yang paling redup yang masih lolos. */
 
   --garis:#E7E0D1;             /* garis pemisah */
   --garis-2:#D6CCB6;           /* garis yang perlu lebih tegas */

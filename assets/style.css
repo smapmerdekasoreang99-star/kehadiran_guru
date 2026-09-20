@@ -112,15 +112,18 @@ button, select, input { font-family: inherit; font-size: inherit; }
     border-left: 2px solid var(--gold);
 }
 
+/* Menu yang belum tersedia. Dibiarkan paling redup — kendali nonaktif
+   memang dikecualikan dari ambang keterbacaan, justru supaya terbaca
+   sebagai "belum bisa dipakai". */
 .sidebar-nav a.disabled {
-    color: var(--tinta-3);
+    color: var(--tinta-terang-3);
     cursor: default;
 }
 
 .sidebar-foot {
     margin-top: auto;
     font-size: 12px;
-    color: var(--tinta-3);
+    color: var(--tinta-terang-2);
     border-top: 1px solid var(--sidebar-line);
     padding-top: 16px;
 }

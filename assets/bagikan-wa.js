@@ -83,9 +83,16 @@ const COLS = [
 const ROW_H = 40;
 const HEAD_H = 40;
 
+/* Warnanya disalin dari assets/dasar.css, bukan dipilih ulang di sini.
+   Kanvas tidak bisa membaca token CSS — berkas ini juga harus jalan di
+   Node untuk diuji — jadi nilainya ditulis apa adanya. Bila palet bersama
+   berubah, nilai di bawah ikut diperbarui. */
 const C = {
-    bg: "#FBF8F1", surface: "#FFFFFF", ink: "#2B2620", muted: "#6E6455",
-    gold: "#C99A2E", goldTint: "#F3E6C4", charcoal: "#211D17", line: "#D9D0BC", flameTint: "#F3DED7", flame: "#A8432E",
+    bg: "#FAF7F0", surface: "#FFFFFF", ink: "#221E17", muted: "#5E5548",
+    gold: "#C29433", goldTint: "#FFF6D2", line: "#D6CCB6",
+    flameTint: "#F7E4DF", flame: "#A8432E",
+    biruMuda: "#E3EDF3",   // latar kepala gambar
+    biru: "#2F5D7C",       // garis pembatas di bawahnya
 };
 
 function wrapText(ctx, text, maxW) {
@@ -115,10 +122,13 @@ export function gambarTabel({ tanggal, kelompok, catatan, namaSekolah, logo, cre
         }
     }
     const tableH = HEAD_H + rowsHeights.reduce((a, b) => a + b, 0);
-    const headerH = 118;
+    /* Kepala dibuat setipis yang masih lapang. Gambar ini dikirim lewat
+       WhatsApp dan dibuka di layar HP: tiap piksel tinggi yang tidak
+       terpakai membuat tabelnya mengecil saat gambar dimuat pas lebar. */
+    const headerH = 76;
     const noteLines = catatan && catatan.trim() ? wrapText(probe, "Catatan: " + catatan.trim(), W - PAD * 2) : [];
-    const footH = 34 + noteLines.length * 20 + 28;
-    const H = headerH + 24 + tableH + 20 + footH;
+    const footH = 28 + noteLines.length * 20 + 20;
+    const H = headerH + 18 + tableH + 20 + footH;
 
     const canvas = createCanvas(W * scale, H * scale);
     const ctx = canvas.getContext("2d");
@@ -127,22 +137,24 @@ export function gambarTabel({ tanggal, kelompok, catatan, namaSekolah, logo, cre
     // latar
     ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
 
-    // header arang
-    ctx.fillStyle = C.charcoal; ctx.fillRect(0, 0, W, headerH);
-    ctx.fillStyle = C.gold; ctx.fillRect(0, headerH - 4, W, 4);
+    // kepala biru muda, dengan garis biru tua sebagai pembatas
+    const GARIS_H = 3;
+    ctx.fillStyle = C.biruMuda; ctx.fillRect(0, 0, W, headerH);
+    ctx.fillStyle = C.biru; ctx.fillRect(0, headerH - GARIS_H, W, GARIS_H);
     let tx = PAD;
     if (logo) {
-        const s = 70;
-        ctx.drawImage(logo, PAD, (headerH - 4 - s) / 2, s, s);
-        tx = PAD + s + 18;
+        const s = 52;
+        ctx.drawImage(logo, PAD, (headerH - GARIS_H - s) / 2, s, s);
+        tx = PAD + s + 14;
     }
-    ctx.fillStyle = "#FFFFFF"; ctx.font = `600 30px ${SERIF}`; ctx.textBaseline = "alphabetic";
-    ctx.fillText("Jadwal Guru Pengganti", tx, 52);
-    ctx.fillStyle = "#C9C1AE"; ctx.font = `500 15px ${FONT}`;
-    ctx.fillText(`${namaSekolah}  ·  ${tanggalPanjang(tanggal)}`, tx, 80);
+    // Tulisan menjadi gelap karena latarnya kini terang.
+    ctx.fillStyle = C.ink; ctx.font = `600 23px ${SERIF}`; ctx.textBaseline = "alphabetic";
+    ctx.fillText("Jadwal Guru Pengganti", tx, 36);
+    ctx.fillStyle = C.muted; ctx.font = `500 13px ${FONT}`;
+    ctx.fillText(`${namaSekolah}  ·  ${tanggalPanjang(tanggal)}`, tx, 58);
 
     // tabel
-    const x0 = PAD, y0 = headerH + 24;
+    const x0 = PAD, y0 = headerH + 18;
     const tableW = COLS.reduce((a, c) => a + c.w, 0);
     ctx.fillStyle = C.surface; ctx.fillRect(x0, y0, tableW, tableH);
 
@@ -207,7 +219,7 @@ export function gambarTabel({ tanggal, kelompok, catatan, namaSekolah, logo, cre
     ctx.strokeStyle = "#B9AE95"; ctx.strokeRect(x0 + 0.5, y0 + 0.5, tableW - 1, tableH - 1);
 
     // catatan & keterangan kode
-    let fy = y0 + tableH + 30;
+    let fy = y0 + tableH + 24;
     ctx.fillStyle = C.ink; ctx.font = `600 14px ${FONT}`;
     noteLines.forEach((ln, i) => ctx.fillText(ln, PAD, fy + i * 20));
     fy += noteLines.length * 20 + (noteLines.length ? 10 : 0);

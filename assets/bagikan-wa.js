@@ -91,7 +91,7 @@ const C = {
     bg: "#FAF7F0", surface: "#FFFFFF", ink: "#221E17", muted: "#5E5548",
     gold: "#C29433", goldTint: "#FFF6D2", line: "#D6CCB6",
     flameTint: "#F7E4DF", flame: "#A8432E",
-    biruMuda: "#E3EDF3",   // latar kepala gambar
+    biruMuda: "#CBDCEA",   // latar kepala gambar
     biru: "#2F5D7C",       // garis pembatas di bawahnya
 };
 
@@ -125,7 +125,7 @@ export function gambarTabel({ tanggal, kelompok, catatan, namaSekolah, logo, cre
     /* Kepala dibuat setipis yang masih lapang. Gambar ini dikirim lewat
        WhatsApp dan dibuka di layar HP: tiap piksel tinggi yang tidak
        terpakai membuat tabelnya mengecil saat gambar dimuat pas lebar. */
-    const headerH = 76;
+    const headerH = 60;
     const noteLines = catatan && catatan.trim() ? wrapText(probe, "Catatan: " + catatan.trim(), W - PAD * 2) : [];
     const footH = 28 + noteLines.length * 20 + 20;
     const H = headerH + 18 + tableH + 20 + footH;
@@ -143,15 +143,15 @@ export function gambarTabel({ tanggal, kelompok, catatan, namaSekolah, logo, cre
     ctx.fillStyle = C.biru; ctx.fillRect(0, headerH - GARIS_H, W, GARIS_H);
     let tx = PAD;
     if (logo) {
-        const s = 52;
+        const s = 44;
         ctx.drawImage(logo, PAD, (headerH - GARIS_H - s) / 2, s, s);
-        tx = PAD + s + 14;
+        tx = PAD + s + 12;
     }
     // Tulisan menjadi gelap karena latarnya kini terang.
-    ctx.fillStyle = C.ink; ctx.font = `600 23px ${SERIF}`; ctx.textBaseline = "alphabetic";
-    ctx.fillText("Jadwal Guru Pengganti", tx, 36);
-    ctx.fillStyle = C.muted; ctx.font = `500 13px ${FONT}`;
-    ctx.fillText(`${namaSekolah}  ·  ${tanggalPanjang(tanggal)}`, tx, 58);
+    ctx.fillStyle = C.ink; ctx.font = `600 21px ${SERIF}`; ctx.textBaseline = "alphabetic";
+    ctx.fillText("Jadwal Guru Pengganti", tx, 28);
+    ctx.fillStyle = C.muted; ctx.font = `500 12px ${FONT}`;
+    ctx.fillText(`${namaSekolah}  ·  ${tanggalPanjang(tanggal)}`, tx, 47);
 
     // tabel
     const x0 = PAD, y0 = headerH + 18;

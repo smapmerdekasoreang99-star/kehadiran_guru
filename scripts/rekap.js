@@ -1,11 +1,11 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920u";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920u";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920u";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920u";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260920u";
-import { rekapKehadiran, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920u";
-import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920u";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920u";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920v";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920v";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920v";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920v";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260920v";
+import { rekapKehadiran, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920v";
+import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920v";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920v";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
 // mengajar, honor pengganti, dan transport — pindah ke aplikasi Induk
@@ -371,7 +371,18 @@ function renderWali() {
       <tr><td class="nama">${r.nama}</td>${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.STT)}${num(r.IT)}${num(r.ITT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}</tr>`).join("")
       || `<tr><td colspan="11" class="empty-state">Tidak ada jam tugas wali kelas pada rentang ini.</td></tr>`;
     const t = w.total;
-    document.getElementById("ringkasWali").textContent = `${w.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
+    document.getElementById("ringkasWali").textContent =
+        `${w.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
+    /* Satuannya perlu dikatakan. Tiap wali kelas terjadwal 1 jam Upacara dan
+       1 jam Bimbingan tiap Senin, jadi angka di sini menumpuk mengikuti
+       banyaknya Senin dalam rentang — dua Senin berarti 4 jam. Induk
+       Pembiayaan menampilkan 1 jam, karena di sana satuannya per minggu.
+       Keduanya benar; yang membingungkan hanya karena sama-sama disebut "jam". */
+    document.getElementById("footWaliTeks").textContent =
+        "Terjadwal dihitung sepanjang rentang tanggal: tiap wali kelas 1 jam Upacara dan 1 jam "
+        + "Bimbingan setiap Senin, jadi dua Senin berarti 4 jam. Di aplikasi Induk Pembiayaan "
+        + "angkanya per minggu (1 jam), karena honornya dibayarkan bulanan atas dasar jam "
+        + "kontrak itu — bukan dikalikan banyaknya pekan.";
     document.getElementById("footWali").innerHTML = `<tr class="total"><td>Total (${w.baris.length} wali kelas)</td>${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.STT)}${num(t.IT)}${num(t.ITT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
 }
 

@@ -9,10 +9,10 @@
 // kolom `jenis`, karena bentuk datanya sama: satu petugas, satu tanggal,
 // hadir atau tidak.
 
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920u";
-import { demoData } from "../assets/demo-data.js?v=20260920u";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920u";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920u";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920v";
+import { demoData } from "../assets/demo-data.js?v=20260920v";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920v";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920v";
 
 try {
     initLockUI(() => render());

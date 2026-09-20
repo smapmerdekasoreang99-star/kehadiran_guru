@@ -3,7 +3,7 @@ import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920h";
 import { terapkanUrutan } from "../assets/guru-order.js?v=20260920h";
 import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260920h";
-import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920n";
+import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920p";
 import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260920h";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi

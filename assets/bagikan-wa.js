@@ -127,8 +127,12 @@ export function gambarTabel({ tanggal, kelompok, catatan, namaSekolah, logo, cre
        terpakai membuat tabelnya mengecil saat gambar dimuat pas lebar. */
     const headerH = 60;
     const noteLines = catatan && catatan.trim() ? wrapText(probe, "Catatan: " + catatan.trim(), W - PAD * 2) : [];
-    const footH = 28 + noteLines.length * 20 + 20;
-    const H = headerH + 18 + tableH + 20 + footH;
+    /* Kaki dirapatkan seperti kepalanya. Sisa ruang kosong di bawah
+       keterangan kode dulu hampir selebar dua baris tulisan — tidak membawa
+       apa pun, tetapi ikut mengecilkan tabel saat gambar dimuat pas lebar
+       layar HP. */
+    const footH = 20 + noteLines.length * 18 + 8;
+    const H = headerH + 18 + tableH + 12 + footH;
 
     const canvas = createCanvas(W * scale, H * scale);
     const ctx = canvas.getContext("2d");
@@ -219,12 +223,12 @@ export function gambarTabel({ tanggal, kelompok, catatan, namaSekolah, logo, cre
     ctx.strokeStyle = "#B9AE95"; ctx.strokeRect(x0 + 0.5, y0 + 0.5, tableW - 1, tableH - 1);
 
     // catatan & keterangan kode
-    let fy = y0 + tableH + 24;
-    ctx.fillStyle = C.ink; ctx.font = `600 14px ${FONT}`;
-    noteLines.forEach((ln, i) => ctx.fillText(ln, PAD, fy + i * 20));
-    fy += noteLines.length * 20 + (noteLines.length ? 10 : 0);
-    ctx.fillStyle = C.muted; ctx.font = `400 12px ${FONT}`;
-    ctx.fillText("GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler   —   dibuat dari Sistem Guru Pengganti", PAD, fy + 6);
+    let fy = y0 + tableH + 18;
+    ctx.fillStyle = C.ink; ctx.font = `600 13px ${FONT}`;
+    noteLines.forEach((ln, i) => ctx.fillText(ln, PAD, fy + i * 18));
+    fy += noteLines.length * 18 + (noteLines.length ? 8 : 0);
+    ctx.fillStyle = C.muted; ctx.font = `400 11px ${FONT}`;
+    ctx.fillText("GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler   —   dibuat dari Sistem Guru Pengganti", PAD, fy + 4);
 
     return canvas;
 }

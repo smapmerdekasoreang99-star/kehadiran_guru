@@ -36,6 +36,9 @@ const tinggiTeksPx = ukuran => pt2px(Math.round(ukuran * 1.7));
    layar sama dengan yang keluar di berkas — ketelitiannya ±5 px. */
 const LANGKAH_GESER = PX_INDENT;
 
+// Sela terkecil antara logo dan tulisan kop, supaya tidak berdempetan.
+const JARAK_LOGO = 4;
+
 const TATA_LETAK_BAWAAN = {
     logo:  { tampil: true, x: 4, y: 3, ukuran: 52 },
     teks:  { x: 60, y: 0, rata: 'kiri', ukuranNama: 13, ukuranAlamat: 9 },
@@ -138,7 +141,33 @@ function susunanKop(t, profil, judul, sub) {
     // menempel pada garis pembatas kop.
     tambah('jarakBawah', 10);
 
-    return { baris, tinggi: atas, identitas,
+    /* Logo tidak boleh menimpa tulisan.
+
+       Di Excel gambar SELALU digambar di atas sel — tidak ada cara
+       menaruhnya di belakang tulisan. (Yang bisa di belakang hanya "latar
+       lembar", dan itu diulang-ulang memenuhi halaman serta tidak bisa
+       ditempatkan.) Jadi satu-satunya cara agar logo tidak menimpa
+       tulisan adalah memastikan keduanya tidak pernah bertemu.
+
+       Dihitung di sini supaya berlaku sama untuk berkas Excel, gambar
+       PNG, dan pratinjau seret — termasuk untuk tata letak yang terlanjur
+       tersimpan bertindih sebelum aturan ini ada.
+
+       Hanya berlaku pada tulisan rata kiri; pada rata tengah/kanan
+       letaknya ditentukan lebar halaman, bukan oleh teks.x. Judul dan
+       subjudul tidak perlu diperiksa karena baris pengganjal di atas
+       sudah menjamin keduanya berada di bawah logo. */
+    let teksMinX = 0;
+    if (t.logo.tampil && t.teks.rata === 'kiri') {
+        const atasTeks = baris[rNama - 1].atas;
+        const akhir = rIdentitas.length ? baris[rIdentitas[rIdentitas.length - 1] - 1] : baris[rNama - 1];
+        const bawahTeks = akhir.atas + akhir.px;
+        const bertindihTegak = t.logo.y < bawahTeks && (t.logo.y + t.logo.ukuran) > atasTeks;
+        if (bertindihTegak) teksMinX = t.logo.x + t.logo.ukuran + JARAK_LOGO;
+    }
+
+    return { baris, tinggi: atas, identitas, teksMinX,
+             teksX: Math.max(t.teks.x, teksMinX),
              indeks: { nama: rNama, identitas: rIdentitas, judul: rJudul, sub: rSub, garis: rGaris } };
 }
 
@@ -164,7 +193,7 @@ function kopExcel(ws, opsi) {
     const lebarKolomPx = [];
     for (let i = 1; i <= KOL; i++) lebarKolomPx.push(PX_KOLOM((ws.getColumn(i).width) || 10));
 
-    const { baris, identitas, indeks } = susunanKop(t, profil, judul, sub);
+    const { baris, identitas, indeks, teksX } = susunanKop(t, profil, judul, sub);
     const { nama: rNama, identitas: rIdentitas, judul: rJudul, sub: rSub, garis: rGaris } = indeks;
 
     baris.forEach((b, i) => { ws.getRow(i + 1).height = px2pt(b.px); });
@@ -183,7 +212,9 @@ function kopExcel(ws, opsi) {
     }
 
     // --- Tulisan ------------------------------------------------------
-    const tempat = tempatkan(lebarKolomPx, t.teks.x);
+    // teksX, bukan t.teks.x: bila logonya menghalangi, tulisannya digeser
+    // ke kanan logo supaya tidak tertimpa. Lihat susunanKop di atas.
+    const tempat = tempatkan(lebarKolomPx, teksX);
     const tulis = (r, teks, ukuran, tebal, perataan) => {
         if (!r) return;
         const tengah = perataan === 'tengah', kanan = perataan === 'kanan';
@@ -247,7 +278,7 @@ function kopKanvas(g, opsi) {
 
     // Susunan barisnya sama persis dengan berkas Excel — memakai fungsi
     // yang sama — sehingga gambar PNG dan xlsx tidak bisa berbeda.
-    const { baris, identitas, indeks, tinggi } = susunanKop(t, profil, judul, sub);
+    const { baris, identitas, indeks, tinggi, teksX } = susunanKop(t, profil, judul, sub);
     const ambil = n => (n ? baris[n - 1] : null);
 
     // Ukuran poin di Excel disepadankan dengan piksel di kanvas, supaya
@@ -259,15 +290,11 @@ function kopKanvas(g, opsi) {
     // Kanvas menggambar tulisan dari garis dasarnya, bukan dari atasnya.
     const garisDasar = (b, pxFont) => b.atas + b.px / 2 + pxFont * 0.36;
 
-    if (t.logo.tampil && logo) {
-        g.drawImage(logo, padding + t.logo.x, t.logo.y, t.logo.ukuran, t.logo.ukuran);
-    }
-
     const kananIsi = lebar - padding;
     const mendatar = perataan => ({
         x: perataan === 'tengah' ? (padding + kananIsi) / 2
          : perataan === 'kanan'  ? kananIsi
-         : padding + t.teks.x,
+         : padding + teksX,
         rata: perataan === 'tengah' ? 'center' : perataan === 'kanan' ? 'right' : 'left'
     });
 
@@ -304,6 +331,16 @@ function kopKanvas(g, opsi) {
         g.moveTo(padding, b.atas + b.px - 2);
         g.lineTo(kananIsi, b.atas + b.px - 2);
         g.stroke();
+    }
+
+    /* Logo digambar TERAKHIR, sesudah tulisan. Bukan selera, melainkan
+       menyamakan diri dengan Excel: di sana gambar selalu berada di atas
+       sel dan tidak bisa ditaruh di belakang tulisan. Kalau di kanvas
+       logonya digambar lebih dulu, gambar PNG dan berkas xlsx akan berbeda
+       justru pada satu hal yang paling kelihatan. Bertindihnya sendiri
+       sudah dicegah di susunanKop; ini untuk berjaga kalau toh terjadi. */
+    if (t.logo.tampil && logo) {
+        g.drawImage(logo, padding + t.logo.x, t.logo.y, t.logo.ukuran, t.logo.ukuran);
     }
 
     g.textAlign = 'left';

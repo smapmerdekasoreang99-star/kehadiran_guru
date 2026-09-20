@@ -1,8 +1,8 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920t";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920t";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920t";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920t";
-import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260920t";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920u";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920u";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920u";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920u";
+import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260920u";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.

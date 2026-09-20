@@ -244,7 +244,7 @@ export { ambilLogoBase64 };
 // =========================================================
 // 4. PELAKSANAAN PIKET
 // =========================================================
-// baris: [{ nama, meja:{jaga,absen}, unit:{jaga,absen}, parkiran:{jaga,absen} }]
+// baris: [{ nama, meja:{terjadwal,jaga}, unit:{terjadwal,jaga}, parkiran:{terjadwal,jaga} }]
 // Hanya jumlah hari. Nilai rupiahnya dihitung di Induk Pembiayaan, supaya
 // tarif dan cara menghitungnya hanya ada di satu tempat.
 export async function bukuPiket({ ExcelJS, baris, total, pengaturan, awal, akhir, logoBase64 }) {
@@ -256,18 +256,18 @@ export async function bukuPiket({ ExcelJS, baris, total, pengaturan, awal, akhir
         judul: "REKAPITULASI PELAKSANAAN TUGAS PIKET",
         sub: labelPeriode(awal, akhir).replace(" :", ":"), kolomTerakhir: KOL });
 
-    kepalaTabel(ws, r, ["NO", "NAMA", "MEJA SEKOLAH JAGA", "MEJA SEKOLAH ABSEN", "UNIT JAGA", "UNIT ABSEN",
-                        "PARKIRAN JAGA", "PARKIRAN ABSEN"], { tinggi: 34 });
+    kepalaTabel(ws, r, ["NO", "NAMA", "MEJA SEKOLAH TERJADWAL", "MEJA SEKOLAH JAGA", "UNIT TERJADWAL", "UNIT JAGA",
+                        "PARKIRAN TERJADWAL", "PARKIRAN JAGA"], { tinggi: 34 });
     r += 1;
     baris.forEach((b, i) => {
         selData(ws, r, 1, i + 1, { align: "center" });
         selData(ws, r, 2, b.nama);
-        [b.meja.jaga, b.meja.absen, b.unit.jaga, b.unit.absen, b.parkiran.jaga, b.parkiran.absen]
+        [b.meja.terjadwal, b.meja.jaga, b.unit.terjadwal, b.unit.jaga, b.parkiran.terjadwal, b.parkiran.jaga]
             .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center" }));
         r += 1;
     });
     selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
-    [total.meja.jaga, total.meja.absen, total.unit.jaga, total.unit.absen, total.parkiran.jaga, total.parkiran.absen]
+    [total.meja.terjadwal, total.meja.jaga, total.unit.terjadwal, total.unit.jaga, total.parkiran.terjadwal, total.parkiran.jaga]
         .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", bold: true, fill: true }));
     r += 2;
     ws.getCell(r, 1).value = '"Jaga" dihitung per hari, termasuk hari saat yang bersangkutan menggantikan petugas lain. '

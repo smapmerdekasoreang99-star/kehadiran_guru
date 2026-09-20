@@ -1,11 +1,11 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920t";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920t";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920t";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920t";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260920t";
-import { rekapKehadiran, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920t";
-import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920t";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920t";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920u";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920u";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920u";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920u";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260920u";
+import { rekapKehadiran, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920u";
+import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920u";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920u";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
 // mengajar, honor pengganti, dan transport — pindah ke aplikasi Induk
@@ -38,6 +38,7 @@ let state = {
     saring: "", saringWali: "", viewPengganti: "ringkas",
     profil: null,
     piket: [], hasilPiket: null,
+    jadwalPiket: { meja: [], unit: [], parkiran: [] },
 };
 
 /* Identitas kop berkas Excel, dibaca dari v_penanda_tangan milik Data Induk —
@@ -99,6 +100,7 @@ async function boot() {
             if (!data || data.length < 1000) break;
         }
         await muatLibur();
+        await muatJadwalPiket();
         await muatProfil();
     } else {
         state.guru = demoData.guru; state.kelas = urutkanKelas(demoData.kelas); state.mapel = demoData.mapel; state.jadwal = demoData.jadwal;
@@ -106,6 +108,30 @@ async function boot() {
     }
     renderLibur();
     await hitungLagi();
+}
+
+/* Jadwal ketiga jenis piket. Bentuknya berbeda-beda, jadi dibaca dari tiga
+   tempat yang berbeda pula — persis sumber yang dipakai halaman Pelaksanaan
+   Piket, supaya "terjadwal" di rekap ini tidak berselisih dengan daftar yang
+   dilihat petugasnya sehari-hari.
+
+     Meja Sekolah  kg_piket        satu baris per guru per hari per jam
+     Unit          v_guru_unit     berlaku tiap hari kerja selama tugasnya aktif
+     Parkiran      v_piket_parkiran satu petugas per hari
+
+   Gagalnya salah satu tidak menghentikan yang lain: rekap tetap tampil,
+   hanya kolom terjadwal jenis itu yang kosong. */
+async function muatJadwalPiket() {
+    const ambil = async (tabel, kolom, ke) => {
+        const { data, error } = await supabaseClient.from(tabel).select(kolom);
+        if (error) { laporError(`Gagal memuat jadwal piket ${ke}`, error); return []; }
+        return data || [];
+    };
+    state.jadwalPiket = {
+        meja: await ambil("kg_piket", "guru_id, hari", "meja sekolah"),
+        unit: await ambil("v_guru_unit", "guru_id, mulai, selesai", "unit"),
+        parkiran: await ambil("v_piket_parkiran", "guru_id, hari", "parkiran"),
+    };
 }
 
 async function muatLibur() {
@@ -192,7 +218,7 @@ async function hitung() {
     const semuaPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: state.ketidakhadiran, jadwal: state.jadwal, awal: state.awal, akhir: state.akhir });
     state.hasilPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: ketMengajar, jadwal: mengajar, awal: state.awal, akhir: state.akhir });
     state.jamWaliDikecualikan = semuaPengganti.rincian.length - state.hasilPengganti.rincian.length;
-    state.hasilPiket = rekapPiket();
+    state.hasilPiket = rekapPiket(hariKerja(state.awal, state.akhir, liburSet));
     renderKehadiran(); renderPengganti(); renderPiket();
 }
 
@@ -207,36 +233,72 @@ async function muatPiket() {
     state.piket = data || [];
 }
 
-// ---------- Rekap pelaksanaan piket ----------
-// Yang dihitung "jaga" adalah orang yang benar-benar berjaga hari itu: kalau
-// petugas terjadwal digantikan, hari itu masuk ke penggantinya, dan petugas
-// terjadwalnya tercatat absen — supaya yang terbaca benar-benar siapa yang
-// menjalankan tugasnya. Nilai rupiahnya dihitung di Induk Pembiayaan, bukan
-// di sini; halaman ini hanya melaporkan jumlah harinya.
+/* ---------- Rekap pelaksanaan piket ----------
+
+   Dua kolom per jenis piket, dan keduanya menjawab pertanyaan berbeda:
+
+     Terjadwal  berapa hari orang ini SEHARUSNYA berjaga, menurut jadwal
+     Jaga       berapa hari ia BENAR-BENAR berjaga
+
+   "Jaga" termasuk hari saat ia menggantikan orang lain, jadi seorang
+   pengganti bisa berjaga lebih banyak daripada yang terjadwal baginya —
+   dan itu memang yang ingin terlihat. Selisih ke arah sebaliknya berarti
+   tidak hadir, digantikan, atau belum dicatat.
+
+   Nilai rupiahnya dihitung di Induk Pembiayaan, bukan di sini; halaman ini
+   hanya melaporkan jumlah harinya. */
 const KUNCI_JENIS = { "Meja Sekolah": "meja", "Unit": "unit", "Parkiran": "parkiran" };
 
-function rekapPiket() {
+function rekapPiket(hari) {
     const per = new Map();
     const baris = (id) => {
-        if (!per.has(id)) per.set(id, { guru_id: id, meja: { jaga: 0, absen: 0 }, unit: { jaga: 0, absen: 0 }, parkiran: { jaga: 0, absen: 0 } });
+        if (!per.has(id)) per.set(id, { guru_id: id, meja: { terjadwal: 0, jaga: 0 }, unit: { terjadwal: 0, jaga: 0 }, parkiran: { terjadwal: 0, jaga: 0 } });
         return per.get(id);
     };
+
+    /* Terjadwal dihitung dari JADWALNYA, bukan dari catatan pelaksanaan.
+       Kalau dihitung dari catatan, hari yang belum sempat dicatat akan
+       hilang tanpa bekas — dan justru selisih antara terjadwal dan jaga
+       itulah yang memberitahu masih ada yang belum dicatat. */
+    /* kg_piket menyimpan satu baris per JAM, bukan per hari — seorang guru
+       yang berjaga jam 1 sampai 5 punya lima baris untuk hari yang sama.
+       Yang dihitung di sini HARI jaga, jadi pasangan (guru, hari) dijadikan
+       himpunan dulu. Tanpa ini, terjadwal meja sekolah terhitung berlipat
+       hampir lima kali. */
+    const hariMeja = new Map();      // guru_id -> himpunan nama hari
+    for (const p of state.jadwalPiket.meja) {
+        if (!hariMeja.has(p.guru_id)) hariMeja.set(p.guru_id, new Set());
+        hariMeja.get(p.guru_id).add(p.hari);
+    }
+    const hariParkiran = new Map();
+    for (const p of state.jadwalPiket.parkiran) {
+        if (!hariParkiran.has(p.guru_id)) hariParkiran.set(p.guru_id, new Set());
+        hariParkiran.get(p.guru_id).add(p.hari);
+    }
+
+    for (const h of hari) {
+        for (const [gid, hs] of hariMeja) if (hs.has(h.hari)) baris(gid).meja.terjadwal += 1;
+        for (const [gid, hs] of hariParkiran) if (hs.has(h.hari)) baris(gid).parkiran.terjadwal += 1;
+        // Piket unit berlaku tiap hari kerja selama tugasnya aktif.
+        for (const p of state.jadwalPiket.unit)
+            if ((!p.mulai || p.mulai <= h.tanggal) && (!p.selesai || p.selesai >= h.tanggal))
+                baris(p.guru_id).unit.terjadwal += 1;
+    }
+
     for (const c of state.piket) {
         const k = KUNCI_JENIS[c.jenis];
         if (!k) continue;
         if (c.status === "Hadir") baris(c.guru_id)[k].jaga += 1;
-        else if (c.status === "Tidak Hadir") baris(c.guru_id)[k].absen += 1;
-        else if (c.status === "Digantikan") {
-            baris(c.guru_id)[k].absen += 1;
-            if (c.pengganti_id) baris(c.pengganti_id)[k].jaga += 1;
-        }
+        else if (c.status === "Digantikan" && c.pengganti_id) baris(c.pengganti_id)[k].jaga += 1;
+        // "Tidak Hadir" tidak menambah apa pun: harinya tetap terhitung
+        // terjadwal, tetapi tidak dijaga — dan selisih itulah keterangannya.
     }
     const rows = [...per.values()]
         .map((r) => ({ ...r, nama: namaGuru(r.guru_id) }))
         .sort(urutBaris);
-    const total = { meja: { jaga: 0, absen: 0 }, unit: { jaga: 0, absen: 0 }, parkiran: { jaga: 0, absen: 0 } };
+    const total = { meja: { terjadwal: 0, jaga: 0 }, unit: { terjadwal: 0, jaga: 0 }, parkiran: { terjadwal: 0, jaga: 0 } };
     for (const r of rows)
-        for (const k of ["meja", "unit", "parkiran"]) { total[k].jaga += r[k].jaga; total[k].absen += r[k].absen; }
+        for (const k of ["meja", "unit", "parkiran"]) { total[k].terjadwal += r[k].terjadwal; total[k].jaga += r[k].jaga; }
     return { baris: rows, total };
 }
 
@@ -247,18 +309,20 @@ function renderPiket() {
     document.getElementById("bodyPiket").innerHTML = rows.map((r, i) => `
       <tr>
         <td class="num">${i + 1}</td><td class="nama">${r.nama}</td>
-        ${num(r.meja.jaga)}${num(r.meja.absen)}${num(r.unit.jaga)}${num(r.unit.absen)}${num(r.parkiran.jaga)}${num(r.parkiran.absen)}
+        ${num(r.meja.terjadwal)}${num(r.meja.jaga)}${num(r.unit.terjadwal)}${num(r.unit.jaga)}${num(r.parkiran.terjadwal)}${num(r.parkiran.jaga)}
       </tr>`).join("");
     const t = h.total;
     document.getElementById("footPiket").innerHTML = rows.length ? `
       <tr class="total"><td></td><td>Total (${rows.length} petugas)</td>
-        ${num(t.meja.jaga)}${num(t.meja.absen)}${num(t.unit.jaga)}${num(t.unit.absen)}${num(t.parkiran.jaga)}${num(t.parkiran.absen)}
+        ${num(t.meja.terjadwal)}${num(t.meja.jaga)}${num(t.unit.terjadwal)}${num(t.unit.jaga)}${num(t.parkiran.terjadwal)}${num(t.parkiran.jaga)}
       </tr>` : "";
     document.getElementById("ringkasPiket").textContent =
         `${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)} · ${state.piket.length} catatan pelaksanaan`;
     document.getElementById("footPiketTeks").textContent =
-        `"Jaga" dihitung per hari, termasuk hari saat yang bersangkutan menggantikan orang lain; `
-        + `"Absen" adalah hari terjadwal yang tidak dijalankan sendiri. `
+        `"Terjadwal" dihitung dari jadwal piket pada hari kerja dalam rentang ini, di luar hari libur. `
+        + `"Jaga" adalah hari yang benar-benar dijalankan, termasuk hari saat yang bersangkutan menggantikan orang lain — `
+        + `karena itu seorang pengganti bisa berjaga lebih banyak daripada yang terjadwal baginya. `
+        + `Selisih keduanya berarti tidak hadir, digantikan, atau belum dicatat. `
         + `Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan.`;
 }
 

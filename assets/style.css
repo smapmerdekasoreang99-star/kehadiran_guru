@@ -1160,3 +1160,25 @@ tr.subtotal td {
     font-variant-numeric: tabular-nums;
 }
 td.komponen-sel { color: var(--tinta-2); font-size: 13px; white-space: nowrap; }
+
+/* ---- Penanda "rentang berubah" di sebelah tombol Hitung ----
+   Menyala ketika tanggalnya sudah diubah tetapi rekapnya belum dihitung
+   ulang. Tanpa penanda ini, angka di layar masih milik rentang yang lama
+   sementara tanggal di atasnya sudah menunjukkan rentang baru — dan tidak
+   ada apa pun yang memberitahu bahwa keduanya tidak cocok. */
+.perlu-hitung {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--emas-teks);
+    background: var(--emas-muda);
+    border: 1px solid var(--emas);
+    border-radius: 999px;
+    padding: 4px 12px;
+    white-space: nowrap;
+}
+/* Tombolnya ikut menegas, supaya penandanya tidak bergantung pada warna saja. */
+.btn-primary.menunggu {
+    box-shadow: 0 0 0 3px var(--emas-muda);
+}

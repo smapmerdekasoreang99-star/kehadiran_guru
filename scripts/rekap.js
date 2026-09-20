@@ -1,11 +1,11 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920r";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920r";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920r";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920r";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260920r";
-import { rekapKehadiran, rekapWaliPerKomponen, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920r";
-import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920r";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920r";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920s";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920s";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920s";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920s";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260920s";
+import { rekapKehadiran, rekapWaliPerKomponen, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920s";
+import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920s";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920s";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
 // mengajar, honor pengganti, dan transport — pindah ke aplikasi Induk
@@ -144,6 +144,13 @@ async function muatProfil() {
     };
 }
 
+function tandaiPerluHitung() {
+    const beda = document.getElementById("tglAwal").value !== state.awal
+              || document.getElementById("tglAkhir").value !== state.akhir;
+    document.getElementById("perluHitung").hidden = !beda;
+    document.getElementById("rekapBtn").classList.toggle("menunggu", beda);
+}
+
 let sedangHitung = false, mintaHitungLagi = false;
 async function hitungLagi() {
     if (sedangHitung) { mintaHitungLagi = true; return; }
@@ -280,6 +287,7 @@ function renderKehadiran() {
       <tr class="total"><td>Total (${h.baris.length} guru)</td>${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.STT)}${num(t.IT)}${num(t.ITT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
     document.getElementById("ringkasKehadiran").textContent = `${h.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
     renderWali();
+    tandaiPerluHitung();
 }
 
 function barisWaliTersaring() {
@@ -417,17 +425,19 @@ const xlsPiket = bungkus(async () => {
 
 // ---------- Wiring ----------
 try {
-    /* Tidak ada lagi tombol Hitung: rekap dihitung ulang begitu rentang
-       tanggalnya berubah. Peristiwa "change" dipakai, bukan "input", supaya
-       perhitungan baru berjalan setelah tanggalnya selesai dipilih — bukan
-       pada tiap ketukan angka.
+    document.getElementById("rekapBtn").addEventListener("click", hitungLagi);
 
-       Penjaga sedangHitung mencegah dua perhitungan berjalan bersamaan:
-       keduanya menulis ke state yang sama, dan yang lebih dulu selesai bisa
-       menimpa hasil yang lebih baru sehingga tabel menampilkan rentang
-       tanggal yang sudah tidak dipilih lagi. */
+    /* Bahaya sebuah tombol Hitung: sesudah tanggalnya diubah tetapi
+       tombolnya belum ditekan, angka di layar masih milik rentang yang
+       lama — sementara tanggal di atasnya sudah menunjukkan rentang baru.
+       Tidak ada apa pun yang memberitahu bahwa keduanya tidak cocok, dan
+       angka itu bisa terlanjur disalin atau diunduh.
+
+       Karena itu perubahan tanggal menyalakan penanda "Rentang berubah"
+       di sebelah tombolnya, dan penanda itu baru padam setelah rekapnya
+       benar-benar dihitung ulang. */
     for (const id of ["tglAwal", "tglAkhir"])
-        document.getElementById(id).addEventListener("change", hitungLagi);
+        document.getElementById(id).addEventListener("change", tandaiPerluHitung);
     document.querySelectorAll(".rekap-tab").forEach((b) => b.addEventListener("click", () => {
         document.querySelectorAll(".rekap-tab").forEach((x) => x.classList.toggle("active", x === b));
         for (const t of ["kehadiran", "pengganti", "wali", "piket", "libur"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;

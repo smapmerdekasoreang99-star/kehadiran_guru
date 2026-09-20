@@ -9,10 +9,10 @@
 // kolom `jenis`, karena bentuk datanya sama: satu petugas, satu tanggal,
 // hadir atau tidak.
 
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920v";
-import { demoData } from "../assets/demo-data.js?v=20260920v";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920v";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920v";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920w";
+import { demoData } from "../assets/demo-data.js?v=20260920w";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920w";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920w";
 
 try {
     initLockUI(() => render());
@@ -128,7 +128,7 @@ async function muatTanggal() {
             supabaseClient.from("v_guru_unit").select("tugas_id, guru_id, nama, unit, jam_per_minggu, mulai, selesai"),
             supabaseClient.from("v_piket_parkiran").select("hari, guru_id, nama, catatan").eq("hari", state.hari),
             supabaseClient.from("kg_pelaksanaan_piket")
-                .select("id, tanggal, jenis, guru_id, tugas_id, status, pengganti_id, catatan")
+                .select("id, tanggal, jenis, guru_id, tugas_id, status, catatan")
                 .eq("tanggal", state.tanggal),
             supabaseClient.from("kg_hari_libur").select("tanggal, keterangan").eq("tanggal", state.tanggal),
         ]);
@@ -216,22 +216,12 @@ function selStatus(nilai, aktif, draf) {
     // yang dianggap hadir lebih dulu — kalau tidak, satu klik bisa mencatat
     // sehari penuh kehadiran yang tidak pernah terjadi.
     const bawaan = draf ? (state.libur ? "" : "Hadir") : (nilai || "");
-    const opsi = [["Hadir", "Hadir"], ["Tidak Hadir", "Tidak hadir"], ["Digantikan", "Digantikan"]];
+    const opsi = [["Hadir", "Hadir"], ["Tidak Hadir", "Tidak hadir"]];
     if (draf) { if (state.libur) opsi.unshift(["", "— tidak ada piket —"]); }
     else opsi.push(["", "— batalkan catatan —"]);
     return `<select class="kelas-filter" data-aksi="status" ${aktif ? "" : "disabled"} style="min-width:190px">${
         opsi.map(([v, t]) => `<option value="${v}" ${v === bawaan ? "selected" : ""}>${t}</option>`).join("")
     }</select>`;
-}
-
-// Selalu digambar, tetapi mati sampai statusnya "Digantikan" — supaya
-// pilihannya tinggal dipakai begitu status diubah, tanpa menggambar ulang.
-function selPengganti(terjadwalId, nilai, aktif, perlu) {
-    const calon = state.guru.filter((g) => g.id !== terjadwalId && (g.status_aktif ?? "Aktif") === "Aktif");
-    return `<select class="kelas-filter" data-aksi="pengganti" ${aktif && perlu ? "" : "disabled"} style="min-width:200px">
-        <option value="">${perlu ? "— pilih pengganti —" : "—"}</option>
-        ${calon.map((g) => `<option value="${esc(g.id)}" ${g.id === (nilai || "") ? "selected" : ""}>${esc(g.nama)}</option>`).join("")}
-      </select>`;
 }
 
 function renderTabel(tab) {
@@ -246,18 +236,14 @@ function renderTabel(tab) {
         const tugasId = tab === "unit" ? p.tugas_id : null;
         const c = cariCatatan(jenis, p.guru_id, tugasId);
         const status = c?.status || "";
-        const perluPengganti = status === "Digantikan";
         const kolomTengah = tab === "meja"
             ? `<td>${p.jam.length ? "jam ke-" + ringkasJam(p.jam) : '<span class="tugas-note">—</span>'}</td>`
             : tab === "unit" ? `<td>${esc(p.unit || "—")}</td>` : "";
         return `<tr data-guru="${esc(p.guru_id)}" data-tugas="${tugasId == null ? "" : esc(tugasId)}" data-jenis="${esc(jenis)}"
                     class="${c ? "" : "belum"}">
-            <td class="nama">${esc(p.nama)}${status === "Digantikan"
-                ? `<br><span class="tugas-note">digantikan ${esc(namaGuru(c.pengganti_id))}</span>`
-                : c ? "" : '<br><span class="tugas-note">belum disimpan</span>'}</td>
+            <td class="nama">${esc(p.nama)}${c ? "" : '<br><span class="tugas-note">belum disimpan</span>'}</td>
             ${kolomTengah}
             <td>${selStatus(status, unlocked, !c)}</td>
-            <td>${selPengganti(p.guru_id, c?.pengganti_id, unlocked, perluPengganti)}</td>
             <td><input type="text" class="kelas-filter" data-aksi="catatan" style="min-width:160px"
                  value="${esc(c?.catatan || "")}" placeholder="opsional" ${unlocked ? "" : "disabled"}></td>
           </tr>`;
@@ -301,17 +287,18 @@ function renderRingkas(tab) {
     const jenis = JENIS[tab];
     const daftar = daftarPetugas(tab);
     const n = (s) => daftar.filter((p) => cariCatatan(jenis, p.guru_id, tab === "unit" ? p.tugas_id : null)?.status === s).length;
-    const belum = daftar.length - n("Hadir") - n("Tidak Hadir") - n("Digantikan");
+    const belum = daftar.length - n("Hadir") - n("Tidak Hadir");
     const el = document.getElementById("ringkas" + besar(tab));
     el.textContent = daftar.length
-        ? `${daftar.length} petugas terjadwal · ${n("Hadir")} hadir · ${n("Digantikan")} digantikan · ${n("Tidak Hadir")} tidak hadir · ${belum} belum dicatat`
+        ? `${daftar.length} petugas terjadwal · ${n("Hadir")} hadir · ${n("Tidak Hadir")} tidak hadir · ${belum} belum dicatat`
         : "";
 
     if (tab === "parkiran") {
-        const terlaksana = n("Hadir") + n("Digantikan");
+        const terlaksana = n("Hadir");
         document.getElementById("footParkiran").textContent =
-            `${terlaksana} hari jaga terhitung pada tanggal ini. Bila petugas digantikan, harinya `
-            + "jatuh ke penggantinya. Besaran kompensasinya dihitung di aplikasi Induk Pembiayaan.";
+            `${terlaksana} hari jaga terhitung pada tanggal ini. Piket tidak mengenal pengganti: `
+            + "bila petugasnya berhalangan, harinya memang tidak dijaga. "
+            + "Besaran kompensasinya dihitung di aplikasi Induk Pembiayaan.";
     }
 }
 
@@ -325,7 +312,6 @@ function pasangAksi(body, tab) {
         const q = (aksi) => tr.querySelector(`[data-aksi="${aksi}"]`);
 
         q("status").addEventListener("change", () => simpanBaris(baris, tr, tab));
-        q("pengganti").addEventListener("change", () => simpanBaris(baris, tr, tab));
         q("catatan").addEventListener("change", () => simpanBaris(baris, tr, tab));
     });
 }
@@ -333,7 +319,6 @@ function pasangAksi(body, tab) {
 // ---------- Simpan ----------
 async function simpanBaris(baris, tr, tab) {
     const status = tr.querySelector('[data-aksi="status"]').value;
-    const pengSel = tr.querySelector('[data-aksi="pengganti"]');
     const catatan = tr.querySelector('[data-aksi="catatan"]').value.trim() || null;
     const lama = cariCatatan(baris.jenis, baris.guruId, baris.tugasId);
 
@@ -344,23 +329,12 @@ async function simpanBaris(baris, tr, tab) {
         return;
     }
 
-    // Status "Digantikan" tanpa pengganti belum lengkap: buka pilihannya dan
-    // tunggu. Tanpa ini database menolak barisnya (constraint), dan
-    // penolakannya tidak jelas bagi pengguna.
-    if (status === "Digantikan" && !pengSel.value) {
-        pengSel.disabled = false;
-        pengSel.options[0].textContent = "— pilih pengganti —";
-        pengSel.focus();
-        return;
-    }
-
     const isi = {
         tanggal: state.tanggal,
         jenis: baris.jenis,
         guru_id: baris.guruId,
         tugas_id: baris.tugasId,
         status,
-        pengganti_id: status === "Digantikan" ? pengSel.value : null,
         catatan,
     };
 
@@ -392,14 +366,11 @@ async function hapusCatatan(baris) {
 }
 
 // Menyimpan baris yang statusnya sudah terpilih di layar tetapi belum tercatat
-// di database — umumnya seluruhnya "Hadir". Yang sudah tercatat tidak ditimpa,
-// dan baris "Digantikan" yang penggantinya belum dipilih dilewati supaya tidak
-// tersimpan berbeda dari yang terbaca di layar.
+// di database — umumnya seluruhnya "Hadir". Yang sudah tercatat tidak ditimpa.
 async function simpanBelumTercatat(tab) {
     if (!isUnlocked()) return;
     const jenis = JENIS[tab];
     const body = document.getElementById("body" + besar(tab));
-    let tertunda = 0;
 
     for (const tr of [...body.querySelectorAll("tr.belum")]) {
         const guruId = tr.dataset.guru;
@@ -407,19 +378,14 @@ async function simpanBelumTercatat(tab) {
         if (cariCatatan(jenis, guruId, tugasId)) continue;
         const status = tr.querySelector('[data-aksi="status"]').value;
         if (!status) continue;
-        const pengganti = tr.querySelector('[data-aksi="pengganti"]').value;
-        if (status === "Digantikan" && !pengganti) { tertunda += 1; continue; }
 
         const isi = { tanggal: state.tanggal, jenis, guru_id: guruId, tugas_id: tugasId, status,
-                      pengganti_id: status === "Digantikan" ? pengganti : null,
                       catatan: tr.querySelector('[data-aksi="catatan"]').value.trim() || null };
         if (!isSupabaseConfigured) { state.catatan.push({ id: "D" + Date.now() + guruId, ...isi }); continue; }
         const { data, error } = await supabaseClient.from("kg_pelaksanaan_piket").insert(isi).select().single();
         if (error) { laporError("Gagal menyimpan catatan piket", error); break; }
         state.catatan.push(data);
     }
-    if (tertunda) laporError("Sebagian belum tersimpan",
-        { message: `${tertunda} baris berstatus Digantikan belum menyebut penggantinya.` });
     renderTabel(tab);
 }
 

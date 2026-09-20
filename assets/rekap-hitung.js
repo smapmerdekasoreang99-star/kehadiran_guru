@@ -55,6 +55,46 @@ export function hariKerja(awal, akhir, liburSet) {
     return out;
 }
 
+/* Rekap tugas wali kelas: SATU baris per orang, tetapi kehadirannya
+   disertai rincian Upacara dan Bimbingan.
+
+   Yang dinilai di aplikasi ini kinerja, jadi angka yang dipakai tetap
+   gabungan keduanya. Rinciannya disertakan karena maknanya berbeda:
+   tidak hadir upacara dan tidak hadir bimbingan bukan hal yang sama bagi
+   seorang wali kelas, meskipun keduanya sama-sama satu jam.
+
+   Perhitungannya memanggil rekapKehadiran yang sama seperti jam mengajar —
+   sekali untuk gabungan, sekali untuk tiap komponen — supaya bobot status
+   dan cara menghitung hari kerja tidak mungkin berbeda antar angka. */
+export function rekapWali({ jadwal, ketidakhadiran, awal, akhir, liburSet }) {
+    const gabungan = rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet });
+    const perKode = {};
+    for (const k of KOMPONEN_WALI) {
+        const jadwalK = jadwal.filter((j) => j.mapel_id === k.mapel);
+        const idK = new Set(jadwalK.map((j) => j.id));
+        perKode[k.kode] = rekapKehadiran({
+            jadwal: jadwalK,
+            ketidakhadiran: ketidakhadiran.filter((x) => idK.has(x.jadwal_id)),
+            awal, akhir, liburSet,
+        });
+    }
+    const ambil = (r, gid, medan) =>
+        (r.baris.find((b) => b.guru_id === gid) || {})[medan] || 0;
+    return {
+        ...gabungan,
+        baris: gabungan.baris.map((b) => ({
+            ...b,
+            hadirUpacara: ambil(perKode.UPACARA, b.guru_id, 'hadirTM'),
+            hadirBimbingan: ambil(perKode.BIMBINGAN, b.guru_id, 'hadirTM'),
+        })),
+        total: {
+            ...gabungan.total,
+            hadirUpacara: perKode.UPACARA.total.hadirTM,
+            hadirBimbingan: perKode.BIMBINGAN.total.hadirTM,
+        },
+    };
+}
+
 // ---------- Rekap kehadiran per guru ----------
 // jadwal: [{ id, hari, jam_ke, guru_id }]  ketidakhadiran: [{ jadwal_id, tanggal, guru_id, status }]
 export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }) {

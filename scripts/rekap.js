@@ -1,11 +1,11 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920v";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920v";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920v";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920v";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260920v";
-import { rekapKehadiran, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920v";
-import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920v";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920v";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920w";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920w";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920w";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920w";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260920w";
+import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920w";
+import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920w";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920w";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
 // mengajar, honor pengganti, dan transport — pindah ke aplikasi Induk
@@ -213,7 +213,7 @@ async function hitung() {
     const liburSet = new Set(state.libur.map((l) => l.tanggal));
     const { mengajar, wali, ketMengajar, ketWali } = pisahWaliKelas(state.jadwal, state.ketidakhadiran);
     state.hasilKehadiran = rekapKehadiran({ jadwal: mengajar, ketidakhadiran: ketMengajar, awal: state.awal, akhir: state.akhir, liburSet });
-    state.hasilWali = rekapKehadiran({ jadwal: wali, ketidakhadiran: ketWali, awal: state.awal, akhir: state.akhir, liburSet });
+    state.hasilWali = rekapWali({ jadwal: wali, ketidakhadiran: ketWali, awal: state.awal, akhir: state.akhir, liburSet });
     // pengganti & honor: hanya jam mengajar; jam tugas wali kelas dihitung terpisah (belum ada tarifnya)
     const semuaPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: state.ketidakhadiran, jadwal: state.jadwal, awal: state.awal, akhir: state.akhir });
     state.hasilPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: ketMengajar, jadwal: mengajar, awal: state.awal, akhir: state.akhir });
@@ -224,7 +224,7 @@ async function hitung() {
 
 async function muatPiket() {
     const { data, error } = await supabaseClient.from("kg_pelaksanaan_piket")
-        .select("tanggal, jenis, guru_id, tugas_id, status, pengganti_id")
+        .select("tanggal, jenis, guru_id, tugas_id, status")
         .gte("tanggal", state.awal).lte("tanggal", state.akhir);
     if (error) {
         laporError("Gagal memuat catatan pelaksanaan piket (tab Piket sementara kosong)", error);
@@ -240,10 +240,9 @@ async function muatPiket() {
      Terjadwal  berapa hari orang ini SEHARUSNYA berjaga, menurut jadwal
      Jaga       berapa hari ia BENAR-BENAR berjaga
 
-   "Jaga" termasuk hari saat ia menggantikan orang lain, jadi seorang
-   pengganti bisa berjaga lebih banyak daripada yang terjadwal baginya —
-   dan itu memang yang ingin terlihat. Selisih ke arah sebaliknya berarti
-   tidak hadir, digantikan, atau belum dicatat.
+   Piket tidak mengenal pengganti, jadi Jaga tidak akan pernah melebihi
+   Terjadwal. Selisih di antara keduanya berarti petugasnya tidak hadir,
+   atau harinya belum dicatat.
 
    Nilai rupiahnya dihitung di Induk Pembiayaan, bukan di sini; halaman ini
    hanya melaporkan jumlah harinya. */
@@ -288,10 +287,11 @@ function rekapPiket(hari) {
     for (const c of state.piket) {
         const k = KUNCI_JENIS[c.jenis];
         if (!k) continue;
+        // Piket tidak mengenal pengganti: yang berjaga selalu petugas yang
+        // terjadwal. "Tidak Hadir" tidak menambah apa pun — harinya tetap
+        // terhitung terjadwal, tetapi tidak dijaga, dan selisih itulah
+        // keterangannya.
         if (c.status === "Hadir") baris(c.guru_id)[k].jaga += 1;
-        else if (c.status === "Digantikan" && c.pengganti_id) baris(c.pengganti_id)[k].jaga += 1;
-        // "Tidak Hadir" tidak menambah apa pun: harinya tetap terhitung
-        // terjadwal, tetapi tidak dijaga — dan selisih itulah keterangannya.
     }
     const rows = [...per.values()]
         .map((r) => ({ ...r, nama: namaGuru(r.guru_id) }))
@@ -320,9 +320,8 @@ function renderPiket() {
         `${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)} · ${state.piket.length} catatan pelaksanaan`;
     document.getElementById("footPiketTeks").textContent =
         `"Terjadwal" dihitung dari jadwal piket pada hari kerja dalam rentang ini, di luar hari libur. `
-        + `"Jaga" adalah hari yang benar-benar dijalankan, termasuk hari saat yang bersangkutan menggantikan orang lain — `
-        + `karena itu seorang pengganti bisa berjaga lebih banyak daripada yang terjadwal baginya. `
-        + `Selisih keduanya berarti tidak hadir, digantikan, atau belum dicatat. `
+        + `"Jaga" adalah hari yang benar-benar dijalankan. Piket tidak mengenal pengganti, `
+        + `jadi selisih antara keduanya berarti petugasnya tidak hadir, atau harinya belum dicatat. `
         + `Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan.`;
 }
 
@@ -360,6 +359,13 @@ function barisWaliTersaring() {
         .filter((r) => !q || r.nama.toLowerCase().includes(q)).sort(urutBaris);
 }
 
+/* Kolom Hadir: satu angka gabungan, disertai rinciannya dengan huruf lebih
+   kecil dan tipis. Rinciannya perlu karena tidak hadir upacara dan tidak
+   hadir bimbingan bukan hal yang sama bagi seorang wali kelas, meskipun
+   keduanya sama-sama satu jam. */
+const selHadir = (r) => `<td class="num">${fmt(r.hadirTM)}<span class="rinci-hadir">`
+    + `${fmt(r.hadirUpacara)} Up + ${fmt(r.hadirBimbingan)} BW</span></td>`;
+
 /* Upacara dan Bimbingan Wali Kelas ditampilkan sebagai satu angka.
    Yang diukur di sini kehadiran untuk penilaian kinerja, bukan uang —
    dan untuk itu keduanya sama saja beratnya. Pemisahan menurut tarif
@@ -368,7 +374,7 @@ function renderWali() {
     const w = state.hasilWali; if (!w) return;
     const rows = barisWaliTersaring();
     document.getElementById("bodyWali").innerHTML = rows.map((r) => `
-      <tr><td class="nama">${r.nama}</td>${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.STT)}${num(r.IT)}${num(r.ITT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}</tr>`).join("")
+      <tr><td class="nama">${r.nama}</td>${num(r.terjadwal)}${selHadir(r)}${num(r.HTTM)}${num(r.ST)}${num(r.STT)}${num(r.IT)}${num(r.ITT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}</tr>`).join("")
       || `<tr><td colspan="11" class="empty-state">Tidak ada jam tugas wali kelas pada rentang ini.</td></tr>`;
     const t = w.total;
     document.getElementById("ringkasWali").textContent =
@@ -383,7 +389,7 @@ function renderWali() {
         + "Bimbingan setiap Senin, jadi dua Senin berarti 4 jam. Di aplikasi Induk Pembiayaan "
         + "angkanya per minggu (1 jam), karena honornya dibayarkan bulanan atas dasar jam "
         + "kontrak itu — bukan dikalikan banyaknya pekan.";
-    document.getElementById("footWali").innerHTML = `<tr class="total"><td>Total (${w.baris.length} wali kelas)</td>${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.STT)}${num(t.IT)}${num(t.ITT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
+    document.getElementById("footWali").innerHTML = `<tr class="total"><td>Total (${w.baris.length} wali kelas)</td>${num(t.terjadwal)}${selHadir(t)}${num(t.HTTM)}${num(t.ST)}${num(t.STT)}${num(t.IT)}${num(t.ITT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
 }
 
 // ---------- Render pengganti ----------

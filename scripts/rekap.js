@@ -1,11 +1,11 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920q";
-import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920q";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920q";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920q";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260920q";
-import { rekapKehadiran, rekapWaliPerKomponen, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920q";
-import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920q";
-import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920q";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260920r";
+import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260920r";
+import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920r";
+import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920r";
+import { urutkanKelas } from "../assets/kelas-order.js?v=20260920r";
+import { rekapKehadiran, rekapWaliPerKomponen, rekapPengganti, isoTanggal, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260920r";
+import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260920r";
+import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260920r";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
 // mengajar, honor pengganti, dan transport — pindah ke aplikasi Induk
@@ -105,7 +105,7 @@ async function boot() {
         state.libur = demoLibur; state.profil = { ...demoProfil };
     }
     renderLibur();
-    await hitung();
+    await hitungLagi();
 }
 
 async function muatLibur() {
@@ -142,6 +142,15 @@ async function muatProfil() {
         // Baris apa adanya, dipakai penulis kop untuk tata letaknya.
         profil: d,
     };
+}
+
+let sedangHitung = false, mintaHitungLagi = false;
+async function hitungLagi() {
+    if (sedangHitung) { mintaHitungLagi = true; return; }
+    sedangHitung = true;
+    try {
+        do { mintaHitungLagi = false; await hitung(); } while (mintaHitungLagi);
+    } finally { sedangHitung = false; }
 }
 
 async function hitung() {
@@ -352,7 +361,7 @@ async function tambahLibur() {
         if (i > -1) demoLibur[i].keterangan = keterangan; else demoLibur.push({ tanggal, keterangan });
     }
     document.getElementById("liburKeterangan").value = "";
-    renderLibur(); await hitung();
+    renderLibur(); await hitungLagi();
 }
 
 async function hapusLibur(tanggal) {
@@ -363,7 +372,7 @@ async function hapusLibur(tanggal) {
     } else {
         const i = demoLibur.findIndex((l) => l.tanggal === tanggal); if (i > -1) demoLibur.splice(i, 1);
     }
-    renderLibur(); await hitung();
+    renderLibur(); await hitungLagi();
 }
 
 // ---------- Honor ----------
@@ -408,10 +417,20 @@ const xlsPiket = bungkus(async () => {
 
 // ---------- Wiring ----------
 try {
-    document.getElementById("rekapBtn").addEventListener("click", hitung);
+    /* Tidak ada lagi tombol Hitung: rekap dihitung ulang begitu rentang
+       tanggalnya berubah. Peristiwa "change" dipakai, bukan "input", supaya
+       perhitungan baru berjalan setelah tanggalnya selesai dipilih — bukan
+       pada tiap ketukan angka.
+
+       Penjaga sedangHitung mencegah dua perhitungan berjalan bersamaan:
+       keduanya menulis ke state yang sama, dan yang lebih dulu selesai bisa
+       menimpa hasil yang lebih baru sehingga tabel menampilkan rentang
+       tanggal yang sudah tidak dipilih lagi. */
+    for (const id of ["tglAwal", "tglAkhir"])
+        document.getElementById(id).addEventListener("change", hitungLagi);
     document.querySelectorAll(".rekap-tab").forEach((b) => b.addEventListener("click", () => {
         document.querySelectorAll(".rekap-tab").forEach((x) => x.classList.toggle("active", x === b));
-        for (const t of ["kehadiran", "wali", "pengganti", "piket", "libur"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
+        for (const t of ["kehadiran", "pengganti", "wali", "piket", "libur"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
     }));
     document.querySelectorAll("#tab-pengganti .day-tabs button").forEach((b) => b.addEventListener("click", () => {
         state.viewPengganti = b.dataset.view;

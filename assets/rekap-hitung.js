@@ -8,10 +8,14 @@ export const STATUS_ABSEN = ["ST", "STT", "IT", "ITT", "TK", "HTTM"];
 /* Mata pelajaran yang termasuk TUGAS WALI KELAS (Senin jam 1-2): dihitung
    terpisah dari jam mengajar.
 
-   Keduanya TIDAK boleh dijumlahkan menjadi satu angka, karena satuan
-   honornya berbeda — Upacara dan Bimbingan Wali Kelas punya tarif
-   sendiri-sendiri di Induk Pembiayaan. Satu angka gabungan tidak bisa
-   dikalikan tarif mana pun tanpa menjadi keliru. */
+   Di rekap ini keduanya DIGABUNG, karena yang diukur di sini adalah
+   kehadiran untuk penilaian kinerja — bukan uang. Pemisahan menurut tarif
+   memang perlu, tetapi tempatnya di Induk Pembiayaan, yang memang
+   mengenal besaran honor tiap komponen.
+
+   Kode komponennya tetap dicatat di sini supaya keterkaitannya dengan
+   Induk Pembiayaan (v_komponen_guru, f_ip_honor_wali_kelas) tidak hilang
+   dari pandangan bila kelak perlu dipisah. */
 export const KOMPONEN_WALI = [
     { mapel: "M25", kode: "UPACARA",   nama: "Upacara" },
     { mapel: "M08", kode: "BIMBINGAN", nama: "Bimbingan Wali Kelas" },
@@ -49,39 +53,6 @@ export function hariKerja(awal, akhir, liburSet) {
         d.setDate(d.getDate() + 1);
     }
     return out;
-}
-
-/* Rekap tugas wali kelas, DIPECAH per komponen.
-
-   Perhitungannya memakai rekapKehadiran yang sama seperti jam mengajar —
-   hanya jadwalnya yang disaring per mata pelajaran — supaya bobot status
-   dan cara menghitung hari kerjanya tidak mungkin berbeda antar tabel.
-
-   Mengembalikan satu baris per (wali kelas × komponen), ditambah subtotal
-   tiap komponen. Subtotal itulah yang sebanding dengan tarif. */
-export function rekapWaliPerKomponen({ jadwal, ketidakhadiran, awal, akhir, liburSet }) {
-    const kelompok = [];
-    let jumlahHariKerja = 0;
-    for (const k of KOMPONEN_WALI) {
-        const jadwalK = jadwal.filter((j) => j.mapel_id === k.mapel);
-        const idK = new Set(jadwalK.map((j) => j.id));
-        const r = rekapKehadiran({
-            jadwal: jadwalK,
-            ketidakhadiran: ketidakhadiran.filter((x) => idK.has(x.jadwal_id)),
-            awal, akhir, liburSet,
-        });
-        jumlahHariKerja = r.jumlahHariKerja;
-        kelompok.push({ ...k, baris: r.baris.map((b) => ({ ...b, komponen: k.kode, namaKomponen: k.nama })), total: r.total });
-    }
-    const baris = kelompok.flatMap((g) => g.baris);
-    const total = baris.reduce((t, r) => {
-        for (const x of ["terjadwal", "ST", "STT", "IT", "ITT", "TK", "HTTM", "tidakHadir", "hadirTM"]) t[x] += r[x];
-        t.hadir += r.hadir;
-        return t;
-    }, { terjadwal: 0, ST: 0, STT: 0, IT: 0, ITT: 0, TK: 0, HTTM: 0, tidakHadir: 0, hadirTM: 0, hadir: 0 });
-    total.hadir = Math.round(total.hadir * 100) / 100;
-    total.persen = total.terjadwal ? Math.round((total.hadir / total.terjadwal) * 10000) / 100 : null;
-    return { kelompok, baris, total, jumlahHariKerja };
 }
 
 // ---------- Rekap kehadiran per guru ----------

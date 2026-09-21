@@ -3,7 +3,7 @@ import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921aa";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921ab";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.

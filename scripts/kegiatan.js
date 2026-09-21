@@ -25,7 +25,7 @@
 import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
 import { demoData, demoKegiatan } from "../assets/demo-data.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921aa";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921ab";
 import { bukuKegiatanGuru, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921v";
 
 // ---------- Pelaporan error ke layar ----------
@@ -94,9 +94,6 @@ const PROFIL_BAWAAN = {
     kepala_sekolah: "", kurikulum: "",
 };
 
-// Janji pemuatan data pendukung (tahap dua). pilih() menunggunya, boot tidak.
-let pendukung = null;
-
 const cariGuru = (id) => state.guru.find((g) => g.id === id) || null;
 
 // Sama persis dengan penilaian "aktif" di halaman Jadwal KBM: kolomnya pernah
@@ -128,11 +125,10 @@ const namaRombel = (rombelId) =>
 // pencarian diam tanpa satu nama pun, dan diamnya tidak bisa dibedakan dari
 // rusak.
 //
-// Jadi pemuatan dipecah dua. Tahap satu: lima rujukan bersama (guru, kelas,
-// mapel, jam, jadwal sepekan) lewat assets/simpanan.js — seketika bila sudah
-// pernah dibuka di browser ini, dan itulah yang menghidupkan kotak pencarian
-// sekaligus matriks jadwalnya. Tahap dua: data yang khas halaman ini (piket,
-// tugas, ekskul, profil) berjalan di latar dan hanya ditunggu oleh pilih().
+// Seluruh yang dibaca halaman ini adalah rujukan — jadwal KBM, jadwal piket,
+// tugas guru, ekskul, profil — dan semuanya datang dari assets/simpanan.js:
+// seketika bila sudah pernah dibuka di browser ini, diperbarui di latar. Tidak
+// ada data harian di sini; ketidakhadiran dan pengganti ada di halaman lain.
 let TEKS_BELUM_PILIH = "";
 
 async function boot() {
@@ -149,7 +145,7 @@ async function boot() {
 
     let rujukan;
     try {
-        rujukan = await muatRujukan(supabaseClient, ["guru", "kelas", "mapel", "jam", "jadwal"], (r) => {
+        rujukan = await muatRujukan(supabaseClient, RUJUKAN_KEGIATAN, (r) => {
             terapkanRujukan(r);
             segarkanSaran();
             // Guru yang sedang dibuka digambar ulang dengan rujukan terbaru.
@@ -163,20 +159,11 @@ async function boot() {
     }
     terapkanRujukan(rujukan);
     segarkanSaran();
-
-    // Tahap dua berjalan di latar dan tidak ditunggu di sini: yang menunggunya
-    // hanya pilih(), dan hanya bila memang ada guru yang dibuka. Kegagalannya
-    // tetap dilaporkan sekali supaya tidak ada yang rusak diam-diam.
-    pendukung = muatSisanya().catch((err) => {
-        state.gagal = true;
-        segarkanSaran();
-        laporError("Data pendukung kegiatan gagal dimuat", err);
-        throw err;
-    });
-    pendukung.catch(() => { /* sudah dilaporkan; sisanya ditangani di pilih() */ });
-
     pulihkanPilihan();
 }
+
+const RUJUKAN_KEGIATAN = ["guru", "kelas", "mapel", "jam", "jadwal",
+    "piketMeja", "piketUnit", "guruUnit", "parkiran", "tugas", "jenisTugas", "ekskul", "pembina", "profil", "tahunAjaran"];
 
 function terapkanRujukan(r) {
     state.guru = r.guru;
@@ -184,53 +171,24 @@ function terapkanRujukan(r) {
     state.mapel = r.mapel;
     state.jam = r.jam;
     state.jadwalSepekan = r.jadwal;
+    state.tahunAjaran = (r.tahunAjaran[0] || {}).kode || PROFIL_BAWAAN.tahun_ajaran;
+    state.piket = r.piketMeja;
+    state.piketUnit = r.piketUnit;
+    state.guruUnit = r.guruUnit;
+    state.parkiran = r.parkiran;
+    // Tugas guru disaring ke tahun ajaran aktif, supaya peran tahun lalu
+    // tidak ikut terbaca sebagai tanggung jawab yang masih berjalan.
+    state.tugas = r.tugas.filter((t) => t.tahun_ajaran === state.tahunAjaran);
+    state.jenisTugas = r.jenisTugas;
+    state.ekskul = r.ekskul.filter((e) => e.aktif !== false);
+    state.pembina = r.pembina;
+    susunProfil(r.profil[0]);
 }
 
 // Kotak saran digambar ulang hanya bila memang sedang terbuka, supaya daftar
 // tidak tiba-tiba muncul sendiri di layar yang sedang tidak dipakai mencari.
 function segarkanSaran() {
     if (!document.getElementById("cariSaran").hidden) renderSaran();
-}
-
-// Tahap dua: data yang khas halaman ini, seluruhnya serentak. Tugas guru
-// diambil untuk semua tahun ajaran yang masih aktif lalu disaring di sini,
-// supaya tidak perlu menunggu tahun ajaran lebih dulu — satu perjalanan
-// pulang pergi lebih sedikit.
-async function muatSisanya() {
-    const [
-        { data: piket }, { data: piketUnit },
-        { data: guruUnit }, { data: parkiran },
-        { data: tugas, error: eTugas }, { data: jenisTugas },
-        { data: ekskul }, { data: pembina }, { data: profil }, { data: ta },
-    ] = await Promise.all([
-        supabaseClient.from("kg_piket").select("guru_id, hari, jam_ke"),
-        supabaseClient.from("v_jadwal_piket_unit").select("tugas_id, guru_id, guru, unit, hari, jam_ke"),
-        supabaseClient.from("v_guru_unit").select("tugas_id, guru_id, nama, unit, jam_per_minggu, mulai, selesai"),
-        supabaseClient.from("v_piket_parkiran").select("hari, urutan_hari, guru_id, nama, catatan"),
-        supabaseClient.from("guru_tugas")
-            .select("id, guru_id, jenis, rombel_id, jabatan, jam_tambahan_mengajar, keterangan, aktif, tahun_ajaran")
-            .eq("aktif", true),
-        supabaseClient.from("jenis_tugas").select("nama, perlu_rombel, perlu_jabatan, piket_sekolah, tambah_jam_mengajar, jam_unit, urutan, aktif, penjelasan, kategori_ekskul").order("urutan"),
-        supabaseClient.from("ae_ekskul").select("id, nama, pembina_id, hari, jam_mulai, jam_selesai, tempat, aktif, kategori"),
-        supabaseClient.from("ae_pembina_aman").select("id, nama, id_guru, status"),
-        supabaseClient.from("v_penanda_tangan").select("*").limit(1),
-        supabaseClient.from("tahun_ajaran").select("kode, aktif").eq("aktif", true).limit(1),
-    ]);
-    if (eTugas) throw eTugas;
-
-    state.tahunAjaran = ((ta || [])[0] || {}).kode || PROFIL_BAWAAN.tahun_ajaran;
-    state.piket = piket || [];
-    state.piketUnit = piketUnit || [];
-    state.guruUnit = guruUnit || [];
-    state.parkiran = parkiran || [];
-    // Tugas guru disaring ke tahun ajaran aktif, supaya peran tahun lalu
-    // tidak ikut terbaca sebagai tanggung jawab yang masih berjalan.
-    state.tugas = (tugas || []).filter((t) => t.tahun_ajaran === state.tahunAjaran);
-    state.jenisTugas = jenisTugas || [];
-    state.ekskul = (ekskul || []).filter((e) => e.aktif !== false);
-    state.pembina = pembina || [];
-
-    susunProfil((profil || [])[0]);
 }
 
 function susunProfil(d) {
@@ -483,39 +441,13 @@ function rentangAngka(angka) {
 // =========================================================
 // Render
 // =========================================================
-// Guru bisa berganti sementara jadwal guru sebelumnya masih di jalan. Nomor
-// urut ini memastikan yang tergambar selalu guru yang terakhir dipilih, bukan
-// jawaban yang kebetulan datang belakangan.
-let urutanPilih = 0;
-
-async function pilih(guruId) {
+function pilih(guruId) {
     state.guruId = guruId;
     state.q = cariGuru(guruId)?.nama || "";
     document.getElementById("cariGuru").value = state.q;
     document.getElementById("cariClear").hidden = false;
     document.getElementById("cariSaran").hidden = true;
     try { localStorage.setItem("kegiatan.guru", guruId); } catch { /* abaikan */ }
-
-    const giliran = ++urutanPilih;
-    // Selama jadwalnya dijemput, yang digambar bukan matriks kosong — matriks
-    // kosong berbohong, seolah gurunya tidak punya kegiatan apa pun — melainkan
-    // keterangan bahwa isinya sedang dalam perjalanan.
-    const kabar = document.getElementById("belumPilih");
-    state.hasil = null;
-    kabar.textContent = `Memuat kegiatan ${state.q}…`;
-    kabar.hidden = false;
-    document.getElementById("isi").hidden = true;
-    document.getElementById("unduhBtn").disabled = true;
-
-    try {
-        await pendukung;
-    } catch (err) {
-        if (giliran !== urutanPilih) return;
-        if (!state.gagal) laporError("Kegiatan guru gagal dimuat", err);
-        kabar.textContent = "Data kegiatan gagal dimuat — periksa sambungan lalu muat ulang halaman.";
-        return;
-    }
-    if (giliran !== urutanPilih) return;   // sudah keburu pindah ke guru lain
 
     state.jadwal = state.jadwalSepekan.filter((r) => r.guru_id === guruId);
     state.hasil = hitung(guruId);

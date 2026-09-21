@@ -3,7 +3,7 @@ import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas } from "../assets/kelas-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921aa";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921ab";
 import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260921v";
 import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921v";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
@@ -89,8 +89,10 @@ async function boot() {
         let rujukan;
         try {
             [rujukan] = await Promise.all([
-                muatRujukan(supabaseClient, ["guru", "kelas", "mapel", "jadwal"], (r) => { terapkanRujukan(r); hitungLagi(); }),
-                muatLibur(), muatJadwalPiket(), muatProfil(),
+                muatRujukan(supabaseClient,
+                    ["guru", "kelas", "mapel", "jadwal", "piketMeja", "piketUnit", "guruUnit", "parkiran", "profil", "tahunAjaran"],
+                    (r) => { terapkanRujukan(r); hitungLagi(); }),
+                muatLibur(),
             ]);
         } catch (err) { laporError("Gagal memuat data rujukan", err); return; }
         terapkanRujukan(rujukan);
@@ -107,35 +109,10 @@ function terapkanRujukan(r) {
     state.kelas = urutkanKelas(r.kelas);
     state.mapel = r.mapel;
     state.jadwal = r.jadwal;
-}
-
-/* Jadwal ketiga jenis piket. Bentuknya berbeda-beda, jadi dibaca dari tiga
-   tempat yang berbeda pula — persis sumber yang dipakai halaman Pelaksanaan
-   Piket, supaya "terjadwal" di rekap ini tidak berselisih dengan daftar yang
-   dilihat petugasnya sehari-hari.
-
-     Meja Sekolah  kg_piket             satu baris per guru per hari per jam
-     Unit          v_jadwal_piket_unit  satu baris per unit per hari per jam,
-                   v_guru_unit          disaring masa berlaku penugasannya
-     Parkiran      v_piket_parkiran     satu petugas per hari, tanpa jam
-
-   Gagalnya salah satu tidak menghentikan yang lain: rekap tetap tampil,
-   hanya kolom terjadwal jenis itu yang kosong. */
-async function muatJadwalPiket() {
-    const ambil = async (tabel, kolom, ke) => {
-        const { data, error } = await supabaseClient.from(tabel).select(kolom);
-        if (error) { laporError(`Gagal memuat jadwal piket ${ke}`, error); return []; }
-        return data || [];
-    };
-    const [meja, unitJam, unit, parkiran] = await Promise.all([
-        // Satu baris per JAM jaga: itulah satuan pencatatan meja dan unit.
-        ambil("kg_piket", "guru_id, hari, jam_ke", "meja sekolah"),
-        ambil("v_jadwal_piket_unit", "tugas_id, guru_id, hari, jam_ke", "jam piket unit"),
-        // Masa berlaku penugasan unit, untuk menyaring jadwal jamnya.
-        ambil("v_guru_unit", "tugas_id, guru_id, mulai, selesai", "unit"),
-        ambil("v_piket_parkiran", "guru_id, hari", "parkiran"),
-    ]);
-    state.jadwalPiket = { meja, unitJam, unit, parkiran };
+    // Satu baris per JAM jaga untuk meja dan unit: itulah satuan pencatatan.
+    // Masa berlaku penugasan unit (unit) dipakai menyaring jadwal jamnya.
+    state.jadwalPiket = { meja: r.piketMeja, unitJam: r.piketUnit, unit: r.guruUnit, parkiran: r.parkiran };
+    susunProfil(r.profil[0], (r.tahunAjaran[0] || {}).kode);
 }
 
 async function muatLibur() {
@@ -152,15 +129,8 @@ async function muatLibur() {
    kg_pengaturan. Tahun ajaran pun diambil dari tabel tahun_ajaran yang
    sedang aktif — satu sumber, sehingga kop semua aplikasi tidak bisa lagi
    berbeda tanpa ada yang menyadari. */
-async function muatProfil() {
+function susunProfil(d, kodeTahun) {
     state.profil = { ...PROFIL_BAWAAN };
-    const [{ data: p, error: eP }, { data: ta }] = await Promise.all([
-        // Seluruh kolom: kop juga memerlukan npsn, catatan kaki, dan tata letaknya.
-        supabaseClient.from("v_penanda_tangan").select("*").limit(1),
-        supabaseClient.from("tahun_ajaran").select("kode, aktif").eq("aktif", true).limit(1),
-    ]);
-    if (eP) { laporError("Profil dokumen tidak terbaca dari Data Induk (kop memakai nilai bawaan)", eP); return; }
-    const d = (p || [])[0];
     if (!d) return;
     state.profil = {
         nama_sekolah: d.nama_sekolah || PROFIL_BAWAAN.nama_sekolah,
@@ -168,7 +138,7 @@ async function muatProfil() {
         tempat: d.kota || PROFIL_BAWAAN.tempat,
         kepala_sekolah: d.kepala_sekolah || "",
         kurikulum: d.kurikulum || "",
-        tahun_ajaran: ((ta || [])[0] || {}).kode || PROFIL_BAWAAN.tahun_ajaran,
+        tahun_ajaran: kodeTahun || PROFIL_BAWAAN.tahun_ajaran,
         // Baris apa adanya, dipakai penulis kop untuk tata letaknya.
         profil: d,
     };

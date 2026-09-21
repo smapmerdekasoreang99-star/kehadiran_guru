@@ -32,7 +32,7 @@ import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.
 import { demoData } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921aa";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921ab";
 import { ambilLogoBase64 } from "../assets/excel-export.js?v=20260921v";
 
 try {
@@ -162,27 +162,16 @@ async function boot() {
     document.getElementById("notice").hidden = isSupabaseConfigured;
 
     if (isSupabaseConfigured) {
-        // Guru dan jam dari simpanan bersama. Identitas kop berkas unduhan
-        // (milik Data Induk) hanya dibutuhkan saat mengunduh, jadi diminta di
-        // latar dan tidak menahan halaman; gagalnya pun hanya mengganggu kop.
+        // Guru, jam, ketiga jadwal piket, dan identitas kop dari simpanan
+        // bersama. Yang diminta segar tiap rentang hanya catatan pelaksanaan
+        // dan hari libur — itulah yang berubah setiap hari.
         let rujukan;
         try {
-            rujukan = await muatRujukan(supabaseClient, ["guru", "jam"], (r) => {
-                state.guru = r.guru;
-                state.jam = r.jam;
-                if (rentangSiap) render();
-            });
-        } catch (err) { laporError("Gagal memuat data guru", err); return; }
-        state.guru = rujukan.guru;
-        state.jam = rujukan.jam;
-        Promise.all([
-            supabaseClient.from("v_penanda_tangan").select("*").limit(1),
-            supabaseClient.from("tahun_ajaran").select("kode, aktif").eq("aktif", true).limit(1),
-        ]).then(([profil, ta]) => {
-            state.profil = (profil.data || [])[0] || null;
-            state.ta = ((ta.data || [])[0] || {}).kode || "";
-            if (profil.error) console.warn("Profil dokumen tidak terbaca:", profil.error.message);
-        });
+            rujukan = await muatRujukan(supabaseClient,
+                ["guru", "jam", "piketMeja", "piketUnit", "guruUnit", "parkiran", "profil", "tahunAjaran"],
+                (r) => { terapkanRujukan(r); if (rentangSiap) render(); });
+        } catch (err) { laporError("Gagal memuat data rujukan", err); return; }
+        terapkanRujukan(rujukan);
     } else {
         state.guru = demoData.guru.map((g) => ({ ...g, status_aktif: "Aktif" }));
         state.jam = demoData.jam || [];
@@ -305,29 +294,14 @@ async function muatRentang() {
     card.hidden = false;
 
     if (isSupabaseConfigured) {
-        const [meja, unitJadwal, unitTugas, parkiran, catatan, libur] = await Promise.all([
-            supabaseClient.from("kg_piket").select("guru_id, hari, jam_ke"),
-            supabaseClient.from("v_jadwal_piket_unit").select("tugas_id, guru_id, guru, unit, hari, jam_ke"),
-            supabaseClient.from("v_guru_unit").select("tugas_id, guru_id, nama, unit, jam_per_minggu, mulai, selesai"),
-            supabaseClient.from("v_piket_parkiran").select("hari, guru_id, nama, catatan"),
+        const [catatan, libur] = await Promise.all([
             supabaseClient.from("kg_pelaksanaan_piket")
                 .select("id, tanggal, jenis, guru_id, tugas_id, jam_ke, status, catatan")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir),
             supabaseClient.from("kg_hari_libur").select("tanggal, keterangan")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir),
         ]);
-        for (const [konteks, r] of [["jadwal piket meja sekolah", meja], ["penugasan unit", unitTugas],
-                                    ["petugas parkiran", parkiran], ["catatan pelaksanaan", catatan]]) {
-            if (r.error) { laporError(`Gagal memuat ${konteks}`, r.error); return; }
-        }
-        // Jadwal jam piket unit baru ada sejak berkas 20260920; bila view-nya
-        // belum ada, penanggung jawabnya tetap muncul di kolom "tanpa jam".
-        if (unitJadwal.error) console.warn("v_jadwal_piket_unit belum tersedia:", unitJadwal.error.message);
-
-        state.jadwalMeja = meja.data || [];
-        state.jadwalUnit = unitJadwal.data || [];
-        state.tugasUnit = unitTugas.data || [];
-        state.parkiran = parkiran.data || [];
+        if (catatan.error) { laporError("Gagal memuat catatan pelaksanaan", catatan.error); return; }
         state.catatan = catatan.data || [];
         state.libur = new Map((libur.data || []).map((l) => [l.tanggal, l.keterangan || ""]));
     } else {
@@ -360,6 +334,17 @@ async function muatRentang() {
 // Pembaruan rujukan di latar boleh menggambar ulang hanya bila data
 // rentangnya sudah ada; sebelum itu tidak ada yang bisa digambar.
 let rentangSiap = false;
+
+function terapkanRujukan(r) {
+    state.guru = r.guru;
+    state.jam = r.jam;
+    state.jadwalMeja = r.piketMeja;
+    state.jadwalUnit = r.piketUnit;
+    state.tugasUnit = r.guruUnit;
+    state.parkiran = r.parkiran;
+    state.profil = r.profil[0] || null;
+    state.ta = (r.tahunAjaran[0] || {}).kode || "";
+}
 
 // ---------- Daftar petugas per tanggal ----------
 const besar = (tab) => tab[0].toUpperCase() + tab.slice(1);

@@ -1,16 +1,7 @@
 import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
 import { demoData } from "../assets/demo-data.js?v=20260921v";
-import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { urutkanKelas, indeksKelas, jenisKelas } from "../assets/kelas-order.js?v=20260921v";
-import { muatRujukan, segarkanRujukan } from "../assets/simpanan.js?v=20260921aa";
-
-// Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
-// walaupun ada bagian lain halaman yang gagal dimuat.
-try {
-    initLockUI(() => renderTable());
-} catch (err) {
-    console.error("Gagal memasang tombol kunci:", err);
-}
+import { muatRujukan } from "../assets/simpanan.js?v=20260921ab";
 
 // ---------- Pelaporan error ke layar ----------
 function laporError(konteks, error) {
@@ -52,7 +43,7 @@ let state = {
     lingkup: "reguler",         // isi matriks harian: "reguler" | "md" | "tahsin"
 };
 
-const TEKS_KOSONG = 'Belum ada jadwal yang cocok. Klik "Tambah Jadwal" untuk menambahkan.';
+const TEKS_KOSONG = "Belum ada jadwal yang cocok.";
 
 // Kelompok belajar yang di matriks kelas reguler diringkas menjadi satu baris.
 const KELOMPOK = {
@@ -78,7 +69,6 @@ function simpanTampilan(v) {
 // ---------- Boot ----------
 async function boot() {
     document.getElementById("notice").hidden = isSupabaseConfigured;
-    document.getElementById("addBtn").disabled = !isUnlocked();
 
     pasangKelasFilter();
     renderDayTabs();
@@ -102,7 +92,6 @@ async function boot() {
         state.jam = demoData.jam;
         state.semua = demoData.jadwal;
         isiKelasFilter();
-        populateModalSelects();
         renderTable();
     }
 }
@@ -116,8 +105,6 @@ function terapkanRujukan(r) {
     state.jam = r.jam;
     state.semua = r.jadwal;
     isiKelasFilter();
-    // Pilihan di formulir tidak diganggu sewaktu formulirnya sedang diisi.
-    if (document.getElementById("jadwalModal").hidden) populateModalSelects();
     renderTable();
 }
 
@@ -160,31 +147,8 @@ function renderDayTabs() {
     });
 }
 
-// ---------- Muat ulang jadwal sesudah halaman ini sendiri mengubahnya ----------
-// Lewat segarkanRujukan supaya simpanan bersama ikut diperbarui saat itu juga;
-// halaman lain yang dibuka sesudahnya langsung membaca jadwal yang baru.
-async function loadJadwal() {
-    if (isSupabaseConfigured) {
-        try { state.semua = await segarkanRujukan(supabaseClient, "jadwal"); }
-        catch (err) { laporError("Gagal memuat jadwal", err); return; }
-    } else {
-        state.semua = demoData.jadwal;
-    }
-    renderTable();
-}
-
 // ---------- Lookups ----------
 
-// Status aktif dari view v_guru — toleran terhadap boolean maupun teks ("Aktif"/"Y"/1).
-// Bila kolomnya tidak ada (mode pratinjau), guru dianggap aktif.
-function guruAktif(g) {
-    const v = g?.status_aktif;
-    if (v === undefined || v === null) return true;
-    if (typeof v === "boolean") return v;
-    if (typeof v === "number") return v === 1;
-    return /^(aktif|active|y|ya|true|1)$/i.test(String(v).trim());
-}
-const daftarGuruAktif = () => state.guru.filter(guruAktif);
 
 const namaGuru = (id) => state.guru.find((g) => g.id === id)?.nama || id;
 const urutKelas = (id) => indeksKelas(state.kelas)(id);
@@ -233,8 +197,6 @@ function renderBanner(rows) {
 }
 
 function renderTable() {
-    document.getElementById("addBtn").disabled = !isUnlocked();
-
     const matriks = modeMatriks();
     document.getElementById("viewDaftar").hidden = matriks;
     document.getElementById("viewMatriks").hidden = !matriks;
@@ -267,9 +229,6 @@ function renderTable() {
     }
     empty.hidden = true;
 
-    const unlocked = isUnlocked();
-    const disabledAttr = unlocked ? "" : "disabled";
-
     tbody.innerHTML = rows
         .map((r) => {
             const jam = jamInfo(r.jam_ke);
@@ -284,24 +243,9 @@ function renderTable() {
           <td><span class="badge-kelas">${namaKelas(r.kelas_id)}</span></td>
           <td>${namaMapel(r.mapel_id)}</td>
           <td>${namaGuru(r.guru_id)}</td>
-          <td>
-            <div class="row-actions">
-              <button class="btn-danger-text" ${disabledAttr} data-action="edit" data-id="${r.id}">Ubah</button>
-              <button class="btn-danger-text" ${disabledAttr} data-action="delete" data-id="${r.id}">Hapus</button>
-            </div>
-          </td>
         </tr>`;
         })
         .join("");
-
-    if (!unlocked) return;
-
-    tbody.querySelectorAll('[data-action="edit"]').forEach((b) =>
-        b.addEventListener("click", () => openModal(b.dataset.id))
-    );
-    tbody.querySelectorAll('[data-action="delete"]').forEach((b) =>
-        b.addEventListener("click", () => openConfirmDelete(b.dataset.id))
-    );
 }
 
 // ---------- Render matriks ----------
@@ -339,7 +283,6 @@ function jamBerjalan() {
 function renderMatriks() {
     const f = state.filter;
     const mingguan = matriksMingguan();
-    const unlocked = isUnlocked();
     const q = modeCari() ? "" : f.q.trim().toLowerCase();
 
     const rows = state.semua.filter((r) => {
@@ -501,7 +444,7 @@ function renderMatriks() {
                 continue;
             }
             if (!s.daftar.length) {
-                html.push(`<td class="m-sel kosong${aktif ? " sekarang" : ""}" ${data}>${unlocked ? '<span class="m-tambah">+</span>' : ""}</td>`);
+                html.push(`<td class="m-sel kosong${aktif ? " sekarang" : ""}" ${data}></td>`);
                 continue;
             }
             const bentrok = f.guruId && new Set(s.daftar.map((r) => r.kelas_id)).size > 1;
@@ -531,7 +474,6 @@ function renderMatriks() {
 
     const table = document.getElementById("matriks");
     table.innerHTML = html.join("");
-    table.classList.toggle("bisa-ubah", unlocked);
     table.classList.toggle("kelompok", matriksKelompok);
     const nSela = kolom.filter((c) => c.sela).length;
     table.style.minWidth = `${88 + (kolom.length - nSela) * 72 + nSela * 12}px`;
@@ -549,8 +491,7 @@ function renderMatriks() {
         : matriksKelompok ? `${KELOMPOK[lingkup].judul} hari ${state.hari} · ${baris.length} kelompok`
         : `hari ${state.hari} · ${baris.filter((b) => !b.grup).length} kelas`;
     document.getElementById("ringkasan").textContent =
-        `Matriks ${judul} · ${jmlJam} jam pelajaran` +
-        (unlocked ? " · klik blok untuk mengubah, klik sel kosong untuk menambah" : "");
+        `Matriks ${judul} · ${jmlJam} jam pelajaran`;
 }
 
 function renderLingkup() {
@@ -595,12 +536,7 @@ function pasangMatriks() {
     );
     document.getElementById("matriks").addEventListener("click", (e) => {
         const ringkas = e.target.closest("[data-lingkup]");
-        if (ringkas) { pilihLingkup(ringkas.dataset.lingkup); return; }
-        if (!isUnlocked()) return;
-        const blok = e.target.closest("[data-id]");
-        if (blok) { openModal(blok.dataset.id); return; }
-        const td = e.target.closest("td.kosong");
-        if (td) openModal(null, { hari: td.dataset.hari, jam_ke: td.dataset.jam, kelas_id: td.dataset.kelas });
+        if (ringkas) pilihLingkup(ringkas.dataset.lingkup);
     });
 }
 
@@ -706,101 +642,8 @@ function pasangPencarian() {
     document.getElementById("cariClear").addEventListener("click", () => bersihkanCari());
 }
 
-// ---------- Modal: tambah / ubah ----------
-function populateModalSelects() {
-    document.getElementById("fHari").innerHTML = HARI_LIST.map((h) => `<option value="${h}">${h}</option>`).join("");
-    document.getElementById("fJam").innerHTML = state.jam
-        .map((j) => `<option value="${j.jam_ke}">Jam ke-${j.jam_ke} (${j.mulai}–${j.selesai})${j.keterangan ? " · " + j.keterangan : ""}</option>`)
-        .join("");
-    document.getElementById("fKelas").innerHTML = state.kelas.map((k) => `<option value="${k.id}">${k.nama_kelas}</option>`).join("");
-    document.getElementById("fMapel").innerHTML = state.mapel.map((m) => `<option value="${m.id}">${m.nama_mapel}</option>`).join("");
-    document.getElementById("fGuru").innerHTML = daftarGuruAktif().map((g) => `<option value="${g.id}">${g.nama}</option>`).join("");
-}
-
-let editingId = null;
-
-// `isian` dipakai saat menambah dari sel kosong matriks: { hari, jam_ke, kelas_id }.
-function openModal(id, isian = {}) {
-    editingId = id || null;
-    const row = id ? state.semua.find((r) => r.id === id) : null;
-    const f = state.filter;
-
-    document.getElementById("modalTitle").textContent = id ? "Ubah Jadwal" : "Tambah Jadwal";
-    document.getElementById("fHari").value = row ? row.hari : (isian.hari || state.hari);
-    document.getElementById("fJam").value = row ? row.jam_ke : (isian.jam_ke || state.jam[0]?.jam_ke);
-    document.getElementById("fKelas").value = row ? row.kelas_id : (isian.kelas_id || (f.kelasId !== "ALL" ? f.kelasId : state.kelas[0]?.id));
-    document.getElementById("fMapel").value = row ? row.mapel_id : (f.mapelId || state.mapel[0]?.id);
-    document.getElementById("fGuru").value = row ? row.guru_id : (f.guruId || daftarGuruAktif()[0]?.id);
-
-    document.getElementById("jadwalModal").hidden = false;
-}
-
-function closeModal() {
-    document.getElementById("jadwalModal").hidden = true;
-    editingId = null;
-}
-
-async function saveJadwal(e) {
-    e.preventDefault();
-    const payload = {
-        hari: document.getElementById("fHari").value,
-        jam_ke: Number(document.getElementById("fJam").value),
-        kelas_id: document.getElementById("fKelas").value,
-        mapel_id: document.getElementById("fMapel").value,
-        guru_id: document.getElementById("fGuru").value,
-    };
-
-    if (isSupabaseConfigured) {
-        const { error } = editingId
-            ? await supabaseClient.from("kg_jadwal_kbm").update(payload).eq("id", editingId)
-            : await supabaseClient.from("kg_jadwal_kbm").insert({ id: `J${Date.now()}`, ...payload });
-        if (error) { laporError("Gagal menyimpan ke tabel kg_jadwal_kbm", error); return; }
-    } else {
-        if (editingId) {
-            const idx = demoData.jadwal.findIndex((r) => r.id === editingId);
-            if (idx > -1) demoData.jadwal[idx] = { id: editingId, ...payload };
-        } else {
-            demoData.jadwal.push({ id: `J${Date.now()}`, ...payload });
-        }
-    }
-
-    closeModal();
-    await loadJadwal();
-}
-
-// ---------- Hapus ----------
-let deletingId = null;
-
-function openConfirmDelete(id) {
-    deletingId = id;
-    document.getElementById("confirmModal").hidden = false;
-}
-
-function closeConfirmDelete() {
-    deletingId = null;
-    document.getElementById("confirmModal").hidden = true;
-}
-
-async function doDelete() {
-    if (!deletingId) return;
-    if (isSupabaseConfigured) {
-        const { error } = await supabaseClient.from("kg_jadwal_kbm").delete().eq("id", deletingId);
-        if (error) { laporError("Gagal menghapus dari tabel kg_jadwal_kbm", error); return; }
-    } else {
-        const idx = demoData.jadwal.findIndex((r) => r.id === deletingId);
-        if (idx > -1) demoData.jadwal.splice(idx, 1);
-    }
-    closeConfirmDelete();
-    await loadJadwal();
-}
-
 // ---------- Pasang kontrol statis, lalu muat data ----------
 try {
-    document.getElementById("addBtn").addEventListener("click", () => openModal(null));
-    document.getElementById("modalCancel").addEventListener("click", closeModal);
-    document.getElementById("jadwalForm").addEventListener("submit", saveJadwal);
-    document.getElementById("confirmCancel").addEventListener("click", closeConfirmDelete);
-    document.getElementById("confirmDelete").addEventListener("click", doDelete);
     pasangPencarian();
     pasangMatriks();
 } catch (err) {

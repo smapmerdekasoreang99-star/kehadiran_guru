@@ -1,5 +1,5 @@
 // =========================================================
-// Jadwal Mengajar & Piket — halaman baca saja
+// Jadwal Kegiatan Sekolah — halaman baca saja
 // =========================================================
 // Satu halaman untuk seluruh jadwal tetap sekolah, dari tiga sudut pandang:
 //
@@ -31,7 +31,7 @@ import { demoData, demoKegiatan } from "../assets/demo-data.js?v=20260921v";
 import { urutkanKelas, indeksKelas, jenisKelas } from "../assets/kelas-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
 import { semesterSekarang, semesterBaris, LABEL_SEMESTER } from "../assets/semester.js?v=20260921ad";
-import { bukuJadwal, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921ac";
+import { bukuJadwal, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921ae";
 
 // ---------- Pelaporan error ke layar ----------
 function laporError(konteks, error) {
@@ -545,7 +545,7 @@ function render() {
     document.getElementById("isi").innerHTML = `
     <div class="page-head">
       <div>
-        <h1>Jadwal Mengajar &amp; Piket</h1>
+        <h1>Jadwal Kegiatan Sekolah</h1>
         <p>Disusun di Data Induk; halaman ini hanya menampilkan. Tahun ajaran ${esc(state.tahunAjaran)}, semester ${smt} (${smt === 1 ? "Juli–Desember" : "Januari–Juni"}${smt === semesterSekarang() ? ", berjalan" : ""}).</p>
       </div>
       <div class="page-head-actions">

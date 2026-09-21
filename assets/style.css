@@ -1489,7 +1489,7 @@ tr.total td {
     .kg-tabel th:last-child { display: none; }
 }
 
-/* ---------- Jadwal Mengajar & Piket: kontrol ala Data Induk ----------
+/* ---------- Jadwal Kegiatan Sekolah: kontrol ala Data Induk ----------
    Tab bersegmen, pemilih dengan panah, pilihan semester. Bentuknya dibuat
    sama dengan halaman Jadwal KBM di Data Induk supaya satu jadwal terasa
    satu jadwal di dua aplikasi. */

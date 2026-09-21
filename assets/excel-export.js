@@ -287,7 +287,7 @@ export async function bukuPiket({ ExcelJS, baris, total, pengaturan, awal, akhir
 }
 
 // =========================================================
-// 5. JADWAL MENGAJAR & PIKET (satu lembar per guru atau per kelas)
+// 5. JADWAL KEGIATAN SEKOLAH (satu lembar per guru atau per kelas)
 // =========================================================
 // Susunannya seperti unduhan Jadwal KBM di Data Induk: baris = jam pelajaran,
 // kolom = hari, warna per mata pelajaran — supaya lembar dari dua aplikasi
@@ -328,7 +328,7 @@ export async function bukuJadwal({ ExcelJS, lembar, hariList, jam, semester, pen
         const ws = wb.addWorksheet(String(L.nama).replace(/[\\/?*\[\]:]/g, "-").slice(0, 31));
         const KOL = 1 + hariList.length;
         ws.columns = [{ width: 12 }, ...hariList.map(() => ({ width: 26 }))];
-        let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul: "JADWAL MENGAJAR & PIKET",
+        let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul: "JADWAL KEGIATAN SEKOLAH",
             sub: `${L.judulSub}  ·  Semester ${semester}  ·  Tahun Ajaran ${pengaturan.tahun_ajaran || ""}`, kolomTerakhir: KOL });
         kepalaTabel(ws, r, ["Jam", ...hariList], { tinggi: 24 });
         const barisKepala = r;

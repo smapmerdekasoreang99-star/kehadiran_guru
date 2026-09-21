@@ -2,6 +2,8 @@
 // Perhitungan rekap — fungsi murni (tanpa DOM), dipakai scripts/rekap.js
 // =========================================================
 
+import { semesterTanggal, semesterBaris } from "./semester.js?v=20260921ad";
+
 const HARI_FROM_JS_DAY = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 export const STATUS_ABSEN = ["ST", "STT", "IT", "ITT", "TK", "HTTM"];
 
@@ -49,7 +51,7 @@ export function hariKerja(awal, akhir, liburSet) {
     while (d <= end) {
         const iso = isoTanggal(d);
         const hari = HARI_FROM_JS_DAY[d.getDay()];
-        if (hari !== "Sabtu" && hari !== "Minggu" && !liburSet.has(iso)) out.push({ tanggal: iso, hari });
+        if (hari !== "Sabtu" && hari !== "Minggu" && !liburSet.has(iso)) out.push({ tanggal: iso, hari, semester: semesterTanggal(iso) });
         d.setDate(d.getDate() + 1);
     }
     return out;
@@ -99,8 +101,11 @@ export function rekapWali({ jadwal, ketidakhadiran, awal, akhir, liburSet }) {
 // jadwal: [{ id, hari, jam_ke, guru_id }]  ketidakhadiran: [{ jadwal_id, tanggal, guru_id, status }]
 export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }) {
     const hari = hariKerja(awal, akhir, liburSet);
-    const jumlahHari = {};
-    for (const h of hari) jumlahHari[h.hari] = (jumlahHari[h.hari] || 0) + 1;
+    // Jumlah hari kerja dihitung PER SEMESTER, karena rentangnya boleh
+    // melintasi pergantian semester (Desember–Januari): baris jadwal semester 1
+    // hanya dikalikan hari-hari semester 1, dan seterusnya.
+    const jumlahHari = { 1: {}, 2: {} };
+    for (const h of hari) jumlahHari[h.semester][h.hari] = (jumlahHari[h.semester][h.hari] || 0) + 1;
     const tanggalSet = new Set(hari.map((h) => h.tanggal));
 
     const per = new Map();
@@ -109,7 +114,7 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
         return per.get(gid);
     };
     for (const j of jadwal) {
-        const n = jumlahHari[j.hari] || 0;
+        const n = (jumlahHari[semesterBaris(j)] || {})[j.hari] || 0;
         if (n) baris(j.guru_id).terjadwal += n;
     }
     for (const k of ketidakhadiran) {

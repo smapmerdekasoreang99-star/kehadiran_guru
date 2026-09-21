@@ -29,7 +29,8 @@
 import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
 import { demoData, demoKegiatan } from "../assets/demo-data.js?v=20260921v";
 import { urutkanKelas, indeksKelas, jenisKelas } from "../assets/kelas-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921ac";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
+import { semesterSekarang, semesterBaris, LABEL_SEMESTER } from "../assets/semester.js?v=20260921ad";
 import { bukuJadwal, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921ac";
 
 // ---------- Pelaporan error ke layar ----------
@@ -246,20 +247,22 @@ function bacaPilihanAwal() {
     state.pilihGuru = url.get("guru") || ingatan("jadwal.guru") || ingatan("kegiatan.guru") || null;
     state.pilihKelas = url.get("kelas") || ingatan("jadwal.kelas") || null;
     state.hari = url.get("hari") || null;
-    state.semester = Number(url.get("semester")) || Number(ingatan("jadwal.semester")) || null;
+    // Semester tidak diingat antar kunjungan: bawaannya semester yang sedang
+    // berjalan menurut tanggal, supaya pergantian semester terjadi sendiri.
+    state.semester = Number(url.get("semester")) || null;
 }
 
 function simpanPilihan() {
     ingat("jadwal.sudut", state.sudut);
     ingat("jadwal.guru", state.pilihGuru);
     ingat("jadwal.kelas", state.pilihKelas);
-    ingat("jadwal.semester", state.semester);
     // URL ikut pilihan, supaya alamat yang disalin membuka tampilan yang sama.
     const u = new URLSearchParams();
     u.set("sudut", state.sudut);
     if (state.sudut === "guru" && state.pilihGuru) u.set("guru", state.pilihGuru);
     if (state.sudut === "kelas" && state.pilihKelas) u.set("kelas", state.pilihKelas);
     if (state.sudut === "hari" && state.hari) u.set("hari", state.hari);
+    if (state.semester !== semesterSekarang()) u.set("semester", state.semester);
     try { history.replaceState(null, "", `${location.pathname}?${u}`); } catch { /* abaikan */ }
 }
 
@@ -267,7 +270,7 @@ function simpanPilihan() {
 // Menyusun matriks
 // =========================================================
 function semesterAda() {
-    return [...new Set(state.jadwalSemua.map((j) => Number(j.semester) || 1))].sort((a, b) => a - b);
+    return [...new Set(state.jadwalSemua.map(semesterBaris))].sort((a, b) => a - b);
 }
 
 /* Kolom = jam pelajaran; jeda istirahat diberi kolom sela tipis. */
@@ -342,9 +345,9 @@ function petaJamKelompok(jadwalSmt) {
 // =========================================================
 function render() {
     const smtAda = semesterAda();
-    if (!smtAda.includes(state.semester)) state.semester = smtAda[0] || 1;
+    if (![1, 2].includes(state.semester)) state.semester = semesterSekarang();
     const smt = state.semester;
-    const jadwalSmt = state.jadwalSemua.filter((j) => (Number(j.semester) || 1) === smt);
+    const jadwalSmt = state.jadwalSemua.filter((j) => semesterBaris(j) === smt);
     const hariAda = HARI_LIST.filter((h) => h !== "Sabtu" || jadwalSmt.some((j) => j.hari === "Sabtu"));
     const hariSkr = hariNyata();
     const sekarang = jamBerjalan();
@@ -534,13 +537,16 @@ function render() {
       </div>` : "";
 
     const kosong = !state.jadwalSemua.length
-        ? `<div class="info-box"><b>Belum ada jadwal tersimpan.</b> Jadwal KBM disusun di Data Induk; tahun ajaran ${esc(state.tahunAjaran)}.</div>` : "";
+        ? `<div class="info-box"><b>Belum ada jadwal tersimpan.</b> Jadwal KBM disusun di Data Induk; tahun ajaran ${esc(state.tahunAjaran)}.</div>`
+        : !jadwalSmt.length
+        ? `<div class="info-box"><b>Belum ada jadwal semester ${smt}</b> untuk tahun ajaran ${esc(state.tahunAjaran)} di Data Induk.
+            ${smtAda.length ? `Yang tersedia: semester ${smtAda.join(" dan ")} — pilih di kotak semester.` : ""}</div>` : "";
 
     document.getElementById("isi").innerHTML = `
     <div class="page-head">
       <div>
         <h1>Jadwal Mengajar &amp; Piket</h1>
-        <p>Disusun di Data Induk; halaman ini hanya menampilkan. Tahun ajaran ${esc(state.tahunAjaran)}, semester ${smt}.</p>
+        <p>Disusun di Data Induk; halaman ini hanya menampilkan. Tahun ajaran ${esc(state.tahunAjaran)}, semester ${smt} (${smt === 1 ? "Juli–Desember" : "Januari–Juni"}${smt === semesterSekarang() ? ", berjalan" : ""}).</p>
       </div>
       <div class="page-head-actions">
         ${sudut !== "hari" ? `<button type="button" class="btn" id="bUnduh" ${pilih ? "" : "disabled"}>Unduh (xlsx)</button>` : ""}
@@ -567,7 +573,7 @@ function render() {
           ${hariAda.map((h) => `<button type="button" class="${h === hariPilih ? "on" : ""}" data-hari="${h}">${h}</button>`).join("")}
         </div>`}
         <select class="jd-select jd-select-auto" id="fSemester" aria-label="Semester">
-          ${(smtAda.length ? smtAda : [1, 2]).map((n) => `<option value="${n}" ${smt === n ? "selected" : ""}>Semester ${n}</option>`).join("")}
+          ${[1, 2].map((n) => `<option value="${n}" ${smt === n ? "selected" : ""}>${LABEL_SEMESTER[n]}${smtAda.includes(n) ? "" : " (kosong)"}</option>`).join("")}
         </select>
         <div class="toolbar-info">${esc(ringkas)}${metaGuru ? ` <span class="toolbar-meta">· ${esc(metaGuru)}</span>` : ""}</div>
       </div>

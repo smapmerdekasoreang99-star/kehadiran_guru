@@ -3,7 +3,8 @@ import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921ac";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
+import { semesterTanggal, semesterBaris } from "../assets/semester.js?v=20260921ad";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -106,8 +107,14 @@ function isiKelasFilter() {
     state.filter.kelasId = sel.value;
 }
 
-const jadwalHariIni = () =>
-    (state.jadwalSepekan || []).filter((r) => r.hari === state.hari).sort((a, b) => a.jam_ke - b.jam_ke);
+// Jadwal hari itu: harinya cocok DAN semesternya semester tanggal itu —
+// jadwal semester lain tidak ikut terbaca.
+const jadwalHariIni = () => {
+    const smt = semesterTanggal(state.tanggal);
+    return (state.jadwalSepekan || [])
+        .filter((r) => r.hari === state.hari && semesterBaris(r) === smt)
+        .sort((a, b) => a.jam_ke - b.jam_ke);
+};
 
 function hariFromTanggal(tanggalStr) {
     const d = new Date(tanggalStr + "T00:00:00");

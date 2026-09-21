@@ -39,7 +39,15 @@
 
 import { terapkanUrutan } from "./guru-order.js?v=20260921v";
 
-const AWALAN = "kg.rujukan.v2.";   // v2: kelas membawa jenis & mapel_id
+const AWALAN = "kg.rujukan.v3.";   // v3: jadwal hanya tahun ajaran aktif, membawa semester
+
+// Simpanan versi lama dibuang sekali saat modul dimuat — isinya tidak terbaca
+// lagi dan hanya memakan jatah localStorage.
+try {
+    for (const k of Object.keys(localStorage)) {
+        if (k.startsWith("kg.rujukan.") && !k.startsWith(AWALAN)) localStorage.removeItem(k);
+    }
+} catch { /* abaikan */ }
 
 // Kolom yang diambil adalah GABUNGAN kebutuhan seluruh halaman — sesuai
 // kontrak di database/kontrak/kehadiran_guru.sql — supaya satu simpanan
@@ -67,16 +75,27 @@ const RUJUKAN = {
     tahunAjaran: (sb) => sb.from("tahun_ajaran").select("kode, aktif").eq("aktif", true).limit(1),
 };
 
+// Hanya jadwal TAHUN AJARAN AKTIF yang diangkut — jadwal_kbm menyimpan semua
+// tahun, dan tanpa saringan ini tahun lalu ikut terbaca di setiap halaman.
+// Kedua semester tahun itu ikut; halaman menyaring semesternya sendiri
+// menurut tanggal (assets/semester.js), karena Rekap bisa merentang dua
+// semester sekaligus.
+//
 // PostgREST memotong hasil di 1.000 baris tanpa error — baris sisanya hilang
-// diam-diam. Jadwal sepekan sudah 1.040 baris, dan yang terbuang justru yang
-// dimasukkan paling akhir (kelompok Tahsin dan Matematika Dasar). Dua halaman
-// pertama diminta serentak, bukan berurutan, supaya kasus lazim — sedikit di
-// atas seribu — selesai dalam satu perjalanan; baru bila halaman kedua pun
-// penuh, halaman berikutnya diminta satu per satu.
+// diam-diam. Jadwal satu semester sudah 1.040 baris, dan yang terbuang justru
+// yang dimasukkan paling akhir (kelompok Tahsin dan Matematika Dasar). Dua
+// halaman pertama diminta serentak, bukan berurutan, supaya kasus lazim —
+// sedikit di atas seribu — selesai dalam satu perjalanan; baru bila halaman
+// kedua pun penuh, halaman berikutnya diminta satu per satu.
 const BATAS = 1000;
 async function ambilJadwalSepekan(sb) {
+    const ta = await sb.from("tahun_ajaran").select("kode").eq("aktif", true).limit(1);
+    if (ta.error) return ta;
+    const kode = (ta.data || [])[0]?.kode;
+    if (!kode) return { data: [], error: null };
     const halaman = (mulai) => sb.from("kg_jadwal_kbm")
-        .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id")
+        .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id, semester, tahun_ajaran")
+        .eq("tahun_ajaran", kode).order("id")
         .range(mulai, mulai + BATAS - 1);
     const [satu, dua] = await Promise.all([halaman(0), halaman(BATAS)]);
     if (satu.error) return satu;

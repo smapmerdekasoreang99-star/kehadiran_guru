@@ -1029,9 +1029,9 @@ function perkakasUnduhan() {
 }
 
 /* Baris formulir: satu petugas, jam jaganya dikelompokkan per hari.
-   Dihitung ulang tiap pekan karena penugasan unit punya masa berlaku —
-   yang sudah selesai tidak boleh muncul di pekan sesudahnya. */
-function barisFormulir(tab, pekan) {
+    adalah tanggal yang dipakai menimbang masa berlaku penugasan
+   unit — yang sudah selesai pada tanggal itu tidak ikut tercetak. */
+function barisFormulir(tab, acuan) {
     const urut = peringkatGuru(state.guru);
     if (tab === "parkiran") {
         return Object.fromEntries(state.parkiran.map((p) => [p.hari, p.nama || namaGuru(p.guru_id)]));
@@ -1055,7 +1055,7 @@ function barisFormulir(tab, pekan) {
             tambahJam(per.get(p.guru_id), p.hari, p.jam_ke);
         }
     } else {
-        const berlaku = (t) => (!t.mulai || t.mulai <= pekan.jumat) && (!t.selesai || t.selesai >= pekan.senin);
+        const berlaku = (t) => (!t.mulai || t.mulai <= acuan) && (!t.selesai || t.selesai >= acuan);
         const tugas = new Map(state.tugasUnit.map((t) => [String(t.tugas_id), t]));
         for (const p of state.jadwalUnit) {
             if (!HARI_LIST.includes(p.hari)) continue;
@@ -1092,48 +1092,47 @@ async function unduhFormulir(tab) {
     const teksLama = tombol.textContent;
     try {
         const { ExcelJS, Kop, F } = perkakasUnduhan();
-        const pekan = F.pekanDari(state.awal, state.akhir);
-        if (!pekan.length) return;
-
-        /* Sekali tekan bisa berarti berpuluh halaman cetak, jadi jumlahnya
-           disebut lebih dulu begitu rentangnya melewati sebulan. */
-        if (pekan.length > 5 && !confirm(
-            `Rentang ini menyentuh ${pekan.length} pekan, jadi berkasnya berisi ${pekan.length} lembar — `
-            + "satu halaman cetak per pekan.\n\nLanjutkan?")) return;
-
         tombol.disabled = true;
         tombol.textContent = "Menyiapkan…";
 
         const profil = state.profil || {};
+        /* Yang menandatangani di kanan adalah pejabat yang berwenang atas
+           ISI dokumennya. Piket meja sekolah dan unit ranah kurikulum —
+           keduanya jam pelajaran. Piket parkiran ranah kesiswaan: yang
+           diawasi siswa yang pulang, bukan jam belajar. */
+        const kesiswaan = tab === "parkiran";
         const ttd = {
             tempat: profil.kota || "", tanggal: null,
             kepala: profil.kepala_sekolah || "",
-            labelKanan: "Wakasek Kurikulum,", namaKanan: profil.kurikulum || ""
+            labelKanan: kesiswaan ? "Wakasek Kesiswaan," : "Wakasek Kurikulum,",
+            namaKanan: (kesiswaan ? profil.kesiswaan : profil.kurikulum) || ""
         };
         const logo = await logoUnduhan();
-        const libur = Object.fromEntries(state.libur);
 
+        /* Satu lembar saja, tanpa tanggal — diperbanyak dengan fotokopi
+           untuk pekan-pekan berikutnya. Rentang tanggal di layar hanya
+           menentukan penugasan unit mana yang masih berlaku; dipakai
+           tanggal AKHIR, karena lembarnya untuk pekan-pekan ke depan. */
         const wb = new ExcelJS.Workbook();
-        for (const p of pekan) {
-            F.lembarParaf(wb, {
-                wb, kop: Kop, logo, profil, jenis: tab,
-                judul: JUDUL_FORMULIR[tab],
-                sub: state.ta ? `Tahun Pelajaran ${state.ta}` : "",
-                namaLembar: `${F.tglRingkas(p.senin)} sd ${F.tglRingkas(p.jumat)}`,
-                pekan: p, libur, ttd, baris: barisFormulir(tab, p),
-            });
-        }
+        F.lembarParaf(wb, {
+            wb, kop: Kop, logo, profil, jenis: tab,
+            judul: JUDUL_FORMULIR[tab],
+            sub: state.ta ? `Tahun Pelajaran ${state.ta}` : "",
+            namaLembar: "Formulir Paraf",
+            ttd, baris: barisFormulir(tab, state.akhir),
+        });
 
         const buf = await wb.xlsx.writeBuffer();
         const blob = new Blob([buf], {
             type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = `Formulir_Paraf_Piket_${besar(tab)}_${state.awal}_sd_${state.akhir}.xlsx`;
+        a.download = `Formulir_Paraf_Piket_${besar(tab)}.xlsx`;
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 3000);
 
-        kabar(`Formulir paraf piket ${JENIS[tab]} diunduh — ${pekan.length} lembar, satu per pekan.`);
+        kabar(`Formulir paraf piket ${JENIS[tab]} diunduh — satu lembar kosong sepekan, `
+            + "siap diperbanyak untuk pekan-pekan berikutnya.");
     } catch (err) {
         laporError("Gagal membuat formulir paraf", err);
     } finally {

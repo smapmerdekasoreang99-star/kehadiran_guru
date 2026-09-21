@@ -50,9 +50,8 @@
     // Tinggi baris isian: cukup untuk dibubuhi paraf dengan tangan.
     // 34 pt kira-kira 1,2 cm di kertas — sebesar kotak paraf pada daftar
     // hadir yang sudah biasa dipakai sekolah.
-    const TINGGI_ISI = 34;
     const TINGGI_ISI_LEBAR = 40;     // baris parkiran: muat tanda tangan penuh
-    const TINGGI_JAM = 20;           // satu larik paraf untuk satu jam jaga
+    const TINGGI_JAM = 22;           // satu kotak paraf untuk satu jam jaga
 
     const isoDari = (d) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -259,31 +258,50 @@
                     const v = (b.jam || {})[h.hari];
                     return Array.isArray(v) ? v : (v == null || v === "" ? [] : [v]);
                 };
-                /* Tinggi barisnya mengikuti hari terpadat pekan itu: tiap
-                   jam mendapat satu larik sendiri, karena satu jam adalah
-                   satu paraf. Guru yang berjaga dua jam bisa hadir pada jam
-                   pertama dan tidak pada jam kedua — kalau seharinya cuma
-                   satu kotak, keadaan itu tidak punya tempat untuk ditulis. */
-                const terbanyak = Math.max(1, ...hariPekan.map((h) => jamHari(h).length));
+                /* Tiap jam jaga mendapat SELNYA SENDIRI, bukan sekadar satu
+                   larik di dalam sel bersama. Alasannya sepele tetapi
+                   menentukan: Excel hanya bisa menggarisi TEPI sel, tidak
+                   bisa menarik garis di tengahnya — jadi tanpa sel
+                   tersendiri, dua paraf dalam satu kotak tidak punya
+                   pembatas dan tidak ketahuan paraf mana untuk jam mana.
+                   Yang hadir jam kedua saja memaraf kotak jam kedua, dan
+                   kotak jam pertama tinggal kosong.
 
-                sel(ws, r, 1, i + 1, { rata: "center", tegak: "top" });
-                sel(ws, r, 2, b.nama, { tegak: "top" });
-                if (o.jenis === "unit") sel(ws, r, 3, b.unit || "—", { lipat: true, ukuran: 9, tegak: "top" });
-                hariPekan.forEach((h, j) => {
-                    const c = kiri.length + j + 1;
-                    const daftar = jamHari(h);
-                    /* Nomor jamnya ditulis kecil dan abu di tepi kiri tiap
-                       larik; ruang di sebelah kanannya itulah tempat
-                       memaraf. Hari yang tidak dijaga diarsir supaya tidak
-                       salah bubuh. */
-                    const cell = sel(ws, r, c,
-                        daftar.length ? daftar.map((x) => "jam " + x).join("\n") : null,
-                        { ukuran: 8, warna: "FF8B8173", rata: "left", tegak: "top", lipat: true });
-                    if (!daftar.length) cell.fill = ISI_KOSONG;
-                    else if (h.iso && libur[h.iso]) cell.fill = ISI_SELANG;
-                });
-                ws.getRow(r).height = Math.max(TINGGI_ISI, terbanyak * TINGGI_JAM);
-                r += 1;
+                   Satu petugas karena itu menempati sebanyak jam jaga
+                   hariannya yang terbanyak pekan itu; nomor dan namanya
+                   digabung menurun supaya tetap terbaca sebagai satu orang. */
+                const larik = Math.max(1, ...hariPekan.map((h) => jamHari(h).length));
+                const rAwal = r, rAkhir = r + larik - 1;
+
+                // Kolom kiri digabung menurun. Garisnya dipasang pada tiap
+                // sel dalam rentang gabungan, karena hanya begitu tepi luar
+                // gabungan tergambar penuh.
+                const kolomKiri = (kolom, nilai, opsi) => {
+                    if (larik > 1) ws.mergeCells(rAwal, kolom, rAkhir, kolom);
+                    for (let rr = rAwal; rr <= rAkhir; rr++) ws.getCell(rr, kolom).border = GARIS;
+                    sel(ws, rAwal, kolom, nilai, Object.assign({ tegak: "middle" }, opsi || {}));
+                };
+                kolomKiri(1, i + 1, { rata: "center" });
+                kolomKiri(2, b.nama);
+                if (o.jenis === "unit") kolomKiri(3, b.unit || "—", { lipat: true, ukuran: 9 });
+
+                for (let k = 0; k < larik; k++) {
+                    hariPekan.forEach((h, j) => {
+                        const kolom = kiri.length + j + 1;
+                        const jam = jamHari(h)[k];
+                        /* Nomor jamnya kecil dan abu di tepi kiri kotak;
+                           sisa ruang di sebelah kanannya tempat memaraf.
+                           Kotak tanpa jam diarsir — hari itu memang tidak
+                           bertugas, atau jam jaganya lebih sedikit daripada
+                           hari tersibuknya. */
+                        const cell = sel(ws, r + k, kolom, jam == null ? null : "jam " + jam,
+                            { ukuran: 8, warna: "FF8B8173", rata: "left", tegak: "middle" });
+                        if (jam == null) cell.fill = ISI_KOSONG;
+                        else if (h.iso && libur[h.iso]) cell.fill = ISI_SELANG;
+                    });
+                    ws.getRow(r + k).height = TINGGI_JAM;
+                }
+                r += larik;
             });
             if (!(o.baris || []).length) {
                 ws.mergeCells(r, 1, r, KOL);
@@ -298,9 +316,10 @@
         sel(ws, r, 1, o.catatan || (parkiran
             ? "Diparaf oleh petugas yang bersangkutan pada hari pelaksanaan. "
               + "Kotak berarsir berarti hari itu belum ada petugasnya."
-            : "Diparaf oleh petugas yang bersangkutan pada hari pelaksanaan, "
-              + "satu paraf untuk satu jam jaga — di sebelah kanan nomor jamnya. "
-              + "Kotak berarsir berarti tidak ada tugas pada hari itu."),
+            : "Diparaf oleh petugas yang bersangkutan pada hari pelaksanaan. Satu kotak "
+              + "satu jam jaga, diparaf di sebelah kanan nomor jamnya — jam yang tidak "
+              + "dijalankan kotaknya dibiarkan kosong. Kotak berarsir berarti tidak ada "
+              + "tugas pada jam itu."),
             { ukuran: 8, miring: true, warna: "FF5E5548", tanpaGaris: true });
         r += 2;
 

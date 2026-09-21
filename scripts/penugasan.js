@@ -1,8 +1,8 @@
 import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
 import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
-import { terapkanUrutan } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260921v";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921aa";
 import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260921v";
 
@@ -67,27 +67,25 @@ async function boot() {
     document.getElementById("notice").hidden = isSupabaseConfigured;
 
     if (isSupabaseConfigured) {
-        const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jam }] =
-            await Promise.all([
-                terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, mapel_utama, is_piket, status_aktif, tmt_sekolah")),
-                supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
-                supabaseClient.from("kg_mapel").select("id, nama_mapel, rumpun_mapel").order("nama_mapel"),
-                supabaseClient.from("kg_jam_pelajaran").select("*").order("jam_ke"),
-            ]);
-        state.guru = guru || [];
-        state.kelas = urutkanKelas(kelas || []);
-        state.mapel = mapel || [];
-        state.jam = (jam || []).filter((j) => j.keterangan !== "Tahsin");
+        // Rujukan — termasuk jadwal sepekan — dari simpanan bersama. Jadwal
+        // hari yang dipilih disaring dari situ, bukan diminta ulang ke
+        // Supabase setiap kali tanggalnya berganti.
+        let rujukan;
+        try {
+            rujukan = await muatRujukan(supabaseClient, ["guru", "kelas", "mapel", "jam", "jadwal"], (r) => {
+                terapkanRujukan(r);
+                state.jadwal = jadwalHariIni();
+                renderTable();
+            });
+        } catch (err) { laporError("Gagal memuat data rujukan", err); return; }
+        terapkanRujukan(rujukan);
     } else {
         state.guru = demoData.guru;
         state.kelas = urutkanKelas(demoData.kelas);
         state.mapel = demoData.mapel;
         state.jam = demoData.jam.filter((j) => j.keterangan !== "Tahsin");
+        isiPilihanPengganti();
     }
-
-    document.getElementById("fGuruPengganti").innerHTML = daftarGuruAktif()
-        .map((g) => `<option value="${g.id}">${g.nama}</option>`)
-        .join("");
 
     const tanggalInput = document.getElementById("tanggalPicker");
     tanggalInput.value = state.tanggal;
@@ -98,6 +96,25 @@ async function boot() {
 
     await loadForDate();
 }
+
+function terapkanRujukan(r) {
+    state.guru = r.guru;
+    state.kelas = urutkanKelas(r.kelas);
+    state.mapel = r.mapel;
+    state.jam = r.jam.filter((j) => j.keterangan !== "Tahsin");
+    state.jadwalSepekan = r.jadwal;
+    // Pilihan di formulir tidak diganggu sewaktu formulirnya sedang diisi.
+    if (document.getElementById("penugasanModal").hidden) isiPilihanPengganti();
+}
+
+function isiPilihanPengganti() {
+    document.getElementById("fGuruPengganti").innerHTML = daftarGuruAktif()
+        .map((g) => `<option value="${g.id}">${g.nama}</option>`)
+        .join("");
+}
+
+const jadwalHariIni = () =>
+    (state.jadwalSepekan || []).filter((r) => r.hari === state.hari).sort((a, b) => a.jam_ke - b.jam_ke);
 
 function hariFromTanggal(tanggalStr) {
     const d = new Date(tanggalStr + "T00:00:00");
@@ -120,19 +137,15 @@ async function loadForDate() {
     card.hidden = false;
 
     if (isSupabaseConfigured) {
-        const [{ data: jadwal }, { data: ketidakhadiran }, { data: piket }] = await Promise.all([
-            supabaseClient
-                .from("kg_jadwal_kbm")
-                .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id")
-                .eq("hari", state.hari)
-                .order("jam_ke"),
+        state.jadwal = jadwalHariIni();
+        const [{ data: ketidakhadiran, error: eK }, { data: piket }] = await Promise.all([
             supabaseClient
                 .from("kg_ketidakhadiran_guru")
                 .select("*")
                 .eq("tanggal", state.tanggal),
             supabaseClient.from("kg_piket").select("*").eq("hari", state.hari),
         ]);
-        state.jadwal = jadwal || [];
+        if (eK) { laporError("Gagal memuat catatan ketidakhadiran", eK); return; }
         state.ketidakhadiran = ketidakhadiran || [];
         state.piket = piket || [];
 

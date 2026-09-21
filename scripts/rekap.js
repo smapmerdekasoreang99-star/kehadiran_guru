@@ -1,8 +1,9 @@
 import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
 import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260921v";
+import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas } from "../assets/kelas-order.js?v=20260921v";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921aa";
 import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260921v";
 import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921v";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
@@ -82,32 +83,30 @@ async function boot() {
     document.getElementById("tglAkhir").value = state.akhir;
 
     if (isSupabaseConfigured) {
-        const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jadwal, error: eJ }] = await Promise.all([
-            terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, tmt_sekolah, status_aktif, is_staf, insentif_fingerprint")),
-            supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
-            supabaseClient.from("kg_mapel").select("id, nama_mapel"),
-            supabaseClient.from("kg_jadwal_kbm").select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id").range(0, 999),
-        ]);
-        if (eJ) { laporError("Gagal memuat jadwal", eJ); return; }
-        state.guru = guru || []; state.kelas = urutkanKelas(kelas || []); state.mapel = mapel || [];
-        // ambil sisa baris di atas batas 1.000
-        state.jadwal = jadwal || [];
-        for (let mulai = 1000; state.jadwal.length === mulai; mulai += 1000) {
-            const { data, error } = await supabaseClient.from("kg_jadwal_kbm")
-                .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id").range(mulai, mulai + 999);
-            if (error) { laporError("Gagal memuat sisa jadwal", error); break; }
-            state.jadwal = state.jadwal.concat(data || []);
-            if (!data || data.length < 1000) break;
-        }
-        await muatLibur();
-        await muatJadwalPiket();
-        await muatProfil();
+        // Rujukan dari simpanan bersama (seketika bila sudah pernah dibuka);
+        // libur, jadwal piket, dan profil diminta serentak, bukan bergiliran —
+        // dulu bergiliran, dan tiap giliran adalah satu perjalanan ke Supabase.
+        let rujukan;
+        try {
+            [rujukan] = await Promise.all([
+                muatRujukan(supabaseClient, ["guru", "kelas", "mapel", "jadwal"], (r) => { terapkanRujukan(r); hitungLagi(); }),
+                muatLibur(), muatJadwalPiket(), muatProfil(),
+            ]);
+        } catch (err) { laporError("Gagal memuat data rujukan", err); return; }
+        terapkanRujukan(rujukan);
     } else {
         state.guru = demoData.guru; state.kelas = urutkanKelas(demoData.kelas); state.mapel = demoData.mapel; state.jadwal = demoData.jadwal;
         state.libur = demoLibur; state.profil = { ...demoProfil };
     }
     renderLibur();
     await hitungLagi();
+}
+
+function terapkanRujukan(r) {
+    state.guru = r.guru;
+    state.kelas = urutkanKelas(r.kelas);
+    state.mapel = r.mapel;
+    state.jadwal = r.jadwal;
 }
 
 /* Jadwal ketiga jenis piket. Bentuknya berbeda-beda, jadi dibaca dari tiga
@@ -128,14 +127,15 @@ async function muatJadwalPiket() {
         if (error) { laporError(`Gagal memuat jadwal piket ${ke}`, error); return []; }
         return data || [];
     };
-    state.jadwalPiket = {
+    const [meja, unitJam, unit, parkiran] = await Promise.all([
         // Satu baris per JAM jaga: itulah satuan pencatatan meja dan unit.
-        meja: await ambil("kg_piket", "guru_id, hari, jam_ke", "meja sekolah"),
-        unitJam: await ambil("v_jadwal_piket_unit", "tugas_id, guru_id, hari, jam_ke", "jam piket unit"),
+        ambil("kg_piket", "guru_id, hari, jam_ke", "meja sekolah"),
+        ambil("v_jadwal_piket_unit", "tugas_id, guru_id, hari, jam_ke", "jam piket unit"),
         // Masa berlaku penugasan unit, untuk menyaring jadwal jamnya.
-        unit: await ambil("v_guru_unit", "tugas_id, guru_id, mulai, selesai", "unit"),
-        parkiran: await ambil("v_piket_parkiran", "guru_id, hari", "parkiran"),
-    };
+        ambil("v_guru_unit", "tugas_id, guru_id, mulai, selesai", "unit"),
+        ambil("v_piket_parkiran", "guru_id, hari", "parkiran"),
+    ]);
+    state.jadwalPiket = { meja, unitJam, unit, parkiran };
 }
 
 async function muatLibur() {

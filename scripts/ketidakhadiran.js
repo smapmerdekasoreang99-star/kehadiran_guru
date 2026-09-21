@@ -1,8 +1,9 @@
 import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
 import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260921v";
+import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260921v";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921aa";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -56,27 +57,25 @@ async function boot() {
     document.getElementById("notice").hidden = isSupabaseConfigured;
 
     if (isSupabaseConfigured) {
-        const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jam }] =
-            await Promise.all([
-                terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, tmt_sekolah")),
-                supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
-                supabaseClient.from("kg_mapel").select("id, nama_mapel").order("nama_mapel"),
-                supabaseClient.from("kg_jam_pelajaran").select("*").order("jam_ke"),
-            ]);
-        state.guru = guru || [];
-        state.kelas = urutkanKelas(kelas || []);
-        state.mapel = mapel || [];
-        state.jam = jam || [];
+        // Rujukan — termasuk jadwal sepekan — dari simpanan bersama. Jadwal
+        // hari yang dipilih disaring dari situ, bukan diminta ulang ke
+        // Supabase setiap kali tanggalnya berganti.
+        let rujukan;
+        try {
+            rujukan = await muatRujukan(supabaseClient, ["guru", "kelas", "mapel", "jam", "jadwal"], (r) => {
+                terapkanRujukan(r);
+                state.jadwal = jadwalHariIni();
+                renderTable();
+            });
+        } catch (err) { laporError("Gagal memuat data rujukan", err); return; }
+        terapkanRujukan(rujukan);
     } else {
         state.guru = demoData.guru;
         state.kelas = urutkanKelas(demoData.kelas);
         state.mapel = demoData.mapel;
         state.jam = demoData.jam;
+        isiKelasFilter();
     }
-
-    document.getElementById("kelasFilter").innerHTML =
-        `<option value="ALL">Semua kelas</option>` +
-        state.kelas.map((k) => `<option value="${k.id}">${k.nama_kelas}</option>`).join("");
 
     const tanggalInput = document.getElementById("tanggalPicker");
     tanggalInput.value = state.tanggal;
@@ -87,6 +86,28 @@ async function boot() {
 
     await loadForDate();
 }
+
+function terapkanRujukan(r) {
+    state.guru = r.guru;
+    state.kelas = urutkanKelas(r.kelas);
+    state.mapel = r.mapel;
+    state.jam = r.jam;
+    state.jadwalSepekan = r.jadwal;
+    isiKelasFilter();
+}
+
+function isiKelasFilter() {
+    const sel = document.getElementById("kelasFilter");
+    const sebelumnya = sel.value || "ALL";
+    sel.innerHTML =
+        `<option value="ALL">Semua kelas</option>` +
+        state.kelas.map((k) => `<option value="${k.id}">${k.nama_kelas}</option>`).join("");
+    sel.value = state.kelas.some((k) => k.id === sebelumnya) ? sebelumnya : "ALL";
+    state.filter.kelasId = sel.value;
+}
+
+const jadwalHariIni = () =>
+    (state.jadwalSepekan || []).filter((r) => r.hari === state.hari).sort((a, b) => a.jam_ke - b.jam_ke);
 
 function hariFromTanggal(tanggalStr) {
     const d = new Date(tanggalStr + "T00:00:00");
@@ -109,18 +130,12 @@ async function loadForDate() {
     card.hidden = false;
 
     if (isSupabaseConfigured) {
-        const [{ data: jadwal }, { data: ketidakhadiran }] = await Promise.all([
-            supabaseClient
-                .from("kg_jadwal_kbm")
-                .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id")
-                .eq("hari", state.hari)
-                .order("jam_ke"),
-            supabaseClient
-                .from("kg_ketidakhadiran_guru")
-                .select("*")
-                .eq("tanggal", state.tanggal),
-        ]);
-        state.jadwal = jadwal || [];
+        state.jadwal = jadwalHariIni();
+        const { data: ketidakhadiran, error: eK } = await supabaseClient
+            .from("kg_ketidakhadiran_guru")
+            .select("*")
+            .eq("tanggal", state.tanggal);
+        if (eK) { laporError("Gagal memuat catatan ketidakhadiran", eK); return; }
         state.ketidakhadiran = ketidakhadiran || [];
         const ids = state.ketidakhadiran.map((k) => k.id);
         const { data: pen } = ids.length

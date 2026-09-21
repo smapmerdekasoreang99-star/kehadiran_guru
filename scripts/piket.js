@@ -31,7 +31,8 @@
 import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
 import { demoData } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
-import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260921v";
+import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921aa";
 import { ambilLogoBase64 } from "../assets/excel-export.js?v=20260921v";
 
 try {
@@ -161,20 +162,27 @@ async function boot() {
     document.getElementById("notice").hidden = isSupabaseConfigured;
 
     if (isSupabaseConfigured) {
-        const [guru, jam, profil, ta] = await Promise.all([
-            terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, status_aktif, tmt_sekolah")),
-            supabaseClient.from("kg_jam_pelajaran").select("jam_ke, mulai, selesai, keterangan").order("jam_ke"),
-            // Identitas kop berkas unduhan, milik Data Induk. Gagalnya tidak
-            // menjatuhkan halaman — yang terganggu hanya kop berkasnya.
+        // Guru dan jam dari simpanan bersama. Identitas kop berkas unduhan
+        // (milik Data Induk) hanya dibutuhkan saat mengunduh, jadi diminta di
+        // latar dan tidak menahan halaman; gagalnya pun hanya mengganggu kop.
+        let rujukan;
+        try {
+            rujukan = await muatRujukan(supabaseClient, ["guru", "jam"], (r) => {
+                state.guru = r.guru;
+                state.jam = r.jam;
+                if (rentangSiap) render();
+            });
+        } catch (err) { laporError("Gagal memuat data guru", err); return; }
+        state.guru = rujukan.guru;
+        state.jam = rujukan.jam;
+        Promise.all([
             supabaseClient.from("v_penanda_tangan").select("*").limit(1),
             supabaseClient.from("tahun_ajaran").select("kode, aktif").eq("aktif", true).limit(1),
-        ]);
-        if (guru.error) { laporError("Gagal memuat data guru", guru.error); return; }
-        state.guru = guru.data || [];
-        state.jam = jam.data || [];
-        state.profil = (profil.data || [])[0] || null;
-        state.ta = ((ta.data || [])[0] || {}).kode || "";
-        if (profil.error) console.warn("Profil dokumen tidak terbaca:", profil.error.message);
+        ]).then(([profil, ta]) => {
+            state.profil = (profil.data || [])[0] || null;
+            state.ta = ((ta.data || [])[0] || {}).kode || "";
+            if (profil.error) console.warn("Profil dokumen tidak terbaca:", profil.error.message);
+        });
     } else {
         state.guru = demoData.guru.map((g) => ({ ...g, status_aktif: "Aktif" }));
         state.jam = demoData.jam || [];
@@ -345,8 +353,13 @@ async function muatRentang() {
             + "bila tetap ada petugas yang bertugas, kehadirannya boleh dipilih satu per satu.";
     }
 
+    rentangSiap = true;
     render();
 }
+
+// Pembaruan rujukan di latar boleh menggambar ulang hanya bila data
+// rentangnya sudah ada; sebelum itu tidak ada yang bisa digambar.
+let rentangSiap = false;
 
 // ---------- Daftar petugas per tanggal ----------
 const besar = (tab) => tab[0].toUpperCase() + tab.slice(1);

@@ -1,8 +1,8 @@
 import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
 import { demoData } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
-import { terapkanUrutan } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas, indeksKelas, jenisKelas } from "../assets/kelas-order.js?v=20260921v";
+import { muatRujukan, segarkanRujukan } from "../assets/simpanan.js?v=20260921aa";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -80,37 +80,59 @@ async function boot() {
     document.getElementById("notice").hidden = isSupabaseConfigured;
     document.getElementById("addBtn").disabled = !isUnlocked();
 
+    pasangKelasFilter();
+    renderDayTabs();
+
     if (isSupabaseConfigured) {
-        const [{ data: guru }, { data: kelas }, { data: mapel }, { data: jam }] =
-            await Promise.all([
-                terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, status_aktif, tmt_sekolah")),
-                supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat"),
-                supabaseClient.from("kg_mapel").select("id, nama_mapel").order("nama_mapel"),
-                supabaseClient.from("kg_jam_pelajaran").select("*").order("jam_ke"),
-            ]);
-        state.guru = guru || [];
-        state.kelas = urutkanKelas(kelas || []);
-        state.mapel = mapel || [];
-        state.jam = jam || [];
+        // Lima rujukan dari simpanan bersama: seketika bila sudah pernah
+        // dibuka, dan bila versi terbarunya ternyata berbeda, terapkanRujukan
+        // menggambar ulang di belakang.
+        let rujukan;
+        try {
+            rujukan = await muatRujukan(supabaseClient, ["guru", "kelas", "mapel", "jam", "jadwal"], terapkanRujukan);
+        } catch (err) {
+            laporError("Gagal memuat data rujukan", err);
+            return;
+        }
+        terapkanRujukan(rujukan);
     } else {
         state.guru = demoData.guru;
         state.kelas = urutkanKelas(demoData.kelas);
         state.mapel = demoData.mapel;
         state.jam = demoData.jam;
+        state.semua = demoData.jadwal;
+        isiKelasFilter();
+        populateModalSelects();
+        renderTable();
     }
-
-    populateKelasFilter();
-    populateModalSelects();
-    renderDayTabs();
-    await loadJadwal();
 }
 
-function populateKelasFilter() {
+// Dipanggil dua kali: saat halaman dibuka (dari simpanan atau jaringan) dan
+// lagi bila pembaruan di latar mendapati rujukan yang berubah.
+function terapkanRujukan(r) {
+    state.guru = r.guru;
+    state.kelas = urutkanKelas(r.kelas);
+    state.mapel = r.mapel;
+    state.jam = r.jam;
+    state.semua = r.jadwal;
+    isiKelasFilter();
+    // Pilihan di formulir tidak diganggu sewaktu formulirnya sedang diisi.
+    if (document.getElementById("jadwalModal").hidden) populateModalSelects();
+    renderTable();
+}
+
+function isiKelasFilter() {
     const sel = document.getElementById("kelasFilter");
+    const sebelumnya = sel.value || "ALL";
     sel.innerHTML =
         `<option value="ALL">Semua kelas</option>` +
         state.kelas.map((k) => `<option value="${k.id}">${k.nama_kelas}</option>`).join("");
-    sel.addEventListener("change", (e) => {
+    sel.value = state.kelas.some((k) => k.id === sebelumnya) ? sebelumnya : "ALL";
+    state.filter.kelasId = sel.value;
+}
+
+function pasangKelasFilter() {
+    document.getElementById("kelasFilter").addEventListener("change", (e) => {
         state.filter.kelasId = e.target.value;
         renderDayTabs();
         renderTable();
@@ -138,25 +160,13 @@ function renderDayTabs() {
     });
 }
 
-// ---------- Data loading (seluruh minggu, sekali) ----------
+// ---------- Muat ulang jadwal sesudah halaman ini sendiri mengubahnya ----------
+// Lewat segarkanRujukan supaya simpanan bersama ikut diperbarui saat itu juga;
+// halaman lain yang dibuka sesudahnya langsung membaca jadwal yang baru.
 async function loadJadwal() {
     if (isSupabaseConfigured) {
-        // Supabase membatasi 1.000 baris per permintaan, sedangkan jadwal seminggu
-        // melebihi itu — jadi diambil bertahap sampai habis.
-        const UKURAN = 1000;
-        let semua = [], mulai = 0;
-        for (;;) {
-            const { data, error } = await supabaseClient
-                .from("kg_jadwal_kbm")
-                .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id")
-                .order("id")
-                .range(mulai, mulai + UKURAN - 1);
-            if (error) { laporError("Gagal memuat jadwal", error); return; }
-            semua = semua.concat(data || []);
-            if (!data || data.length < UKURAN) break;
-            mulai += UKURAN;
-        }
-        state.semua = semua;
+        try { state.semua = await segarkanRujukan(supabaseClient, "jadwal"); }
+        catch (err) { laporError("Gagal memuat jadwal", err); return; }
     } else {
         state.semua = demoData.jadwal;
     }

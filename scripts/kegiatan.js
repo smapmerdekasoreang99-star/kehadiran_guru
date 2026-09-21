@@ -81,6 +81,8 @@ let state = {
     tugas: [], jenisTugas: [], ekskul: [], pembina: [],
     profil: null, tahunAjaran: "",
     q: "", guruId: null,
+    siap: false,            // seluruh data kegiatan sudah masuk, bukan daftar guru saja
+    gagal: false,           // pemuatan berhenti karena error; kotak saran ikut berkata jujur
     hasil: null,            // hasil hitung untuk guru terpilih (dipakai ulang oleh unduhan)
 };
 
@@ -112,32 +114,101 @@ const infoJenis = (nama) => state.jenisTugas.find((j) => j.nama === nama) || nul
 const namaRombel = (rombelId) =>
     state.kelas.find((k) => k.rombel_id && k.rombel_id === rombelId)?.nama_kelas || null;
 
-// ---------- Boot ----------
+// =========================================================
+// Boot — daftar guru didahulukan
+// =========================================================
+// Halaman ini membaca lima belas tabel, dan sambungan ke Supabase dari sekolah
+// pernah terukur 0,6 detik sampai 48 detik untuk permintaan yang sama persis
+// (kuerinya sendiri hanya 4 milidetik di server — yang lambat perjalanannya,
+// bukan hitungannya). Selama semuanya ditunggu dalam satu tarikan napas, kotak
+// pencarian diam tanpa satu nama pun, dan diamnya tidak bisa dibedakan dari
+// rusak.
+//
+// Jadi pemuatan dipecah dua: daftar guru lebih dulu — satu permintaan kecil,
+// itulah satu-satunya yang dibutuhkan kotak pencarian — lalu sisanya menyusul.
+// Daftar guru yang sudah pernah terbaca juga disimpan di browser, jadi pada
+// kunjungan berikutnya daftarnya terbuka seketika, bahkan sebelum jaringan
+// menjawab, dan diperbarui diam-diam begitu jawaban datang.
+const SIMPANAN_GURU = "kegiatan.guru.daftar.v1";
+let TEKS_BELUM_PILIH = "";
+
 async function boot() {
     document.getElementById("notice").hidden = isSupabaseConfigured;
+    TEKS_BELUM_PILIH = document.getElementById("belumPilih").innerHTML;
     pasangPencarian();
     document.getElementById("unduhBtn").addEventListener("click", unduhXlsx);
 
+    if (!isSupabaseConfigured) {
+        muatDemo();
+        state.siap = true;
+        pulihkanPilihan();
+        return;
+    }
+
+    bacaSimpananGuru();
     try {
-        if (isSupabaseConfigured) await muatSupabase();
-        else muatDemo();
+        await muatGuru();
+        segarkanSaran();
+        pulihkanPilihan();      // nama guru sudah cukup untuk memulihkan pilihan
+        await muatSisanya();
     } catch (err) {
+        state.gagal = true;
+        segarkanSaran();
+        if (state.guruId) pilih(state.guruId);   // ganti "memuat…" jadi keterangan gagal
         laporError("Data kegiatan guru gagal dimuat", err);
         return;
     }
-    pulihkanPilihan();
+    state.siap = true;
+    segarkanSaran();
+    // Guru yang sempat dipilih sewaktu data belum lengkap digambar ulang
+    // sekarang, kali ini dengan seluruh jadwal dan tugasnya.
+    if (state.guruId) pilih(state.guruId);
+    else pulihkanPilihan();
 }
 
-async function muatSupabase() {
+// Simpanan lokal hanya demi kecepatan: bila isinya rusak atau tak terbaca,
+// halaman tetap berjalan seperti biasa lewat jaringan.
+function bacaSimpananGuru() {
+    try {
+        const isi = JSON.parse(localStorage.getItem(SIMPANAN_GURU) || "null");
+        if (Array.isArray(isi) && isi.length) state.guru = isi;
+    } catch { /* abaikan */ }
+}
+
+function simpanGuru(daftar) {
+    try { localStorage.setItem(SIMPANAN_GURU, JSON.stringify(daftar)); } catch { /* abaikan */ }
+}
+
+// Kotak saran digambar ulang hanya bila memang sedang terbuka, supaya daftar
+// tidak tiba-tiba muncul sendiri di layar yang sedang tidak dipakai mencari.
+function segarkanSaran() {
+    if (!document.getElementById("cariSaran").hidden) renderSaran();
+}
+
+// Tahap satu: yang menghidupkan kotak pencarian. Tahun ajaran ikut di sini
+// karena tahap dua memerlukannya untuk menyaring tugas guru.
+async function muatGuru() {
+    const [{ data: guru, error: eGuru }, { data: ta }] = await Promise.all([
+        terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, status_aktif, tmt_sekolah, mapel_utama, wali_kelas, is_piket, is_staf")),
+        supabaseClient.from("tahun_ajaran").select("kode, aktif").eq("aktif", true).limit(1),
+    ]);
+    if (eGuru) throw eGuru;
+    state.guru = guru || [];
+    state.tahunAjaran = ((ta || [])[0] || {}).kode || PROFIL_BAWAAN.tahun_ajaran;
+    simpanGuru(state.guru);
+}
+
+// Tahap dua: seluruh kegiatan sepekan. Tugas guru ikut serentak di sini —
+// dulu ia menunggu giliran sesudah yang lain selesai, satu perjalanan pulang
+// pergi tambahan yang di sambungan sekolah bisa berarti belasan detik.
+async function muatSisanya() {
     const [
-        { data: guru, error: eGuru },
         { data: kelas }, { data: mapel }, { data: jam },
         { data: jadwal, error: eJadwal }, { data: piket }, { data: piketUnit },
         { data: guruUnit }, { data: parkiran },
-        { data: jenisTugas }, { data: ekskul }, { data: pembina },
-        { data: profil }, { data: ta },
+        { data: tugas, error: eTugas }, { data: jenisTugas },
+        { data: ekskul }, { data: pembina }, { data: profil },
     ] = await Promise.all([
-        terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, status_aktif, tmt_sekolah, mapel_utama, wali_kelas, is_piket, is_staf")),
         supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat, rombel_id"),
         supabaseClient.from("kg_mapel").select("id, nama_mapel"),
         supabaseClient.from("kg_jam_pelajaran").select("jam_ke, mulai, selesai, keterangan").order("jam_ke"),
@@ -147,16 +218,19 @@ async function muatSupabase() {
         supabaseClient.from("v_jadwal_piket_unit").select("tugas_id, guru_id, guru, unit, hari, jam_ke"),
         supabaseClient.from("v_guru_unit").select("tugas_id, guru_id, nama, unit, jam_per_minggu, mulai, selesai"),
         supabaseClient.from("v_piket_parkiran").select("hari, urutan_hari, guru_id, nama, catatan"),
+        // Tugas guru disaring ke tahun ajaran aktif, supaya peran tahun lalu
+        // tidak ikut terbaca sebagai tanggung jawab yang masih berjalan.
+        supabaseClient.from("guru_tugas")
+            .select("id, guru_id, jenis, rombel_id, jabatan, jam_tambahan_mengajar, keterangan, aktif, tahun_ajaran")
+            .eq("aktif", true).eq("tahun_ajaran", state.tahunAjaran),
         supabaseClient.from("jenis_tugas").select("nama, perlu_rombel, perlu_jabatan, piket_sekolah, tambah_jam_mengajar, jam_unit, urutan, aktif, penjelasan, kategori_ekskul").order("urutan"),
         supabaseClient.from("ae_ekskul").select("id, nama, pembina_id, hari, jam_mulai, jam_selesai, tempat, aktif, kategori"),
         supabaseClient.from("ae_pembina_aman").select("id, nama, id_guru, status"),
         supabaseClient.from("v_penanda_tangan").select("*").limit(1),
-        supabaseClient.from("tahun_ajaran").select("kode, aktif").eq("aktif", true).limit(1),
     ]);
-    if (eGuru) throw eGuru;
     if (eJadwal) throw eJadwal;
+    if (eTugas) throw eTugas;
 
-    state.guru = guru || [];
     state.kelas = kelas || [];
     state.mapel = mapel || [];
     state.jam = jam || [];
@@ -165,19 +239,10 @@ async function muatSupabase() {
     state.piketUnit = piketUnit || [];
     state.guruUnit = guruUnit || [];
     state.parkiran = parkiran || [];
+    state.tugas = tugas || [];
     state.jenisTugas = jenisTugas || [];
     state.ekskul = (ekskul || []).filter((e) => e.aktif !== false);
     state.pembina = pembina || [];
-    state.tahunAjaran = ((ta || [])[0] || {}).kode || PROFIL_BAWAAN.tahun_ajaran;
-
-    // Tugas guru disaring ke tahun ajaran aktif, supaya peran tahun lalu tidak
-    // ikut terbaca sebagai tanggung jawab yang masih berjalan.
-    const { data: tugas, error: eTugas } = await supabaseClient
-        .from("guru_tugas")
-        .select("id, guru_id, jenis, rombel_id, jabatan, jam_tambahan_mengajar, keterangan, aktif, tahun_ajaran")
-        .eq("aktif", true).eq("tahun_ajaran", state.tahunAjaran);
-    if (eTugas) throw eTugas;
-    state.tugas = tugas || [];
 
     susunProfil((profil || [])[0]);
 }
@@ -440,6 +505,22 @@ function pilih(guruId) {
     document.getElementById("cariSaran").hidden = true;
     try { localStorage.setItem("kegiatan.guru", guruId); } catch { /* abaikan */ }
 
+    // Nama guru sudah bisa dipilih sebelum jadwalnya tiba. Yang digambar saat
+    // itu bukan matriks kosong — matriks kosong berbohong, seolah gurunya tidak
+    // punya kegiatan apa pun — melainkan keterangan bahwa kegiatannya sedang
+    // dijemput. Boot menggambar ulang sendiri begitu datanya lengkap.
+    if (!state.siap) {
+        state.hasil = null;
+        const kabar = document.getElementById("belumPilih");
+        kabar.textContent = state.gagal
+            ? "Data kegiatan gagal dimuat — periksa sambungan lalu muat ulang halaman."
+            : `Memuat kegiatan ${state.q}…`;
+        kabar.hidden = false;
+        document.getElementById("isi").hidden = true;
+        document.getElementById("unduhBtn").disabled = true;
+        return;
+    }
+
     state.hasil = hitung(guruId);
     document.getElementById("belumPilih").hidden = true;
     document.getElementById("isi").hidden = false;
@@ -456,7 +537,9 @@ function kosongkan() {
     document.getElementById("cariGuru").value = "";
     document.getElementById("cariClear").hidden = true;
     document.getElementById("cariSaran").hidden = true;
-    document.getElementById("belumPilih").hidden = false;
+    const kabar = document.getElementById("belumPilih");
+    kabar.innerHTML = TEKS_BELUM_PILIH;
+    kabar.hidden = false;
     document.getElementById("isi").hidden = true;
     document.getElementById("unduhBtn").disabled = true;
 }
@@ -676,17 +759,21 @@ function renderSaran() {
     const hits = q ? cocok.slice(0, 8) : cocok;
 
     if (!hits.length) {
-        box.innerHTML = `<div class="suggest-empty">${q
-            ? `Tidak ada guru yang cocok dengan "${esc(state.q)}"`
-            : "Belum ada data guru yang bisa dipilih."}</div>`;
+        box.innerHTML = `<div class="suggest-empty">${state.guru.length
+            ? (q ? `Tidak ada guru yang cocok dengan "${esc(state.q)}"` : "Belum ada data guru yang bisa dipilih.")
+            : (state.gagal ? "Daftar guru gagal dimuat." : "Memuat daftar guru…")}</div>`;
     } else {
         box.innerHTML = hits.map((g) => {
-            const meta = [`${jamGuru.get(g.id) || 0} JP/minggu`, `${tugasGuru.get(g.id) || 0} tugas`];
+            // Angka jam dan tugas baru berarti setelah jadwal sepekan masuk.
+            // Selama belum, menuliskan "0 JP/minggu" hanya menyesatkan.
+            const meta = state.siap
+                ? [`${jamGuru.get(g.id) || 0} JP/minggu`, `${tugasGuru.get(g.id) || 0} tugas`]
+                : [];
             if (g.mapel_utama && g.mapel_utama !== "-") meta.unshift(g.mapel_utama);
             const tanda = g.id === state.guruId ? " terpilih" : "";
             return `<button type="button" class="suggest-item${tanda}" data-guru="${escAttr(g.id)}">
                 <span class="suggest-nama">${sorot(g.nama, q)}</span>
-                <span class="suggest-meta">${esc(meta.join(" · "))}</span>
+                ${meta.length ? `<span class="suggest-meta">${esc(meta.join(" · "))}</span>` : ""}
               </button>`;
         }).join("");
         box.querySelectorAll(".suggest-item").forEach((b) =>

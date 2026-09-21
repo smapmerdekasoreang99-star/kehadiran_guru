@@ -25,7 +25,6 @@
 import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
 import { demoData, demoKegiatan } from "../assets/demo-data.js?v=20260921v";
 import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260921v";
-import { ambilSemua } from "../assets/ambil-semua.js?v=20260921w";
 import { bukuKegiatanGuru, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921v";
 
 // ---------- Pelaporan error ke layar ----------
@@ -77,11 +76,11 @@ const kategoriEkskul = (jenis) => infoJenis(jenis)?.kategori_ekskul || null;
 // ---------- State ----------
 let state = {
     guru: [], kelas: [], mapel: [], jam: [],
-    jadwal: [], piket: [], piketUnit: [], guruUnit: [], parkiran: [],
+    jadwal: [],             // hanya jadwal guru yang sedang dibuka, bukan sepekan sekolah
+    piket: [], piketUnit: [], guruUnit: [], parkiran: [],
     tugas: [], jenisTugas: [], ekskul: [], pembina: [],
     profil: null, tahunAjaran: "",
     q: "", guruId: null,
-    siap: false,            // seluruh data kegiatan sudah masuk, bukan daftar guru saja
     gagal: false,           // pemuatan berhenti karena error; kotak saran ikut berkata jujur
     hasil: null,            // hasil hitung untuk guru terpilih (dipakai ulang oleh unduhan)
 };
@@ -92,6 +91,9 @@ const PROFIL_BAWAAN = {
     tahun_ajaran: "2026/2027", tempat: "Soreang",
     kepala_sekolah: "", kurikulum: "",
 };
+
+// Janji pemuatan data pendukung (tahap dua). pilih() menunggunya, boot tidak.
+let pendukung = null;
 
 const cariGuru = (id) => state.guru.find((g) => g.id === id) || null;
 
@@ -140,7 +142,6 @@ async function boot() {
 
     if (!isSupabaseConfigured) {
         muatDemo();
-        state.siap = true;
         pulihkanPilihan();
         return;
     }
@@ -148,22 +149,49 @@ async function boot() {
     bacaSimpananGuru();
     try {
         await muatGuru();
-        segarkanSaran();
-        pulihkanPilihan();      // nama guru sudah cukup untuk memulihkan pilihan
-        await muatSisanya();
     } catch (err) {
         state.gagal = true;
         segarkanSaran();
-        if (state.guruId) pilih(state.guruId);   // ganti "memuat…" jadi keterangan gagal
-        laporError("Data kegiatan guru gagal dimuat", err);
+        laporError("Daftar guru gagal dimuat", err);
         return;
     }
-    state.siap = true;
     segarkanSaran();
-    // Guru yang sempat dipilih sewaktu data belum lengkap digambar ulang
-    // sekarang, kali ini dengan seluruh jadwal dan tugasnya.
-    if (state.guruId) pilih(state.guruId);
-    else pulihkanPilihan();
+
+    // Tahap dua berjalan di latar dan tidak ditunggu di sini: yang menunggunya
+    // hanya pilih(), dan hanya bila memang ada guru yang dibuka. Kegagalannya
+    // tetap dilaporkan sekali supaya tidak ada yang rusak diam-diam.
+    pendukung = muatSisanya().catch((err) => {
+        state.gagal = true;
+        segarkanSaran();
+        laporError("Data pendukung kegiatan gagal dimuat", err);
+        throw err;
+    });
+    pendukung.catch(() => { /* sudah dilaporkan; sisanya ditangani di pilih() */ });
+
+    pulihkanPilihan();
+}
+
+// Jadwal KBM sepekan berisi 1.040 baris — di atas batas 1.000 baris PostgREST,
+// jadi dulu ia diangkut dua perjalanan pulang pergi sekaligus, padahal yang
+// dipakai halaman ini hanya baris milik satu guru (sekitar tiga puluh). Kini
+// yang diminta memang hanya milik guru yang dibuka: satu permintaan kecil, dan
+// hasilnya diingat selama halaman terbuka supaya berpindah-pindah guru tidak
+// berarti meminta ulang.
+const jadwalGuru = new Map();
+
+async function muatJadwalGuru(guruId) {
+    if (jadwalGuru.has(guruId)) return jadwalGuru.get(guruId);
+    let baris;
+    if (isSupabaseConfigured) {
+        const { data, error } = await supabaseClient.from("kg_jadwal_kbm")
+            .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").eq("guru_id", guruId);
+        if (error) throw error;
+        baris = data || [];
+    } else {
+        baris = demoData.jadwal.filter((r) => r.guru_id === guruId);
+    }
+    jadwalGuru.set(guruId, baris);
+    return baris;
 }
 
 // Simpanan lokal hanya demi kecepatan: bila isinya rusak atau tak terbaca,
@@ -204,7 +232,7 @@ async function muatGuru() {
 async function muatSisanya() {
     const [
         { data: kelas }, { data: mapel }, { data: jam },
-        { data: jadwal, error: eJadwal }, { data: piket }, { data: piketUnit },
+        { data: piket }, { data: piketUnit },
         { data: guruUnit }, { data: parkiran },
         { data: tugas, error: eTugas }, { data: jenisTugas },
         { data: ekskul }, { data: pembina }, { data: profil },
@@ -212,8 +240,6 @@ async function muatSisanya() {
         supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat, rombel_id"),
         supabaseClient.from("kg_mapel").select("id, nama_mapel"),
         supabaseClient.from("kg_jam_pelajaran").select("jam_ke, mulai, selesai, keterangan").order("jam_ke"),
-        ambilSemua(() => supabaseClient.from("kg_jadwal_kbm")
-            .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id")),
         supabaseClient.from("kg_piket").select("guru_id, hari, jam_ke"),
         supabaseClient.from("v_jadwal_piket_unit").select("tugas_id, guru_id, guru, unit, hari, jam_ke"),
         supabaseClient.from("v_guru_unit").select("tugas_id, guru_id, nama, unit, jam_per_minggu, mulai, selesai"),
@@ -228,13 +254,11 @@ async function muatSisanya() {
         supabaseClient.from("ae_pembina_aman").select("id, nama, id_guru, status"),
         supabaseClient.from("v_penanda_tangan").select("*").limit(1),
     ]);
-    if (eJadwal) throw eJadwal;
     if (eTugas) throw eTugas;
 
     state.kelas = kelas || [];
     state.mapel = mapel || [];
     state.jam = jam || [];
-    state.jadwal = jadwal || [];
     state.piket = piket || [];
     state.piketUnit = piketUnit || [];
     state.guruUnit = guruUnit || [];
@@ -268,7 +292,6 @@ function muatDemo() {
     state.kelas = demoData.kelas.map((k) => ({ ...k, rombel_id: k.rombel_id || k.id }));
     state.mapel = demoData.mapel;
     state.jam = demoData.jam;
-    state.jadwal = demoData.jadwal;
     state.piket = demoData.piket;
     state.piketUnit = demoKegiatan.piketUnit;
     state.guruUnit = demoKegiatan.guruUnit;
@@ -497,7 +520,12 @@ function rentangAngka(angka) {
 // =========================================================
 // Render
 // =========================================================
-function pilih(guruId) {
+// Guru bisa berganti sementara jadwal guru sebelumnya masih di jalan. Nomor
+// urut ini memastikan yang tergambar selalu guru yang terakhir dipilih, bukan
+// jawaban yang kebetulan datang belakangan.
+let urutanPilih = 0;
+
+async function pilih(guruId) {
     state.guruId = guruId;
     state.q = cariGuru(guruId)?.nama || "";
     document.getElementById("cariGuru").value = state.q;
@@ -505,22 +533,29 @@ function pilih(guruId) {
     document.getElementById("cariSaran").hidden = true;
     try { localStorage.setItem("kegiatan.guru", guruId); } catch { /* abaikan */ }
 
-    // Nama guru sudah bisa dipilih sebelum jadwalnya tiba. Yang digambar saat
-    // itu bukan matriks kosong — matriks kosong berbohong, seolah gurunya tidak
-    // punya kegiatan apa pun — melainkan keterangan bahwa kegiatannya sedang
-    // dijemput. Boot menggambar ulang sendiri begitu datanya lengkap.
-    if (!state.siap) {
-        state.hasil = null;
-        const kabar = document.getElementById("belumPilih");
-        kabar.textContent = state.gagal
-            ? "Data kegiatan gagal dimuat — periksa sambungan lalu muat ulang halaman."
-            : `Memuat kegiatan ${state.q}…`;
-        kabar.hidden = false;
-        document.getElementById("isi").hidden = true;
-        document.getElementById("unduhBtn").disabled = true;
+    const giliran = ++urutanPilih;
+    // Selama jadwalnya dijemput, yang digambar bukan matriks kosong — matriks
+    // kosong berbohong, seolah gurunya tidak punya kegiatan apa pun — melainkan
+    // keterangan bahwa isinya sedang dalam perjalanan.
+    const kabar = document.getElementById("belumPilih");
+    state.hasil = null;
+    kabar.textContent = `Memuat kegiatan ${state.q}…`;
+    kabar.hidden = false;
+    document.getElementById("isi").hidden = true;
+    document.getElementById("unduhBtn").disabled = true;
+
+    let jadwal;
+    try {
+        [jadwal] = await Promise.all([muatJadwalGuru(guruId), pendukung]);
+    } catch (err) {
+        if (giliran !== urutanPilih) return;
+        if (!state.gagal) laporError("Kegiatan guru gagal dimuat", err);
+        kabar.textContent = "Data kegiatan gagal dimuat — periksa sambungan lalu muat ulang halaman.";
         return;
     }
+    if (giliran !== urutanPilih) return;   // sudah keburu pindah ke guru lain
 
+    state.jadwal = jadwal;
     state.hasil = hitung(guruId);
     document.getElementById("belumPilih").hidden = true;
     document.getElementById("isi").hidden = false;
@@ -743,13 +778,6 @@ function renderSaran() {
     // terpilih, kata kuncinya dianggap kosong dan daftarnya utuh.
     const q = state.guruId ? "" : state.q.trim().toLowerCase();
 
-    // Angka di bawah nama membantu memilih orang yang benar saat ada dua nama
-    // mirip — sekaligus memperlihatkan lebih dulu siapa yang jadwalnya kosong.
-    const jamGuru = new Map();
-    for (const r of state.jadwal) jamGuru.set(r.guru_id, (jamGuru.get(r.guru_id) || 0) + 1);
-    const tugasGuru = new Map();
-    for (const t of state.tugas) tugasGuru.set(t.guru_id, (tugasGuru.get(t.guru_id) || 0) + 1);
-
     const urut = peringkatGuru(state.guru);
     const cocok = state.guru
         .filter((g) => guruAktif(g) && g.nama.toLowerCase().includes(q))
@@ -764,12 +792,13 @@ function renderSaran() {
             : (state.gagal ? "Daftar guru gagal dimuat." : "Memuat daftar guru…")}</div>`;
     } else {
         box.innerHTML = hits.map((g) => {
-            // Angka jam dan tugas baru berarti setelah jadwal sepekan masuk.
-            // Selama belum, menuliskan "0 JP/minggu" hanya menyesatkan.
-            const meta = state.siap
-                ? [`${jamGuru.get(g.id) || 0} JP/minggu`, `${tugasGuru.get(g.id) || 0} tugas`]
-                : [];
-            if (g.mapel_utama && g.mapel_utama !== "-") meta.unshift(g.mapel_utama);
+            // Keterangan pembeda diambil dari kolom v_guru yang sudah ada di
+            // tangan — mapel dan wali kelas. Angka jam mengajar dulu ditulis di
+            // sini, tapi angka itu menuntut jadwal seluruh sekolah ikut diangkut
+            // lebih dulu, dan harganya belasan detik diam.
+            const meta = [];
+            if (g.mapel_utama && g.mapel_utama !== "-") meta.push(g.mapel_utama);
+            if (g.wali_kelas) meta.push(`Wali kelas ${g.wali_kelas}`);
             const tanda = g.id === state.guruId ? " terpilih" : "";
             return `<button type="button" class="suggest-item${tanda}" data-guru="${escAttr(g.id)}">
                 <span class="suggest-nama">${sorot(g.nama, q)}</span>

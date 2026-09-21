@@ -656,6 +656,10 @@ textarea {
 }
 .suggest-item:last-child { border-bottom: none; }
 .suggest-item:hover { background: var(--gold-tint); }
+/* Daftar lengkap terbuka tanpa mengetik, jadi yang sedang dipakai perlu
+   penanda supaya posisinya langsung ketemu di daftar panjang. */
+.suggest-item.terpilih { background: var(--gold-tint); box-shadow: inset 3px 0 0 var(--gold); }
+.suggest-item.terpilih .suggest-nama { font-weight: 700; }
 .suggest-nama { font-size: 14px; }
 .suggest-nama mark { background: transparent; color: var(--gold-deep); font-weight: 700; }
 .suggest-meta { font-size: 12px; color: var(--ink-muted); white-space: nowrap; }

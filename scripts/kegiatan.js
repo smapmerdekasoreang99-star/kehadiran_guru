@@ -25,6 +25,7 @@
 import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
 import { demoData, demoKegiatan } from "../assets/demo-data.js?v=20260921v";
 import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260921v";
+import { ambilSemua } from "../assets/ambil-semua.js?v=20260921w";
 import { bukuKegiatanGuru, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921v";
 
 // ---------- Pelaporan error ke layar ----------
@@ -131,7 +132,7 @@ async function muatSupabase() {
     const [
         { data: guru, error: eGuru },
         { data: kelas }, { data: mapel }, { data: jam },
-        { data: jadwal }, { data: piket }, { data: piketUnit },
+        { data: jadwal, error: eJadwal }, { data: piket }, { data: piketUnit },
         { data: guruUnit }, { data: parkiran },
         { data: jenisTugas }, { data: ekskul }, { data: pembina },
         { data: profil }, { data: ta },
@@ -140,7 +141,8 @@ async function muatSupabase() {
         supabaseClient.from("kg_kelas").select("id, nama_kelas, tingkat, rombel_id"),
         supabaseClient.from("kg_mapel").select("id, nama_mapel"),
         supabaseClient.from("kg_jam_pelajaran").select("jam_ke, mulai, selesai, keterangan").order("jam_ke"),
-        supabaseClient.from("kg_jadwal_kbm").select("id, hari, jam_ke, kelas_id, mapel_id, guru_id"),
+        ambilSemua(() => supabaseClient.from("kg_jadwal_kbm")
+            .select("id, hari, jam_ke, kelas_id, mapel_id, guru_id").order("id")),
         supabaseClient.from("kg_piket").select("guru_id, hari, jam_ke"),
         supabaseClient.from("v_jadwal_piket_unit").select("tugas_id, guru_id, guru, unit, hari, jam_ke"),
         supabaseClient.from("v_guru_unit").select("tugas_id, guru_id, nama, unit, jam_per_minggu, mulai, selesai"),
@@ -152,6 +154,7 @@ async function muatSupabase() {
         supabaseClient.from("tahun_ajaran").select("kode, aktif").eq("aktif", true).limit(1),
     ]);
     if (eGuru) throw eGuru;
+    if (eJadwal) throw eJadwal;
 
     state.guru = guru || [];
     state.kelas = kelas || [];
@@ -637,15 +640,25 @@ function renderMatriks() {
 // Pencarian guru
 // =========================================================
 function sorot(teks, q) {
+    if (!q) return esc(teks);
     const i = teks.toLowerCase().indexOf(q);
     if (i < 0) return esc(teks);
     return `${esc(teks.slice(0, i))}<mark>${esc(teks.slice(i, i + q.length))}</mark>${esc(teks.slice(i + q.length))}`;
 }
 
+/* Kotak saran ini merangkap dua peran, sama seperti di halaman Jadwal KBM.
+   Sewaktu kotak isian masih kosong ia menjadi daftar pilihan biasa: seluruh
+   guru aktif langsung terlihat begitu kotaknya diklik, tidak menunggu huruf
+   pertama diketik — nama guru di sini panjang-panjang dan bergelar, jadi
+   menebak huruf awalnya justru pekerjaan tambahan. Sewaktu ada yang diketik ia
+   kembali menyaring seperti biasa. */
 function renderSaran() {
     const box = document.getElementById("cariSaran");
-    const q = state.q.trim().toLowerCase();
-    if (!q || state.guruId) { box.hidden = true; return; }
+    // Nama guru yang sedang dibuka memenuhi kotak isian. Bila nama itu ikut
+    // dipakai sebagai kata kunci, daftarnya menyusut menjadi satu baris —
+    // padahal yang dicari saat itu justru nama lain. Jadi selama ada guru
+    // terpilih, kata kuncinya dianggap kosong dan daftarnya utuh.
+    const q = state.guruId ? "" : state.q.trim().toLowerCase();
 
     // Angka di bawah nama membantu memilih orang yang benar saat ada dua nama
     // mirip — sekaligus memperlihatkan lebih dulu siapa yang jadwalnya kosong.
@@ -655,18 +668,23 @@ function renderSaran() {
     for (const t of state.tugas) tugasGuru.set(t.guru_id, (tugasGuru.get(t.guru_id) || 0) + 1);
 
     const urut = peringkatGuru(state.guru);
-    const hits = state.guru
+    const cocok = state.guru
         .filter((g) => guruAktif(g) && g.nama.toLowerCase().includes(q))
-        .sort((a, b) => urut(a.id) - urut(b.id))
-        .slice(0, 8);
+        .sort((a, b) => urut(a.id) - urut(b.id));
+    // Sewaktu mengetik daftarnya dipangkas supaya yang paling cocok terbaca
+    // tanpa digulung; sewaktu kosong justru sebaliknya — tampilkan semuanya.
+    const hits = q ? cocok.slice(0, 8) : cocok;
 
     if (!hits.length) {
-        box.innerHTML = `<div class="suggest-empty">Tidak ada guru yang cocok dengan "${esc(state.q)}"</div>`;
+        box.innerHTML = `<div class="suggest-empty">${q
+            ? `Tidak ada guru yang cocok dengan "${esc(state.q)}"`
+            : "Belum ada data guru yang bisa dipilih."}</div>`;
     } else {
         box.innerHTML = hits.map((g) => {
             const meta = [`${jamGuru.get(g.id) || 0} JP/minggu`, `${tugasGuru.get(g.id) || 0} tugas`];
             if (g.mapel_utama && g.mapel_utama !== "-") meta.unshift(g.mapel_utama);
-            return `<button type="button" class="suggest-item" data-guru="${escAttr(g.id)}">
+            const tanda = g.id === state.guruId ? " terpilih" : "";
+            return `<button type="button" class="suggest-item${tanda}" data-guru="${escAttr(g.id)}">
                 <span class="suggest-nama">${sorot(g.nama, q)}</span>
                 <span class="suggest-meta">${esc(meta.join(" · "))}</span>
               </button>`;
@@ -676,6 +694,8 @@ function renderSaran() {
         );
     }
     box.hidden = false;
+    // Daftar seluruh guru itu panjang: yang sedang dibuka dibawa ke dalam pandangan.
+    box.querySelector(".suggest-item.terpilih")?.scrollIntoView({ block: "nearest" });
 }
 
 function pasangPencarian() {
@@ -694,7 +714,10 @@ function pasangPencarian() {
             if (first) pilih(first.dataset.guru);
         }
     });
+    // Fokus untuk klik pertama; klik untuk klik-klik berikutnya, sewaktu kotak
+    // isian sudah dipegang dan daftar sebelumnya ditutup karena satu nama dipilih.
     input.addEventListener("focus", renderSaran);
+    input.addEventListener("click", renderSaran);
     input.addEventListener("blur", () => setTimeout(() => (document.getElementById("cariSaran").hidden = true), 120));
     document.getElementById("cariClear").addEventListener("click", kosongkan);
 }

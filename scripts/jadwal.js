@@ -596,35 +596,47 @@ function pasangMatriks() {
 
 // ---------- Pencarian guru / mapel ----------
 function sorot(teks, q) {
+    if (!q) return teks;
     const i = teks.toLowerCase().indexOf(q);
     if (i < 0) return teks;
     return `${teks.slice(0, i)}<mark>${teks.slice(i, i + q.length)}</mark>${teks.slice(i + q.length)}`;
 }
 
+/* Kotak saran ini merangkap dua peran. Saat sudah ada yang diketik ia menyaring;
+   saat masih kosong ia berlaku sebagai daftar pilihan biasa — seluruh guru yang
+   punya jadwal langsung terlihat, tidak menunggu huruf pertama diketik. Guru
+   yang sedang terpilih pun tetap bisa diganti dari sini tanpa menghapus isian
+   dulu. */
 function renderSaran() {
     const box = document.getElementById("cariSaran");
-    const q = state.filter.q.trim().toLowerCase();
-    if (!q || modeCari()) { box.hidden = true; return; }
+    const q = modeCari() ? "" : state.filter.q.trim().toLowerCase();
 
     const jamGuru = new Map(), jamMapel = new Map();
     for (const r of state.semua) {
         jamGuru.set(r.guru_id, (jamGuru.get(r.guru_id) || 0) + 1);
         jamMapel.set(r.mapel_id, (jamMapel.get(r.mapel_id) || 0) + 1);
     }
-    const guruHits = state.guru.filter((g) => g.nama.toLowerCase().includes(q) && jamGuru.has(g.id)).slice(0, 6);
-    const mapelHits = state.mapel.filter((m) => m.nama_mapel.toLowerCase().includes(q) && jamMapel.has(m.id)).slice(0, 4);
+    const guruAda = state.guru.filter((g) => jamGuru.has(g.id) && g.nama.toLowerCase().includes(q));
+    const mapelAda = state.mapel.filter((m) => jamMapel.has(m.id) && m.nama_mapel.toLowerCase().includes(q));
+    // Sewaktu mengetik daftarnya dipangkas supaya yang paling cocok terbaca
+    // tanpa digulung. Sewaktu kosong justru sebaliknya: tampilkan semuanya.
+    const guruHits = q ? guruAda.slice(0, 6) : guruAda;
+    const mapelHits = q ? mapelAda.slice(0, 4) : mapelAda;
 
     if (!guruHits.length && !mapelHits.length) {
-        box.innerHTML = `<div class="suggest-empty">Tidak ada guru atau mata pelajaran yang cocok dengan "${state.filter.q}"</div>`;
+        box.innerHTML = `<div class="suggest-empty">${q
+            ? `Tidak ada guru atau mata pelajaran yang cocok dengan "${state.filter.q}"`
+            : "Belum ada jadwal yang bisa dipilih."}</div>`;
     } else {
+        const terpilih = (id) => (id && id === (state.filter.guruId || state.filter.mapelId) ? " terpilih" : "");
         box.innerHTML =
             guruHits.map((g) => `
-              <button type="button" class="suggest-item" data-guru="${g.id}">
+              <button type="button" class="suggest-item${terpilih(g.id)}" data-guru="${g.id}">
                 <span class="suggest-nama">${sorot(g.nama, q)}</span>
                 <span class="suggest-meta">Guru · ${jamGuru.get(g.id)} jam/minggu</span>
               </button>`).join("") +
             mapelHits.map((m) => `
-              <button type="button" class="suggest-item" data-mapel="${m.id}">
+              <button type="button" class="suggest-item${terpilih(m.id)}" data-mapel="${m.id}">
                 <span class="suggest-nama">${sorot(m.nama_mapel, q)}</span>
                 <span class="suggest-meta">Mapel · ${jamMapel.get(m.id)} jam/minggu</span>
               </button>`).join("");
@@ -636,6 +648,8 @@ function renderSaran() {
         );
     }
     box.hidden = false;
+    // Daftar panjang: yang sedang terpilih dibawa ke dalam pandangan.
+    box.querySelector(".suggest-item.terpilih")?.scrollIntoView({ block: "nearest" });
 }
 
 function pilih(guruId, mapelId) {

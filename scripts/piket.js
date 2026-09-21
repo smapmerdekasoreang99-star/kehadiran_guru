@@ -32,8 +32,8 @@ import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.
 import { demoData } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921ab";
-import { ambilLogoBase64 } from "../assets/excel-export.js?v=20260921v";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921ac";
+import { ambilLogoBase64 } from "../assets/excel-export.js?v=20260921ac";
 
 try {
     initLockUI(() => render());

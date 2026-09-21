@@ -2,7 +2,7 @@
 // Simpanan bersama data rujukan — Sistem Guru Pengganti
 // =========================================================
 // Data rujukan — guru, kelas, mata pelajaran, jam pelajaran, jadwal KBM
-// sepekan, jadwal piket, tugas guru, ekskul, profil sekolah — dibaca hampir
+// sepekan, jadwal piket, ekskul, profil sekolah — dibaca hampir
 // setiap halaman, dan isinya berubah paling-paling beberapa kali dalam satu
 // semester. Tidak satu pun diubah dari aplikasi ini; penyusunnya Data Induk
 // dan Absensi Ekskul. Yang berubah setiap hari — ketidakhadiran, penugasan
@@ -39,7 +39,7 @@
 
 import { terapkanUrutan } from "./guru-order.js?v=20260921v";
 
-const AWALAN = "kg.rujukan.v1.";
+const AWALAN = "kg.rujukan.v2.";   // v2: kelas membawa jenis & mapel_id
 
 // Kolom yang diambil adalah GABUNGAN kebutuhan seluruh halaman — sesuai
 // kontrak di database/kontrak/kehadiran_guru.sql — supaya satu simpanan
@@ -48,7 +48,7 @@ const AWALAN = "kg.rujukan.v1.";
 const RUJUKAN = {
     guru:   (sb) => terapkanUrutan(sb.from("v_guru")
                 .select("id, nama, status_aktif, mapel_utama, wali_kelas, is_piket, tmt_sekolah, is_staf, insentif_fingerprint")),
-    kelas:  (sb) => sb.from("kg_kelas").select("id, nama_kelas, tingkat, rombel_id"),
+    kelas:  (sb) => sb.from("kg_kelas").select("id, nama_kelas, tingkat, rombel_id, jenis, mapel_id"),
     mapel:  (sb) => sb.from("kg_mapel").select("id, nama_mapel, rumpun_mapel").order("nama_mapel"),
     jam:    (sb) => sb.from("kg_jam_pelajaran").select("jam_ke, mulai, selesai, keterangan").order("jam_ke"),
     jadwal: (sb) => ambilJadwalSepekan(sb),
@@ -57,14 +57,6 @@ const RUJUKAN = {
     piketUnit: (sb) => sb.from("v_jadwal_piket_unit").select("tugas_id, guru_id, guru, unit, hari, jam_ke"),
     guruUnit:  (sb) => sb.from("v_guru_unit").select("tugas_id, guru_id, nama, unit, jam_per_minggu, mulai, selesai"),
     parkiran:  (sb) => sb.from("v_piket_parkiran").select("hari, urutan_hari, guru_id, nama, catatan"),
-    // Tugas guru seluruh tahun ajaran yang masih aktif; halaman menyaring ke
-    // tahun ajaran berjalan sendiri, supaya tidak bergantung urutan permintaan.
-    tugas:      (sb) => sb.from("guru_tugas")
-                    .select("id, guru_id, jenis, rombel_id, jabatan, jam_tambahan_mengajar, keterangan, aktif, tahun_ajaran")
-                    .eq("aktif", true),
-    jenisTugas: (sb) => sb.from("jenis_tugas")
-                    .select("nama, perlu_rombel, perlu_jabatan, piket_sekolah, tambah_jam_mengajar, jam_unit, urutan, aktif, penjelasan, kategori_ekskul")
-                    .order("urutan"),
     // Milik Absensi Ekskul; dibaca untuk kolom "Setelah KBM" di Kegiatan.
     ekskul:  (sb) => sb.from("ae_ekskul").select("id, nama, pembina_id, hari, jam_mulai, jam_selesai, tempat, aktif, kategori"),
     pembina: (sb) => sb.from("ae_pembina_aman").select("id, nama, id_guru, status"),

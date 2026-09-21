@@ -3,9 +3,9 @@ import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas } from "../assets/kelas-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921ab";
+import { muatRujukan } from "../assets/simpanan.js?v=20260921ac";
 import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260921v";
-import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921v";
+import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921ac";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor

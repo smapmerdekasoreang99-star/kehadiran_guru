@@ -1173,3 +1173,121 @@ tr.total td {
     line-height: 1.3;
     white-space: nowrap;
 }
+
+/* ---------- Pelaksanaan Piket: matriks pita nama ----------
+   Bentuknya sengaja sama dengan matriks jadwal piket di Data Induk —
+   orang yang sama memakai kedua halaman itu. Yang berbeda hanya arti
+   warnanya: di sana warna berarti dasar penugasan, di sini berarti
+   keadaan kehadiran, memakai hijau/merah yang sama dengan seluruh
+   aplikasi (lihat aturan 3 di dasar.css). */
+.piket-legenda {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 20px;
+    margin: 0 0 14px;
+}
+.pk-legenda { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-muted); }
+.pk-legenda::before {
+    content: "";
+    width: 20px; height: 12px;
+    border-radius: 4px;
+    background: var(--pk-bg);
+    border-left: 3px solid var(--pk-aksen);
+}
+.pk-legenda.hadir { --pk-bg: var(--hadir-muda); --pk-aksen: var(--hadir); }
+.pk-legenda.absen { --pk-bg: var(--absen-muda); --pk-aksen: var(--absen); }
+.pk-legenda.draf  { --pk-bg: var(--surface);    --pk-aksen: var(--garis-2); }
+.pk-legenda.draf::before { border-left-style: dashed; }
+.pk-legenda-teks { font-size: 12px; color: var(--ink-muted); font-style: italic; }
+
+/* Baris tanggal ringkas: pita ramping, sel tidak dipaksa setinggi blok jadwal. */
+.matriks td.pk-sel { height: 32px; padding: 3px; vertical-align: top; }
+.matriks td.pk-nol { background: var(--kertas-3); }
+.matriks tr.libur th.m-label { background: var(--flame-tint); box-shadow: inset 3px 0 0 var(--flame); }
+.matriks th.pk-tanpa-jam { background: var(--kertas-3); }
+
+.pk-pita, .pk-kosong { height: 20px; margin-bottom: 2px; }
+.pk-pita {
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--pk-bg);
+    border-left: 3px solid var(--pk-aksen);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: filter 0.12s;
+}
+.pk-pita.hadir { --pk-bg: var(--hadir-muda); --pk-aksen: var(--hadir); }
+.pk-pita.absen { --pk-bg: var(--absen-muda); --pk-aksen: var(--absen); }
+.pk-pita.draf  { --pk-bg: var(--surface);    --pk-aksen: var(--garis-2);
+    border: 1px dashed var(--garis-2); border-left: 3px solid var(--garis-2); color: var(--ink-muted); }
+.pk-tanda { margin-left: 4px; color: var(--emas-teks); }
+
+.matriks.bisa-ubah .pk-pita { cursor: pointer; }
+.matriks.bisa-ubah .pk-pita:hover { filter: brightness(0.94); }
+
+/* jam berturut-turut milik orang yang sama tersambung menjadi satu pita */
+.pk-pita.ke-kanan { margin-right: -3px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.pk-pita.dari-kiri {
+    margin-left: -3px;
+    border-left: none;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    color: transparent;
+    box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.75);
+}
+.pk-pita.draf.ke-kanan { border-right: none; }
+.pk-pita.draf.dari-kiri { border-left: none; }
+.pk-pita.ke-kanan:not(.dari-kiri) { overflow: visible; text-overflow: clip; position: relative; z-index: 1; }
+
+/* ---------- Pelaksanaan Piket: matriks parkiran (kolom = hari) ----------
+   Parkiran tidak mengenal jam pelajaran, jadi matriksnya berbentuk
+   penanggalan: satu baris satu pekan, satu sel satu tanggal. */
+.matriks th.m-hari {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+}
+.matriks td.pk-hari-sel { height: 62px; padding: 5px 6px; vertical-align: top; }
+.matriks td.pk-luar {
+    background: repeating-linear-gradient(135deg, transparent 0 5px, rgba(201, 154, 46, 0.12) 5px 6px), var(--kertas);
+}
+.matriks td.pk-libur { background: var(--flame-tint); }
+.pk-tgl { display: block; font-size: 10.5px; font-weight: 600; color: var(--ink-muted); margin-bottom: 4px; }
+.pk-tgl-libur { color: var(--absen); font-weight: 700; }
+.pk-pita.lebar { height: 24px; font-size: 11.5px; padding: 0 8px; border-radius: 5px; }
+.pk-kosong-teks { font-size: 10.5px; color: var(--ink-muted); font-style: italic; }
+
+/* ---------- Dialog pilih kehadiran ----------
+   Dua tombol sebesar sasaran sentuh, bukan daftar pilihan: yang dipilih
+   di sini hanya satu hal, dan memilihnya langsung menyimpan. */
+.pilih-hadir { display: flex; gap: 10px; margin: 0 0 18px; }
+.pilih-hadir button {
+    flex: 1;
+    min-height: var(--sentuh);
+    padding: 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 14px;
+}
+.pilih-hadir .pilih-ya { background: var(--hadir-muda); border-color: var(--hadir); color: var(--hadir-tua); }
+.pilih-hadir .pilih-tidak { background: var(--absen-muda); border-color: var(--absen); color: var(--absen-tua); }
+.pilih-hadir button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px currentColor; }
+.pilih-hadir button[aria-pressed="true"]::after { content: " ✓"; }
+/* Petunjuk di bawah isian biasa tidak punya kotak centang di kirinya. */
+.field > .field-hint { margin-left: 0; }
+
+/* Catatan yang petugasnya tidak ada di jadwal tanggal itu: jadwalnya
+   berubah sesudah pelaksanaannya dicatat. Tetap tampil supaya bisa
+   dibatalkan satu per satu — ditandai, karena bukan giliran terjadwal. */
+.pk-pita.tercecer { outline: 1px dotted var(--emas-teks); outline-offset: -1px; }

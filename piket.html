@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/dasar.css?v=2">
-<link rel="stylesheet" href="assets/style.css?v=20260920w" />
+<link rel="stylesheet" href="assets/style.css?v=20260921p" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -31,19 +31,22 @@
     <div class="sidebar-foot">Sistem Guru Pengganti<br/>Tahun Ajaran 2026/2027</div>
   </aside>
 
-  <main>
+  <main class="lebar">
     <div class="page-head">
       <div>
         <h1>Pelaksanaan Piket</h1>
-        <p>Catat siapa yang benar-benar menjalankan piket hari itu — meja sekolah, unit, dan parkiran.
-          Semuanya sudah terisi <b>Hadir</b> karena umumnya memang hadir: ubah yang menyimpang,
-          lalu simpan sisanya sekaligus.</p>
+        <p>Catat siapa yang benar-benar menjalankan piket — meja sekolah, unit, dan parkiran.
+          Bentuknya matriks seperti jadwal piket di Data Induk: <b>ketuk nama petugasnya</b>,
+          lalu pilih kehadirannya. Pilihannya sudah tertuju ke <b>Hadir</b> karena umumnya
+          memang hadir.</p>
       </div>
       <div class="page-head-actions">
         <div class="date-field">
-          <label for="tanggalPicker">Tanggal</label>
-          <input type="date" id="tanggalPicker" />
-          <span class="hari-badge">Hari: <span id="hariLabel">—</span></span>
+          <label for="tglAwal">Dari</label>
+          <input type="date" id="tglAwal" />
+          <label for="tglAkhir">sampai</label>
+          <input type="date" id="tglAkhir" />
+          <span class="hari-badge" id="rentangLabel">—</span>
         </div>
         <button id="lockToggle" class="btn-lock">🔒 Buka Kunci Edit</button>
       </div>
@@ -54,17 +57,22 @@
       hanya tersimpan sementara di halaman ini.
     </div>
 
-    <div id="weekendNotice" class="weekend-notice" hidden>
-      Tidak ada piket pada hari ini (Sabtu/Minggu). Pilih tanggal hari kerja (Senin–Jumat).
-    </div>
+    <div id="pesanRentang" class="weekend-notice" hidden></div>
 
-    <div id="liburNotice" class="weekend-notice" hidden></div>
+    <div id="liburNotice" class="notice" hidden></div>
 
     <div id="mainCard">
       <div class="rekap-tabs">
         <button type="button" class="rekap-tab active" data-tab="meja">Piket Meja Sekolah</button>
         <button type="button" class="rekap-tab" data-tab="unit">Piket Unit</button>
         <button type="button" class="rekap-tab" data-tab="parkiran">Piket Parkiran</button>
+      </div>
+
+      <div class="piket-legenda">
+        <span class="pk-legenda hadir">Hadir</span>
+        <span class="pk-legenda absen">Tidak hadir</span>
+        <span class="pk-legenda draf">Belum dicatat</span>
+        <span class="pk-legenda-teks">Ketuk nama untuk memilih kehadirannya.</span>
       </div>
 
       <!-- TAB: meja sekolah -->
@@ -76,21 +84,10 @@
             <button type="button" id="simpanMeja" class="btn btn-primary">Simpan yang belum tercatat</button>
           </div>
         </div>
-        <div class="table-scroll">
-          <table class="tabel-rekap">
-            <thead>
-              <tr>
-                <th>Petugas</th>
-                <th style="width:150px">Jam jaga</th>
-                <th style="width:210px">Status</th>
-                <th>Catatan</th>
-              </tr>
-            </thead>
-            <tbody id="bodyMeja"></tbody>
-          </table>
-        </div>
-        <div id="kosongMeja" class="empty-state" hidden>Tidak ada petugas piket meja sekolah pada hari ini. Jadwalnya diatur di Data Induk → Piket &amp; Honor.</div>
-        <div class="table-foot">Dasar jadwalnya adalah jadwal piket meja sekolah. Satu baris per petugas per hari, bukan per jam pelajaran.</div>
+        <div class="matriks-scroll"><table id="matriksMeja" class="matriks"></table></div>
+        <div id="kosongMeja" class="empty-state" hidden>Tidak ada petugas piket meja sekolah pada rentang ini. Jadwalnya diatur di Data Induk &rarr; Piket &amp; Honor.</div>
+        <div class="table-foot">Baris adalah tanggal, kolom adalah jam pelajaran &mdash; sama dengan matriks jadwal piket di Data Induk.
+          Kehadiran dicatat satu kali per petugas per tanggal, jadi memilih pada jam mana pun berlaku untuk seluruh jam jaganya hari itu.</div>
       </section>
 
       <!-- TAB: unit -->
@@ -102,21 +99,10 @@
             <button type="button" id="simpanUnit" class="btn btn-primary">Simpan yang belum tercatat</button>
           </div>
         </div>
-        <div class="table-scroll">
-          <table class="tabel-rekap">
-            <thead>
-              <tr>
-                <th>Penanggung jawab</th>
-                <th style="width:190px">Unit</th>
-                <th style="width:210px">Status</th>
-                <th>Catatan</th>
-              </tr>
-            </thead>
-            <tbody id="bodyUnit"></tbody>
-          </table>
-        </div>
-        <div id="kosongUnit" class="empty-state" hidden>Belum ada guru diperbantukan pada tahun ajaran ini. Dicatat di Data Induk → Tugas Guru, jenis "Diperbantukan".</div>
-        <div class="table-foot">Guru yang diperbantukan menjaga unitnya (mis. Lab IPA, Perpustakaan) pada jam piket unit yang tercatat di Data Induk.</div>
+        <div class="matriks-scroll"><table id="matriksUnit" class="matriks"></table></div>
+        <div id="kosongUnit" class="empty-state" hidden>Belum ada guru diperbantukan pada tahun ajaran ini. Dicatat di Data Induk &rarr; Tugas Guru, jenis &ldquo;Diperbantukan&rdquo;.</div>
+        <div class="table-foot">Guru yang diperbantukan menjaga unitnya (mis. Lab IPA, Perpustakaan) pada jam piket unit yang tercatat di Data Induk.
+          Penanggung jawab yang jam jaganya belum dijadwalkan di sana muncul di kolom <b>tanpa jam</b>, dan kehadirannya tetap bisa dicatat.</div>
       </section>
 
       <!-- TAB: parkiran -->
@@ -128,23 +114,38 @@
             <button type="button" id="simpanParkiran" class="btn btn-primary">Simpan yang belum tercatat</button>
           </div>
         </div>
-        <div class="table-scroll">
-          <table class="tabel-rekap">
-            <thead>
-              <tr>
-                <th>Petugas</th>
-                <th style="width:210px">Status</th>
-                <th>Catatan</th>
-              </tr>
-            </thead>
-            <tbody id="bodyParkiran"></tbody>
-          </table>
-        </div>
-        <div id="kosongParkiran" class="empty-state" hidden>Belum ada petugas parkiran untuk hari ini. Tetapkan di Data Induk → Piket &amp; Honor → Piket parkiran.</div>
+        <div class="matriks-scroll"><table id="matriksParkiran" class="matriks"></table></div>
+        <div id="kosongParkiran" class="empty-state" hidden>Belum ada petugas parkiran. Tetapkan di Data Induk &rarr; Piket &amp; Honor &rarr; Piket parkiran.</div>
         <div class="table-foot" id="footParkiran"></div>
       </section>
     </div>
   </main>
+</div>
+
+<!-- Modal: pilih kehadiran satu petugas pada satu tanggal -->
+<div id="statusModal" class="modal-backdrop" hidden>
+  <div class="modal" style="max-width:400px;">
+    <h2 id="statusNama">&mdash;</h2>
+    <p id="statusSub" style="margin:-10px 0 16px;color:#6E6455;font-size:13.5px;"></p>
+
+    <p id="statusLibur" class="notice" hidden style="margin-bottom:16px;"></p>
+
+    <div class="field">
+      <label for="statusCatatan">Catatan (opsional)</label>
+      <input type="text" id="statusCatatan" placeholder="mis. datang terlambat, tukar hari" />
+      <p class="field-hint">Isi dulu bila perlu, lalu pilih kehadirannya di bawah &mdash; pilihan langsung tersimpan.</p>
+    </div>
+
+    <div class="pilih-hadir">
+      <button type="button" class="pilih-ya" data-status="Hadir">Hadir</button>
+      <button type="button" class="pilih-tidak" data-status="Tidak Hadir">Tidak Hadir</button>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" id="statusHapus" class="btn btn-danger-text" hidden>Batalkan catatan</button>
+      <button type="button" id="statusTutup" class="btn btn-ghost">Tutup</button>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: PIN (satu kali per sesi browser) -->
@@ -166,6 +167,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/piket.js?v=20260920w"></script>
+<script type="module" src="scripts/piket.js?v=20260921p"></script>
 </body>
 </html>

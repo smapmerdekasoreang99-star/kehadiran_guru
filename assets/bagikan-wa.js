@@ -91,9 +91,37 @@ const C = {
     bg: "#FAF7F0", surface: "#FFFFFF", ink: "#221E17", muted: "#5E5548",
     gold: "#C29433", goldTint: "#FFF6D2", line: "#D6CCB6",
     flameTint: "#F7E4DF", flame: "#A8432E",
-    biruMuda: "#CBDCEA",   // latar kepala gambar
-    biru: "#2F5D7C",       // garis pembatas di bawahnya
 };
+
+/* Nuansa kepala gambar mengikuti berat hari itu: makin banyak jam pelajaran
+   yang harus dicarikan pengganti, makin “berat” warnanya. Lima tingkat saja
+   supaya pembaca di grup WhatsApp bisa menebak keadaan sebelum membaca
+   tabelnya. Tiap tingkat membawa warna tulisannya sendiri karena tingkat
+   terakhir berlatar gelap. */
+const NUANSA = [
+    { maks: 2, nama: "lega", latar: "#D9EBD3", garis: "#4C7A44", tulisan: "#1B3517", redup: "#3F6639" },
+    { maks: 5, nama: "wajar", latar: "#E8F0CE", garis: "#6E7F35", tulisan: "#28310F", redup: "#54632A" },
+    { maks: 9, nama: "padat", latar: "#FBEFC6", garis: "#A07A1E", tulisan: "#3A2E0E", redup: "#6B5415" },
+    { maks: 14, nama: "berat", latar: "#F6DAC2", garis: "#B4642A", tulisan: "#42230C", redup: "#87471C" },
+    { maks: Infinity, nama: "genting", latar: "#8C3423", garis: "#5E2015", tulisan: "#FFF3EE", redup: "#EFCCC2" },
+];
+
+// Jumlah jam pelajaran yang harus diganti — satu baris bisa memuat
+// beberapa jam berurutan (mis. "3–4"), jadi dihitung dari rentangnya.
+export function hitungJam(kelompok) {
+    let n = 0;
+    for (const k of kelompok) {
+        for (const b of k.baris) {
+            const a = Number(b.jamAwal), z = Number(b.jamAkhir);
+            n += Number.isFinite(a) && Number.isFinite(z) && z >= a ? z - a + 1 : 1;
+        }
+    }
+    return n;
+}
+
+export function nuansaKepala(jumlahJam) {
+    return NUANSA.find((n) => jumlahJam <= n.maks) || NUANSA[NUANSA.length - 1];
+}
 
 function wrapText(ctx, text, maxW) {
     const words = String(text).split(" ");
@@ -126,12 +154,13 @@ export function gambarTabel({ tanggal, kelompok, catatan, namaSekolah, logo, cre
        WhatsApp dan dibuka di layar HP: tiap piksel tinggi yang tidak
        terpakai membuat tabelnya mengecil saat gambar dimuat pas lebar. */
     const headerH = 60;
+    const NOTE_LH = 18;
     const noteLines = catatan && catatan.trim() ? wrapText(probe, "Catatan: " + catatan.trim(), W - PAD * 2) : [];
     /* Kaki dirapatkan seperti kepalanya. Sisa ruang kosong di bawah
        keterangan kode dulu hampir selebar dua baris tulisan — tidak membawa
        apa pun, tetapi ikut mengecilkan tabel saat gambar dimuat pas lebar
-       layar HP. */
-    const footH = 20 + noteLines.length * 18 + 8;
+       layar HP. Tingginya mengikuti jarak baris kaki di bawah. */
+    const footH = noteLines.length ? 26 + noteLines.length * NOTE_LH : 32;
     const H = headerH + 18 + tableH + 12 + footH;
 
     const canvas = createCanvas(W * scale, H * scale);
@@ -141,20 +170,21 @@ export function gambarTabel({ tanggal, kelompok, catatan, namaSekolah, logo, cre
     // latar
     ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
 
-    // kepala biru muda, dengan garis biru tua sebagai pembatas
+    // kepala berwarna sesuai berat hari itu, dengan garis senada sebagai pembatas
+    const nuansa = nuansaKepala(hitungJam(kelompok));
     const GARIS_H = 3;
-    ctx.fillStyle = C.biruMuda; ctx.fillRect(0, 0, W, headerH);
-    ctx.fillStyle = C.biru; ctx.fillRect(0, headerH - GARIS_H, W, GARIS_H);
+    ctx.fillStyle = nuansa.latar; ctx.fillRect(0, 0, W, headerH);
+    ctx.fillStyle = nuansa.garis; ctx.fillRect(0, headerH - GARIS_H, W, GARIS_H);
     let tx = PAD;
     if (logo) {
         const s = 44;
         ctx.drawImage(logo, PAD, (headerH - GARIS_H - s) / 2, s, s);
         tx = PAD + s + 12;
     }
-    // Tulisan menjadi gelap karena latarnya kini terang.
-    ctx.fillStyle = C.ink; ctx.font = `600 21px ${SERIF}`; ctx.textBaseline = "alphabetic";
+    // Warna tulisan ikut nuansa: terang di latar gelap, gelap di latar terang.
+    ctx.fillStyle = nuansa.tulisan; ctx.font = `600 21px ${SERIF}`; ctx.textBaseline = "alphabetic";
     ctx.fillText("Jadwal Guru Pengganti", tx, 28);
-    ctx.fillStyle = C.muted; ctx.font = `500 12px ${FONT}`;
+    ctx.fillStyle = nuansa.redup; ctx.font = `500 12px ${FONT}`;
     ctx.fillText(`${namaSekolah}  ·  ${tanggalPanjang(tanggal)}`, tx, 47);
 
     // tabel
@@ -225,10 +255,19 @@ export function gambarTabel({ tanggal, kelompok, catatan, namaSekolah, logo, cre
     // catatan & keterangan kode
     let fy = y0 + tableH + 18;
     ctx.fillStyle = C.ink; ctx.font = `600 13px ${FONT}`;
-    noteLines.forEach((ln, i) => ctx.fillText(ln, PAD, fy + i * 18));
-    fy += noteLines.length * 18 + (noteLines.length ? 8 : 0);
+    noteLines.forEach((ln, i) => ctx.fillText(ln, PAD, fy + i * NOTE_LH));
+    /* Keterangan kode menempel pada catatan: jaraknya dihitung dari baris
+       catatan terakhir, bukan ditumpuk satu baris penuh lagi, supaya kaki
+       tetap tipis. */
+    fy += noteLines.length ? (noteLines.length - 1) * NOTE_LH + 16 : 4;
     ctx.fillStyle = C.muted; ctx.font = `400 11px ${FONT}`;
-    ctx.fillText("GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler   —   dibuat dari Sistem Guru Pengganti", PAD, fy + 4);
+    ctx.fillText("GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler   —   dibuat dari Sistem Guru Pengganti", PAD, fy);
+    // Penanda asal berkas: rata kanan, lebih kecil, dan miring supaya jelas
+    // berbeda tingkat dari dua baris di atasnya.
+    fy += 14;
+    ctx.font = `italic 400 10px ${FONT}`;
+    const cetak = "Dicetak menggunakan aplikasi Kehadiran Guru";
+    ctx.fillText(cetak, W - PAD - ctx.measureText(cetak).width, fy);
 
     return canvas;
 }

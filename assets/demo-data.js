@@ -961,3 +961,67 @@ export const demoData = {
 // Penyimpanan sementara untuk mode pratinjau (hilang saat halaman dimuat ulang)
 export const demoKetidakhadiran = [];
 export const demoPenugasan = [];
+
+/* Data contoh untuk halaman Kegiatan & Tugas Guru.
+   Sengaja dibuat cukup beragam untuk memperlihatkan seluruh keadaan yang
+   ditangani halaman itu, termasuk dua keadaan yang mudah terlewat saat
+   dikembangkan hanya dengan data yang rapi:
+     * tugas yang harinya memang belum ditetapkan (Pembina OSIS), dan
+     * pembina ekskul yang jadwalnya ada di Absensi Ekskul tetapi perannya
+       belum dicatat di Tugas Guru (G047).
+   Nama jenis tugas dan pasangan kategori ekskulnya mengikuti isi tabel
+   jenis_tugas yang sesungguhnya. */
+export const demoKegiatan = {
+  jenisTugas: [
+    { nama: "Wali Kelas",         perlu_rombel: true,  perlu_jabatan: false, piket_sekolah: "Melekat",    tambah_jam_mengajar: false, jam_unit: false, urutan: 10, aktif: true, kategori_ekskul: null,
+      penjelasan: "Membina satu rombel. Ikut piket meja sekolah bila namanya ada di jadwal; sebagian tidak piket karena jam mengajarnya sudah padat." },
+    { nama: "Staf",               perlu_rombel: false, perlu_jabatan: true,  piket_sekolah: "Melekat",    tambah_jam_mengajar: false, jam_unit: false, urutan: 20, aktif: true, kategori_ekskul: null,
+      penjelasan: "Jabatan struktural, bertugas penuh Senin-Sabtu, termasuk giliran piket saat sekolah libur. Kehadiran dihitung lewat fingerprint, jadi TIDAK ada transport piket terpisah." },
+    { nama: "Tugas Tambahan",     perlu_rombel: false, perlu_jabatan: true,  piket_sekolah: null,         tambah_jam_mengajar: true,  jam_unit: false, urutan: 30, aktif: true, kategori_ekskul: null,
+      penjelasan: "Tugas khusus yang dibayar HANYA lewat penambahan jam mengajar. Tidak ada dalam jadwal KBM." },
+    { nama: "Diperbantukan",      perlu_rombel: false, perlu_jabatan: true,  piket_sekolah: null,         tambah_jam_mengajar: false, jam_unit: true,  urutan: 40, aktif: true, kategori_ekskul: null,
+      penjelasan: "Penanggung jawab satu unit sekolah. Honor penanggung jawab, ditambah transport kedatangan pada jam piket unitnya sendiri. Bukan piket meja sekolah." },
+    { nama: "Piket",              perlu_rombel: false, perlu_jabatan: false, piket_sekolah: "Ditugaskan", tambah_jam_mengajar: false, jam_unit: false, urutan: 50, aktif: true, kategori_ekskul: null,
+      penjelasan: "Ditugaskan piket meja sekolah, termasuk guru bukan wali kelas, untuk menutup jam yang belum terisi." },
+    { nama: "Pembina Ekskul",     perlu_rombel: false, perlu_jabatan: false, piket_sekolah: null,         tambah_jam_mengajar: false, jam_unit: false, urutan: 60, aktif: true, kategori_ekskul: "Ekstrakurikuler",
+      penjelasan: "Dicatat juga di ae_pembina milik aplikasi Absensi Ekskul." },
+    { nama: "Pembina OSIS",       perlu_rombel: false, perlu_jabatan: false, piket_sekolah: null,         tambah_jam_mengajar: false, jam_unit: false, urutan: 65, aktif: true, kategori_ekskul: "Pembinaan Kesiswaan",
+      penjelasan: "Membina OSIS di luar jam pelajaran. Melekat pada staf kesiswaan, tetapi dicatat terpisah karena kegiatannya sesudah jam pulang." },
+    { nama: "Pembimbing Tahfidz", perlu_rombel: false, perlu_jabatan: false, piket_sekolah: null,         tambah_jam_mengajar: false, jam_unit: false, urutan: 70, aktif: true, kategori_ekskul: "Pembinaan Imtaq",
+      penjelasan: "Membimbing hafalan Quran bagi siswa yang berminat, bagian dari pembinaan Imtaq bersama Tahsin." },
+  ],
+  tugas: [
+    { id: 101, guru_id: "G006", jenis: "Staf",           jabatan: "Wakasek Kurikulum", rombel_id: null,  jam_tambahan_mengajar: null, jam_piket_unit: null, keterangan: "", aktif: true },
+    { id: 102, guru_id: "G012", jenis: "Wali Kelas",     jabatan: null,                rombel_id: "X-1", jam_tambahan_mengajar: null, jam_piket_unit: null, keterangan: "", aktif: true },
+    { id: 103, guru_id: "G012", jenis: "Pembina Ekskul", jabatan: null,                rombel_id: null,  jam_tambahan_mengajar: null, jam_piket_unit: null, keterangan: "", aktif: true },
+    { id: 104, guru_id: "G047", jenis: "Pembina OSIS",   jabatan: null,                rombel_id: null,  jam_tambahan_mengajar: null, jam_piket_unit: null, keterangan: "Harinya belum ditetapkan.", aktif: true },
+    { id: 105, guru_id: "G047", jenis: "Piket",          jabatan: null,                rombel_id: null,  jam_tambahan_mengajar: null, jam_piket_unit: null, keterangan: "", aktif: true },
+    { id: 106, guru_id: "G108", jenis: "Diperbantukan",  jabatan: "Laboratorium IPA",  rombel_id: null,  jam_tambahan_mengajar: null, jam_piket_unit: 6,    keterangan: "", aktif: true },
+    { id: 107, guru_id: "G138", jenis: "Tugas Tambahan", jabatan: "Pembina Seni",      rombel_id: null,  jam_tambahan_mengajar: 4,    jam_piket_unit: null, keterangan: "", aktif: true },
+  ],
+  piketUnit: [
+    { tugas_id: 106, guru_id: "G108", guru: "Dindin Barqah, S.ST.", unit: "Laboratorium IPA", hari: "Selasa", jam_ke: 5 },
+    { tugas_id: 106, guru_id: "G108", guru: "Dindin Barqah, S.ST.", unit: "Laboratorium IPA", hari: "Selasa", jam_ke: 6 },
+    { tugas_id: 106, guru_id: "G108", guru: "Dindin Barqah, S.ST.", unit: "Laboratorium IPA", hari: "Selasa", jam_ke: 7 },
+    { tugas_id: 106, guru_id: "G108", guru: "Dindin Barqah, S.ST.", unit: "Laboratorium IPA", hari: "Kamis",  jam_ke: 5 },
+    { tugas_id: 106, guru_id: "G108", guru: "Dindin Barqah, S.ST.", unit: "Laboratorium IPA", hari: "Kamis",  jam_ke: 6 },
+    { tugas_id: 106, guru_id: "G108", guru: "Dindin Barqah, S.ST.", unit: "Laboratorium IPA", hari: "Kamis",  jam_ke: 7 },
+  ],
+  guruUnit: [
+    { tugas_id: 106, guru_id: "G108", nama: "Dindin Barqah, S.ST.", unit: "Laboratorium IPA", jam_per_minggu: 6, mulai: null, selesai: null },
+  ],
+  parkiran: [
+    { hari: "Senin",  urutan_hari: 1, guru_id: "G012", nama: "Devy Resmisari, S.Pd.", catatan: "" },
+    { hari: "Rabu",   urutan_hari: 3, guru_id: "G134", nama: "Firman Nurrahman",      catatan: "" },
+  ],
+  pembina: [
+    { id: "P01", nama: "Pelatih Karate (luar sekolah)", id_guru: null,   status: "Aktif" },
+    { id: "P02", nama: "Devy Resmisari, S.Pd.",          id_guru: "G012", status: "Aktif" },
+    { id: "P03", nama: "Fairina Fitriani, S.Pd.",        id_guru: "G047", status: "Aktif" },
+  ],
+  ekskul: [
+    { id: "E01", nama: "Karate", pembina_id: "P01", hari: "Senin",  jam_mulai: "15:30", jam_selesai: "17:30", tempat: "Aula",     aktif: true, kategori: "Ekstrakurikuler" },
+    { id: "E02", nama: "Basket", pembina_id: "P02", hari: "Kamis",  jam_mulai: "15:30", jam_selesai: "17:00", tempat: "Lapangan", aktif: true, kategori: "Ekstrakurikuler" },
+    { id: "E03", nama: "Tari",   pembina_id: "P03", hari: "Selasa", jam_mulai: "15:30", jam_selesai: "17:00", tempat: "Aula",     aktif: true, kategori: "Ekstrakurikuler" },
+  ],
+};

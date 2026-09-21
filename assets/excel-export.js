@@ -285,3 +285,182 @@ export async function bukuPiket({ ExcelJS, baris, total, pengaturan, awal, akhir
 
     return wb;
 }
+
+// =========================================================
+// 5. KEGIATAN & TUGAS SEORANG GURU (satu lembar)
+// =========================================================
+// Susunannya sama dengan layar: daftar tugas di atas, matriks pekanan di
+// bawah, dalam satu sheet supaya bisa dicetak satu lembar dan diserahkan
+// kepada gurunya sebagai peta tugasnya sepekan.
+//
+// PENGECUALIAN GAYA: berkas ini umumnya "hemat tinta — tanpa blok warna",
+// tetapi matriks di sini memuat LIMA jenis tugas dalam satu kisi, dan warna
+// adalah satu-satunya yang membedakannya tanpa menambah kolom keterangan yang
+// justru memakan ruang. Ronanya sangat muda dan sama persis dengan warna di
+// layar, sehingga lembar cetak dan halaman web terbaca sebagai benda yang sama.
+const HARI_PENDEK_XLS = { Senin: "Sen", Selasa: "Sel", Rabu: "Rab", Kamis: "Kam", Jumat: "Jum" };
+const jam5xls = (t) => String(t || "").slice(0, 5);
+
+// Membagi KOL kolom sempit menjadi beberapa kolom tabel selebar bobotnya.
+// Matriks memerlukan satu kolom per jam pelajaran, sedangkan tabel tugas hanya
+// enam kolom — keduanya harus hidup di sheet yang sama, dan lebar kolom di
+// Excel berlaku untuk seluruh sheet, bukan per tabel.
+function rentangKolom(bobot, kol) {
+    const total = bobot.reduce((a, b) => a + b, 0);
+    const hasil = [];
+    let mulai = 1, dipakai = 0;
+    bobot.forEach((b, i) => {
+        dipakai += b;
+        const sisaKolom = bobot.length - 1 - i;      // kolom yang masih harus kebagian minimal satu
+        const akhir = i === bobot.length - 1 ? kol
+            : Math.min(kol - sisaKolom, Math.max(mulai, Math.round((dipakai / total) * kol)));
+        hasil.push([mulai, akhir]);
+        mulai = akhir + 1;
+    });
+    return hasil;
+}
+
+function judulBagian(ws, baris, teks, kolomTerakhir) {
+    const c = ws.getCell(baris, 1);
+    c.value = teks;
+    c.font = { name: FONT, size: 11, bold: true };
+    c.alignment = { horizontal: "left", vertical: "middle" };
+    ws.mergeCells(baris, 1, baris, kolomTerakhir);
+    ws.getRow(baris).height = 20;
+    return baris + 1;
+}
+
+function selGabung(ws, baris, [dari, sampai], nilai, opsi = {}) {
+    const cell = selData(ws, baris, dari, nilai, opsi);
+    if (sampai > dari) {
+        for (let c = dari + 1; c <= sampai; c++) {
+            const k = ws.getCell(baris, c);
+            k.border = BORDER;
+            if (opsi.fill) k.fill = HEAD_FILL;
+        }
+        ws.mergeCells(baris, dari, baris, sampai);
+    }
+    return cell;
+}
+
+export async function bukuKegiatanGuru({ ExcelJS, guru, tugas, perJam, setelah, jam, hariList, jenis, pengaturan, logoBase64 }) {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Kegiatan & Tugas");
+
+    const jamList = (jam || []).slice().sort((a, b) => Number(a.jam_ke) - Number(b.jam_ke));
+    const KOL = 1 + jamList.length + 1;               // label + jam pelajaran + "Setelah KBM"
+    ws.columns = [{ width: 13 }, ...jamList.map(() => ({ width: 9 })), { width: 24 }];
+
+    const sub = [guru?.mapel_utama && guru.mapel_utama !== "-" ? guru.mapel_utama : "",
+                 guru?.wali_kelas ? `Wali Kelas ${guru.wali_kelas}` : "",
+                 `Tahun Ajaran ${pengaturan.tahun_ajaran || ""}`].filter(Boolean).join("  ·  ");
+    let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan,
+        judul: "KEGIATAN & TUGAS GURU DALAM SEPEKAN",
+        sub: String(guru?.nama || "").toUpperCase() + (sub ? `  ·  ${sub}` : ""),
+        kolomTerakhir: KOL });
+
+    // ---------- A. Tugas & tanggung jawab ----------
+    r = judulBagian(ws, r, "A. TUGAS & TANGGUNG JAWAB", KOL);
+    const span = rentangKolom([1, 3, 3, 3, 1, 3], KOL);
+    ["NO", "TUGAS", "RINCIAN", "JADWAL", "JAM/PEKAN", "KETERANGAN"]
+        .forEach((t, i) => selGabung(ws, r, span[i], t, { bold: true, align: "center", fill: true, wrap: true }));
+    ws.getRow(r).height = 22;
+    r += 1;
+
+    for (const b of tugas) {
+        const jadwal = b.jadwal && b.jadwal.length
+            ? b.jadwal.map((j) => `${HARI_PENDEK_XLS[j.hari] || j.hari} ${j.teks}`).join("; ")
+            : (b.kosongTeks || "—");
+        const jamTeks = b.jam ? `${b.jam}${b.satuan ? " " + b.satuan : ""}` : "—";
+        selGabung(ws, r, span[0], b.no, { align: "center" });
+        selGabung(ws, r, span[1], b.tugas, { bold: true, wrap: true });
+        selGabung(ws, r, span[2], b.rincian || "—", { wrap: true });
+        selGabung(ws, r, span[3], jadwal, { wrap: true });
+        selGabung(ws, r, span[4], jamTeks, { align: "center" });
+        selGabung(ws, r, span[5], b.ket || "", { wrap: true });
+        ws.getRow(r).height = 26;
+        r += 1;
+    }
+    r += 1;
+
+    // ---------- B. Matriks pekanan ----------
+    r = judulBagian(ws, r, "B. KEGIATAN DALAM SEPEKAN", KOL);
+    const barisKepala = r;
+    kepalaTabel(ws, r, ["HARI", ...jamList.map((j) => String(j.jam_ke)), "SETELAH KBM"], { tinggi: 30 });
+    r += 1;
+    // Baris kedua kepala: pukul berapa jam itu. Tanpa ini angka 1–12 tidak
+    // memberi tahu waktunya, dan lembar ini sering dibaca orang yang tidak
+    // hafal pembagian jam pelajaran.
+    selData(ws, r, 1, "Pukul", { align: "center", bold: true, fill: true });
+    jamList.forEach((j, i) => selData(ws, r, 2 + i,
+        j.mulai ? `${jam5xls(j.mulai)}\n${jam5xls(j.selesai)}` : "", { align: "center", wrap: true, fill: true }));
+    selData(ws, r, KOL, "sesudah bel pulang", { align: "center", wrap: true, fill: true });
+    ws.getRow(r).height = 26;
+    r += 1;
+
+    const warna = (kunciJenis) => {
+        const w = jenis[kunciJenis];
+        if (!w) return null;
+        return { type: "pattern", pattern: "solid",
+                 fgColor: { argb: "FF" + String(w.bg).replace("#", "").toUpperCase() } };
+    };
+
+    for (const hari of hariList) {
+        const perJamHari = perJam.filter((k) => k.hari === hari);
+        selData(ws, r, 1, hari, { bold: true, align: "center" });
+
+        // Jam berurutan dengan kegiatan yang sama digabung menjadi satu sel,
+        // persis seperti blok panjang di layar.
+        let i = 0;
+        while (i < jamList.length) {
+            const isi = perJamHari.filter((k) => k.jamKe === Number(jamList[i].jam_ke));
+            if (!isi.length) { selData(ws, r, 2 + i, "", { align: "center" }); i += 1; continue; }
+            const teks = isi.map((k) => [k.utama, k.kedua].filter(Boolean).join("\n")).join(" / ");
+            const kunci = isi.length === 1 ? isi[0].kunci : null;
+            let j = i + 1;
+            while (kunci && j < jamList.length) {
+                const lanjut = perJamHari.filter((k) => k.jamKe === Number(jamList[j].jam_ke));
+                if (lanjut.length !== 1 || lanjut[0].kunci !== kunci) break;
+                j += 1;
+            }
+            const cell = selData(ws, r, 2 + i, teks, { align: "center", wrap: true });
+            cell.font = { name: FONT, size: 8 };
+            const f = warna(isi[0].jenis);
+            for (let c = 2 + i; c <= 1 + j; c++) {
+                ws.getCell(r, c).border = BORDER;
+                if (f) ws.getCell(r, c).fill = f;
+            }
+            if (j > i + 1) ws.mergeCells(r, 2 + i, r, 1 + j);
+            i = j;
+        }
+
+        const setelahHari = setelah.filter((s) => s.hari === hari);
+        const selAkhir = selData(ws, r, KOL,
+            setelahHari.length ? setelahHari.map((s) => `${s.utama} (${s.kedua})`).join("\n") : "—",
+            { align: "center", wrap: true });
+        selAkhir.font = { name: FONT, size: 8 };
+        if (setelahHari.length === 1) {
+            const f = warna(setelahHari[0].jenis);
+            if (f) selAkhir.fill = f;
+        }
+        ws.getRow(r).height = 34;
+        r += 1;
+    }
+
+    r += 1;
+    ws.getCell(r, 1).value = 'Kolom terakhir BUKAN jam ke-13. Isinya kegiatan sesudah bel pulang yang satuannya bukan '
+        + 'jam pelajaran: piket parkiran (sekali jaga, tanpa jam) serta ekstrakurikuler dan pembinaan (jam dinding). '
+        + 'Yang tertulis di sini adalah POLA PEKANAN yang berlaku sepanjang semester — ketidakhadiran dan guru '
+        + 'pengganti pada tanggal tertentu direkap terpisah. Seluruh jadwal dan tugas disusun di Data Induk; '
+        + 'lembar ini hanya membacanya.';
+    ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true };
+    ws.getCell(r, 1).alignment = { wrapText: true, vertical: "top" };
+    ws.mergeCells(r, 1, r + 1, KOL);
+    r += 3;
+
+    blokTandaTangan(ws, r, { pengaturan, tanggal: new Date().toISOString().slice(0, 10),
+        kolomKiri: 2, kolomKanan: Math.max(3, KOL - 3), kolomTerakhir: KOL });
+    pengaturanCetak(ws, "landscape");
+    ws.pageSetup.printTitlesRow = `${barisKepala}:${barisKepala}`;
+    return wb;
+}

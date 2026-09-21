@@ -231,9 +231,12 @@
             hariPekan.forEach((h, i) => {
                 const c = kolomHari(i);
                 ws.mergeCells(r, c, r, c + 1);
-                // Tanggalnya dikosongkan untuk ditulis tangan: lembar ini
-                // diperbanyak dengan fotokopi untuk pekan-pekan berikutnya.
-                kepalaSel(ws, r, c, `${h.toUpperCase()}   ……/……`);
+                // Cukup nama harinya. Tempat menulis tanggal sudah ada sekali
+                // di baris "Pekan: … s.d. …" pada kop — begitu rentangnya
+                // ditulis, tanggal tiap hari sudah tertentu. Titik-titik kedua
+                // di sini hanya mengundang pertanyaan mana yang berlaku bila
+                // keduanya diisi berbeda.
+                kepalaSel(ws, r, c, h.toUpperCase());
                 kepalaSel(ws, r, c + 1, null);
             });
             ws.getRow(r).height = 20;

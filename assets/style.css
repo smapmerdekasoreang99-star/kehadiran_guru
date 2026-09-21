@@ -1325,3 +1325,162 @@ tr.total td {
     color: var(--ink-muted);
     white-space: nowrap;
 }
+
+/* =========================================================
+   Kegiatan & Tugas Guru
+   =========================================================
+   Halaman baca saja: satu guru, satu pekan. Dua bagian bertumpuk — daftar
+   tugas di atas, matriks pekanan di bawah — dengan kepala yang sama supaya
+   keduanya terbaca sebagai satu lembar, bukan dua kartu terpisah. */
+
+.kg-kepala {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--j4);
+    padding: var(--j4) var(--j4) var(--j3);
+    margin-bottom: var(--j3);
+    border-bottom: 2px solid var(--line);
+}
+.kg-nama {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: var(--h-judul);
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--ink);
+}
+.kg-meta { margin-top: 2px; font-size: var(--h-s); color: var(--ink-muted); }
+
+/* Angka ringkas: dibaca sekilas sebelum masuk ke tabel. Hanya yang berisi
+   yang ditampilkan — kolom bernilai nol tidak memberi keterangan apa pun
+   selain memenuhi ruang. */
+.kg-angka { display: flex; flex-wrap: wrap; gap: var(--j5); }
+.kg-angka-item { text-align: right; }
+.kg-angka-item b {
+    display: block;
+    font-family: "Fraunces", Georgia, serif;
+    font-size: var(--h-judul-s);
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+.kg-angka-item span { font-size: var(--h-xs); color: var(--ink-muted); }
+.kg-angka-nol span { font-style: italic; }
+
+.kg-judul {
+    font-size: var(--h-judul-s);
+    margin: var(--j5) var(--j4) var(--j2);
+}
+.kg-judul:first-of-type { margin-top: 0; }
+
+/* ---------- Tabel tugas & tanggung jawab ---------- */
+.kg-tabel { width: 100%; border-collapse: collapse; }
+.kg-tabel th, .kg-tabel td {
+    padding: var(--j2) var(--j3);
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+    font-size: var(--h-s);
+}
+.kg-tabel thead th {
+    background: var(--kertas-3);
+    font-weight: 600;
+    font-size: var(--h-xs);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    white-space: nowrap;
+}
+.kg-tabel td.kg-no, .kg-tabel th.kg-no { width: 40px; text-align: center; color: var(--ink-muted); }
+.kg-tabel td.kg-jam, .kg-tabel th.kg-jam { width: 92px; text-align: right; white-space: nowrap; }
+.kg-tabel td.kg-ket { color: var(--ink-muted); font-size: var(--h-xs); max-width: 320px; }
+.kg-tabel tbody tr:hover { background: var(--emas-kabut); }
+
+.kg-tugas-nama { font-weight: 600; white-space: nowrap; }
+/* Titik berwarna menautkan baris tabel ke blok berwarna di matriks bawahnya —
+   tanpa itu, dua bagian halaman ini tidak terbaca sebagai satu cerita. */
+.kg-titik {
+    display: inline-block;
+    width: 8px; height: 8px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: var(--kg-aksen);
+    vertical-align: 1px;
+}
+.kg-info { margin-left: 4px; color: var(--ink-muted); font-size: 11px; cursor: help; }
+
+.kg-jadwal { line-height: 1.9; }
+.kg-chip {
+    display: inline-block;
+    margin: 0 4px 2px 0;
+    padding: 1px 8px;
+    border-radius: var(--r-bulat);
+    background: var(--kg-bg);
+    border-left: 3px solid var(--kg-aksen);
+    font-size: var(--h-xs);
+    white-space: nowrap;
+}
+.kg-chip b { font-weight: 600; }
+/* "Belum dijadwalkan" sengaja netral, bukan merah: harinya memang belum
+   ditetapkan, dan itu keadaan yang wajar — bukan kesalahan yang perlu
+   diteriakkan setiap kali halaman dibuka. */
+.kg-chip-kosong {
+    background: var(--kertas-3);
+    border-left: 3px dashed var(--garis-2);
+    color: var(--ink-muted);
+    font-style: italic;
+}
+
+/* ---------- Legenda jenis kegiatan ---------- */
+.kg-legenda {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--j2) var(--j3);
+    padding: 0 var(--j4) var(--j3);
+}
+.kg-legenda-item {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: var(--r1);
+    background: var(--kg-bg);
+    border-left: 3px solid var(--kg-aksen);
+    font-size: var(--h-xs);
+    font-weight: 600;
+    color: var(--ink);
+}
+.kg-legenda-teks { font-size: var(--h-xs); color: var(--ink-muted); font-style: italic; }
+
+/* ---------- Matriks: 12 jam pelajaran + satu kolom "Setelah KBM" ----------
+   Kolom terakhir dipisah tegas dan dibuat lebih lebar karena isinya bukan
+   jam pelajaran: parkiran tidak punya jam sama sekali, ekskul memakai jam
+   dinding. Menyamakan lebarnya dengan kolom jam akan mengundang pembacaan
+   bahwa ia jam ke-13. */
+.kg-matriks th.kg-kol-setelah,
+.kg-matriks td.kg-sel-setelah {
+    width: 150px;
+    border-left: 2px solid var(--garis-2);
+    background: var(--kertas-3);
+}
+.kg-matriks th.kg-kol-setelah .m-jam-ke {
+    font-size: var(--h-s);
+    line-height: 1.15;
+    white-space: normal;
+}
+.kg-matriks th.kg-kol-setelah .m-jam-waktu { white-space: normal; font-style: italic; }
+.kg-matriks td.kg-sel-setelah { vertical-align: top; }
+.kg-blok-setelah { height: auto; min-height: 28px; padding: 4px 6px 4px 8px; }
+.kg-blok-setelah + .kg-blok-setelah { margin-top: 3px; }
+.kg-blok-setelah .m-utama { -webkit-line-clamp: 2; white-space: normal; }
+.kg-blok-setelah .m-kedua { font-variant-numeric: tabular-nums; }
+.kg-tak-ada { display: block; padding-top: 6px; text-align: center; color: var(--tinta-3); }
+
+@media (max-width: 900px) {
+    .kg-kepala { padding: var(--j3); }
+    .kg-angka { gap: var(--j4); }
+    .kg-tabel td.kg-ket { display: none; }
+    .kg-tabel th:last-child { display: none; }
+}

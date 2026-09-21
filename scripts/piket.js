@@ -6,8 +6,13 @@
 //   Unit         : piket_unit + guru_tugas "Diperbantukan" (Data Induk)
 //   Parkiran     : tabel piket_parkiran (Data Induk → Piket & Honor)
 // Semua catatan masuk ke satu tabel kg_pelaksanaan_piket dengan pembeda
-// kolom `jenis`, karena bentuk datanya sama: satu petugas, satu tanggal,
+// kolom `jenis`, karena bentuk datanya sama: satu petugas, satu giliran,
 // hadir atau tidak.
+//
+// Satu giliran = satu JAM pelajaran untuk Meja Sekolah dan Unit, dan satu
+// HARI untuk Parkiran — mengikuti satuan jadwalnya masing-masing. Guru yang
+// berjaga dua jam bisa hadir pada jam pertama dan tidak pada jam kedua;
+// dicatat per hari, keadaan itu tidak punya tempat untuk ditulis.
 //
 // Bentuk layarnya sengaja dibuat sama dengan matriks jadwal piket di Data
 // Induk — orang yang sama memakai kedua halaman itu, dan dulu keduanya
@@ -17,7 +22,9 @@
 // "terjadwal", di sini warnanya berarti "hadir atau tidak".
 //
 // Sumbu matriksnya:
-//   Meja & Unit : baris = tanggal, kolom = jam pelajaran
+//   Meja & Unit : baris = tanggal, kolom = jam pelajaran — satu pita satu
+//                 catatan, dan pita hanya tersambung bila jam bersebelahan
+//                 berstatus sama
 //   Parkiran    : baris = pekan,   kolom = Senin–Jumat  (parkiran per hari,
 //                 bukan per jam, jadi kolom jam tidak ada artinya di situ)
 
@@ -25,6 +32,7 @@ import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.
 import { demoData } from "../assets/demo-data.js?v=20260920w";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260920w";
 import { terapkanUrutan, peringkatGuru } from "../assets/guru-order.js?v=20260920w";
+import { ambilLogoBase64 } from "../assets/excel-export.js?v=20260921q";
 
 try {
     initLockUI(() => render());
@@ -111,16 +119,34 @@ let state = {
     catatan: [],          // kg_pelaksanaan_piket dalam rentang
     libur: new Map(),     // tanggal -> keterangan
     hari: [],             // [{ iso, hari }] hari kerja dalam rentang
+    profil: null,         // v_penanda_tangan, untuk kop berkas unduhan
+    ta: "",               // tahun ajaran aktif, tertulis di bawah judul berkas
 };
 
 const namaGuru = (id) => state.guru.find((g) => g.id === id)?.nama || id;
 
-// Satu baris catatan dikenali dari tanggal + jenis + petugas + unit.
-// tugas_id hanya dipakai jenis Unit; di luar itu selalu null.
-function cariCatatan(tanggal, jenis, guruId, tugasId = null) {
+/* Satu baris catatan dikenali dari tanggal + jenis + petugas + unit + JAM.
+   tugas_id hanya dipakai jenis Unit; di luar itu selalu null.
+
+   Satuannya jam, bukan hari, karena seorang guru yang berjaga dua jam bisa
+   hadir pada jam pertama lalu tidak pada jam kedua. Dicatat per hari, kedua
+   keadaan itu terpaksa diringkas jadi satu: menuliskan Hadir berarti
+   membayar jam yang tidak dijaga, menuliskan Tidak Hadir berarti menghapus
+   jam yang benar-benar dijaga.
+
+   jam_ke kosong berarti sehari tanpa rincian jam. Selalu demikian untuk
+   Parkiran — satuannya sekali jaga sesudah bel pulang, bukan jam pelajaran
+   — dan untuk penanggung jawab unit yang jam jaganya belum dijadwalkan di
+   Data Induk. */
+function cariCatatan(tanggal, jenis, guruId, tugasId = null, jamKe = null) {
     return state.catatan.find((c) => c.tanggal === tanggal && c.jenis === jenis
-        && c.guru_id === guruId && (c.tugas_id ?? null) === (tugasId ?? null));
+        && c.guru_id === guruId && (c.tugas_id ?? null) === (tugasId ?? null)
+        && (c.jam_ke ?? null) === (jamKe ?? null));
 }
+
+// Giliran piket satu petugas pada satu hari: satu per jam jaganya, atau
+// satu tanpa jam bila jadwalnya tidak menyebut jam.
+const jamGiliran = (p) => (p.jam.length ? p.jam : [null]);
 
 // Seluruh catatan satu jenis dalam rentang yang sedang dibuka. Sengaja
 // dihitung dari state.catatan, bukan dari pita yang tampil: bila jadwal
@@ -135,16 +161,24 @@ async function boot() {
     document.getElementById("notice").hidden = isSupabaseConfigured;
 
     if (isSupabaseConfigured) {
-        const [guru, jam] = await Promise.all([
+        const [guru, jam, profil, ta] = await Promise.all([
             terapkanUrutan(supabaseClient.from("v_guru").select("id, nama, status_aktif, tmt_sekolah")),
             supabaseClient.from("kg_jam_pelajaran").select("jam_ke, mulai, selesai, keterangan").order("jam_ke"),
+            // Identitas kop berkas unduhan, milik Data Induk. Gagalnya tidak
+            // menjatuhkan halaman — yang terganggu hanya kop berkasnya.
+            supabaseClient.from("v_penanda_tangan").select("*").limit(1),
+            supabaseClient.from("tahun_ajaran").select("kode, aktif").eq("aktif", true).limit(1),
         ]);
         if (guru.error) { laporError("Gagal memuat data guru", guru.error); return; }
         state.guru = guru.data || [];
         state.jam = jam.data || [];
+        state.profil = (profil.data || [])[0] || null;
+        state.ta = ((ta.data || [])[0] || {}).kode || "";
+        if (profil.error) console.warn("Profil dokumen tidak terbaca:", profil.error.message);
     } else {
         state.guru = demoData.guru.map((g) => ({ ...g, status_aktif: "Aktif" }));
         state.jam = demoData.jam || [];
+        state.ta = "2026/2027";
     }
 
     const awal = document.getElementById("tglAwal");
@@ -169,10 +203,43 @@ async function boot() {
     for (const tab of ["meja", "unit", "parkiran"]) {
         document.getElementById(idSimpan(tab)).addEventListener("click", () => simpanBelumTercatat(tab));
         document.getElementById(idBatal(tab)).addEventListener("click", () => batalkanSemua(tab));
+        document.getElementById("unduh" + besar(tab)).addEventListener("click", () => unduhFormulir(tab));
     }
 
+    pasangPekanPintas();
     pasangModal();
     await muatRentang();
+}
+
+/* Tombol pintas pekan. Rentangnya sengaja TIDAK dikunci sepekan — melihat
+   sebulan sekaligus itulah gunanya rentang, dan rekap memerlukannya. Yang
+   dijaga sepekan adalah KERTASNYA: unduhan selalu satu lembar per pekan,
+   berapa pun rentang di layar. Tombol ini hanya jalan pintas bagi yang
+   memang bekerja pekan demi pekan. */
+function pasangPekanPintas() {
+    const seninDari = (iso) => {
+        const d = new Date(iso + "T00:00:00");
+        const geser = (d.getDay() + 6) % 7;      // Minggu dihitung akhir pekan sebelumnya
+        d.setDate(d.getDate() - geser);
+        return d;
+    };
+    const pasangPekan = (senin) => {
+        const jumat = new Date(senin);
+        jumat.setDate(senin.getDate() + 4);
+        state.awal = isoDari(senin);
+        state.akhir = isoDari(jumat);
+        document.getElementById("tglAwal").value = state.awal;
+        document.getElementById("tglAkhir").value = state.akhir;
+        muatRentang();
+    };
+    const geser = (pekan) => {
+        const senin = seninDari(state.awal || todayISO());
+        senin.setDate(senin.getDate() + pekan * 7);
+        pasangPekan(senin);
+    };
+    document.getElementById("pekanIni").addEventListener("click", () => pasangPekan(seninDari(todayISO())));
+    document.getElementById("pekanMundur").addEventListener("click", () => geser(-1));
+    document.getElementById("pekanMaju").addEventListener("click", () => geser(1));
 }
 
 /* Hari kerja dalam rentang. Sabtu dan Minggu dibuang di sini, bukan di
@@ -236,7 +303,7 @@ async function muatRentang() {
             supabaseClient.from("v_guru_unit").select("tugas_id, guru_id, nama, unit, jam_per_minggu, mulai, selesai"),
             supabaseClient.from("v_piket_parkiran").select("hari, guru_id, nama, catatan"),
             supabaseClient.from("kg_pelaksanaan_piket")
-                .select("id, tanggal, jenis, guru_id, tugas_id, status, catatan")
+                .select("id, tanggal, jenis, guru_id, tugas_id, jam_ke, status, catatan")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir),
             supabaseClient.from("kg_hari_libur").select("tanggal, keterangan")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir),
@@ -307,7 +374,9 @@ function petugasMeja(d, urut) {
         if (p.jam_ke != null) per.get(p.guru_id).jam.push(Number(p.jam_ke));
     }
     const daftar = [...per.values()];
-    for (const p of daftar) p.ket = p.jam.length ? "Jam ke-" + ringkasJam(p.jam) : "tanpa jam jaga tercatat";
+    // Jamnya kini tertulis pada tiap pita, jadi keterangan barisnya hanya
+    // perlu menyebut keadaan yang menyimpang.
+    for (const p of daftar) p.ket = p.jam.length ? "" : "tanpa jam jaga tercatat";
     return daftar.sort((a, b) => urut(a.guruId) - urut(b.guruId));
 }
 
@@ -354,16 +423,26 @@ function tambahTercecer(tab, isiPer) {
     const jenis = JENIS[tab];
     for (const d of state.hari) {
         const isi = isiPer.get(d.iso) || [];
-        const ada = new Set(isi.map((p) => `${p.guruId}|${p.tugasId ?? ""}`));
+        // Giliran yang sudah tergambar, dikenali sampai ke jamnya: sejak
+        // dicatat per jam, satu jam bisa tercecer sementara jam lain milik
+        // orang yang sama tetap terjadwal.
+        const terjadwal = new Map(isi.map((p) => [`${p.guruId}|${p.tugasId ?? ""}`, p]));
+        const tambahan = new Map();
         for (const c of state.catatan) {
             if (c.jenis !== jenis || c.tanggal !== d.iso) continue;
             const k = `${c.guru_id}|${c.tugas_id ?? ""}`;
-            if (ada.has(k)) continue;
-            ada.add(k);
-            isi.push({ kunci: "x" + k, guruId: c.guru_id, tugasId: c.tugas_id ?? null,
-                       nama: namaGuru(c.guru_id), ket: "tercatat, tetapi tidak ada di jadwal tanggal ini",
-                       jam: [], tercecer: true });
+            const jam = c.jam_ke == null ? null : Number(c.jam_ke);
+            const p = terjadwal.get(k);
+            if (p && (jam == null ? !p.jam.length : p.jam.includes(jam))) continue;
+            if (!tambahan.has(k)) {
+                tambahan.set(k, { kunci: "x" + k, guruId: c.guru_id, tugasId: c.tugas_id ?? null,
+                                  nama: namaGuru(c.guru_id),
+                                  ket: "tercatat, tetapi tidak ada di jadwal tanggal ini",
+                                  jam: [], tercecer: true });
+            }
+            if (jam != null) tambahan.get(k).jam.push(jam);
         }
+        for (const p of tambahan.values()) isi.push(p);
         isiPer.set(d.iso, isi);
     }
 }
@@ -416,14 +495,22 @@ function lajurkan(petugas) {
 
 /* Satu pita nama. Warnanya adalah statusnya: hijau hadir, merah tidak
    hadir, garis putus-putus berarti belum dicatat. */
-function pitaHtml(iso, jenis, p, extra = "") {
-    const c = cariCatatan(iso, jenis, p.guruId, p.tugasId);
+// "Jam ke-3 (07:50–08:30)" — jam pelajaran beserta waktunya, bila ada.
+function labelJam(jamKe) {
+    if (jamKe == null) return "";
+    const j = state.jam.find((x) => Number(x.jam_ke) === Number(jamKe));
+    return `Jam ke-${jamKe}` + (j?.mulai ? ` (${jam5(j.mulai)}–${jam5(j.selesai)})` : "");
+}
+
+function pitaHtml(iso, jenis, p, jamKe = null, extra = "") {
+    const c = cariCatatan(iso, jenis, p.guruId, p.tugasId, jamKe);
     const status = c ? (c.status === "Tidak Hadir" ? "absen" : "hadir") : "draf";
     const kelas = ["pk-pita", status, p.tercecer && "tercecer", extra].filter(Boolean).join(" ");
+    const ket = [labelJam(jamKe), p.ket].filter(Boolean).join(" · ");
     const judul = [
         p.nama,
         `${jenis} · ${tglIndo(iso)}`,
-        p.ket,
+        ket,
         c ? `Status: ${c.status}` : "Belum dicatat",
         c?.catatan ? `Catatan: ${c.catatan}` : "",
         isUnlocked() ? "Ketuk untuk memilih kehadirannya" : "Buka kunci edit untuk mencatat",
@@ -432,17 +519,31 @@ function pitaHtml(iso, jenis, p, extra = "") {
     return `<div class="${kelas}" role="button" tabindex="0"
         data-tanggal="${esc(iso)}" data-jenis="${esc(jenis)}" data-guru="${esc(p.guruId)}"
         data-tugas="${p.tugasId == null ? "" : esc(p.tugasId)}"
-        data-nama="${esc(p.nama)}" data-ket="${esc(p.ket || "")}"
+        data-jam="${jamKe == null ? "" : esc(jamKe)}"
+        data-nama="${esc(p.nama)}" data-ket="${esc(ket)}"
         title="${esc(judul)}">${esc(namaPendek(p.nama))}${
             c?.catatan ? '<span class="pk-tanda" aria-hidden="true">•</span>' : ""}</div>`;
 }
 
+// Berapa giliran (jam) pada satu tanggal, dan berapa yang sudah tercatat.
+function hitungBaris(d, isi, jenis) {
+    let total = 0, tercatat = 0;
+    for (const p of isi) {
+        for (const jk of jamGiliran(p)) {
+            total++;
+            if (cariCatatan(d.iso, jenis, p.guruId, p.tugasId, jk)) tercatat++;
+        }
+    }
+    return { total, tercatat };
+}
+
 function labelBaris(d, isi) {
     const jenis = JENIS[state.tab];
-    const tercatat = isi.filter((p) => cariCatatan(d.iso, jenis, p.guruId, p.tugasId)).length;
+    const { total, tercatat } = hitungBaris(d, isi, jenis);
     const libur = state.libur.has(d.iso);
-    const sub = !isi.length ? (libur ? "libur" : "tidak ada petugas")
-        : `${tercatat}/${isi.length} tercatat${libur ? " · libur" : ""}`;
+    const satuan = state.tab === "parkiran" ? "" : " jam";
+    const sub = !total ? (libur ? "libur" : "tidak ada petugas")
+        : `${tercatat}/${total}${satuan} tercatat${libur ? " · libur" : ""}`;
     return `<th scope="row" class="m-label"><span>${HARI_PENDEK[d.hari]}, ${esc(tglPendek(d.iso))}</span>
         <small>${esc(sub)}</small></th>`;
 }
@@ -455,7 +556,6 @@ function renderMatriksJam(tab) {
     tambahTercecer(tab, isiPer);
     const adaTanpaJam = [...isiPer.values()].some((daftar) => daftar.some((p) => !p.jam.length));
     const total = [...isiPer.values()].reduce((n, daftar) => n + daftar.length, 0);
-
     const hariNyata = todayISO();
     const html = [];
 
@@ -482,13 +582,19 @@ function renderMatriksJam(tab) {
             const punya = (p) => p.jam.includes(c.jamKe);
             const ada = isi.some(punya);
             const kiri = kolom[ci - 1], kanan = kolom[ci + 1];
+            /* Pita hanya disambung bila jam bersebelahan itu berstatus SAMA.
+               Sejak kehadiran dicatat per jam, pita panjang yang menyatukan
+               jam hadir dengan jam tidak hadir justru menyembunyikan hal
+               yang paling perlu terlihat; putusnya pita itulah tandanya. */
+            const status = (p, jk) => cariCatatan(d.iso, jenis, p.guruId, p.tugasId, jk)?.status || "";
+            const sambung = (p, jk) => p.jam.includes(jk) && status(p, jk) === status(p, c.jamKe);
             const pita = !ada ? "" : jalur.map((lajur) => {
                 const p = lajur.find(punya);
                 if (!p) return '<div class="pk-kosong"></div>';
-                const dariKiri = kiri && !kiri.sela && p.jam.includes(kiri.jamKe);
-                const keKanan = kanan && !kanan.sela && p.jam.includes(kanan.jamKe);
+                const dariKiri = kiri && !kiri.sela && sambung(p, kiri.jamKe);
+                const keKanan = kanan && !kanan.sela && sambung(p, kanan.jamKe);
                 const extra = [dariKiri && "dari-kiri", keKanan && "ke-kanan"].filter(Boolean).join(" ");
-                return pitaHtml(d.iso, jenis, p, extra);
+                return pitaHtml(d.iso, jenis, p, c.jamKe, extra);
             }).join("");
             html.push(`<td class="m-sel pk-sel${ada ? "" : " pk-nol"}">${pita}</td>`);
         });
@@ -565,7 +671,7 @@ function renderParkiran() {
                            libur && "pk-libur", !isi.length && "pk-nol"].filter(Boolean).join(" ");
             html.push(`<td class="${kelas}">
                 <span class="pk-tgl">${esc(tglPendek(d.iso))}${libur ? ' <b class="pk-tgl-libur">libur</b>' : ""}</span>
-                ${isi.length ? isi.map((x) => pitaHtml(d.iso, jenis, x, "lebar")).join("")
+                ${isi.length ? isi.map((x) => pitaHtml(d.iso, jenis, x, null, "lebar")).join("")
                              : '<span class="pk-kosong-teks">belum ada petugas</span>'}</td>`);
         }
         html.push("</tr>");
@@ -589,16 +695,21 @@ function renderRingkas(tab, isiPer) {
     let total = 0, hadir = 0, absen = 0;
     for (const d of state.hari) {
         for (const p of isiPer.get(d.iso) || []) {
-            total++;
-            const c = cariCatatan(d.iso, jenis, p.guruId, p.tugasId);
-            if (!c) continue;
-            if (c.status === "Tidak Hadir") absen++; else hadir++;
+            for (const jk of jamGiliran(p)) {
+                total++;
+                const c = cariCatatan(d.iso, jenis, p.guruId, p.tugasId, jk);
+                if (!c) continue;
+                if (c.status === "Tidak Hadir") absen++; else hadir++;
+            }
         }
     }
     const belum = total - hadir - absen;
     const hari = state.hari.length;
+    // Satuannya disebut apa adanya: meja dan unit per jam pelajaran,
+    // parkiran per hari jaga.
+    const satuan = tab === "parkiran" ? "hari jaga" : "jam jaga";
     document.getElementById("ringkas" + besar(tab)).textContent = total
-        ? `${hari} hari kerja · ${total} giliran piket · ${hadir} hadir · ${absen} tidak hadir · ${belum} belum dicatat`
+        ? `${hari} hari kerja · ${total} ${satuan} · ${hadir} hadir · ${absen} tidak hadir · ${belum} belum dicatat`
         : "";
 
     // Tombol simpan menyebut berapa yang masih tertunda, supaya jelas ada
@@ -639,9 +750,11 @@ function draf(tab, isiPer) {
     for (const d of state.hari) {
         if (state.libur.has(d.iso)) continue;
         for (const p of isiPer.get(d.iso) || []) {
-            if (cariCatatan(d.iso, jenis, p.guruId, p.tugasId)) continue;
-            out.push({ tanggal: d.iso, jenis, guru_id: p.guruId, tugas_id: p.tugasId,
-                       status: "Hadir", catatan: null });
+            for (const jk of jamGiliran(p)) {
+                if (cariCatatan(d.iso, jenis, p.guruId, p.tugasId, jk)) continue;
+                out.push({ tanggal: d.iso, jenis, guru_id: p.guruId, tugas_id: p.tugasId,
+                           jam_ke: jk, status: "Hadir", catatan: null });
+            }
         }
     }
     return out;
@@ -649,7 +762,9 @@ function draf(tab, isiPer) {
 
 function isiTab(tab) {
     const urut = peringkatGuru(state.guru);
-    return new Map(state.hari.map((d) => [d.iso, daftarPetugas(tab, d, urut)]));
+    const isiPer = new Map(state.hari.map((d) => [d.iso, daftarPetugas(tab, d, urut)]));
+    tambahTercecer(tab, isiPer);
+    return isiPer;
 }
 
 function pasangAksi(table) {
@@ -685,12 +800,30 @@ function bukaPilihan(el) {
     const jenis = el.dataset.jenis;
     const guruId = el.dataset.guru;
     const tugasId = el.dataset.tugas === "" ? null : Number(el.dataset.tugas);
-    const c = cariCatatan(tanggal, jenis, guruId, tugasId);
-    pilihanAktif = { tanggal, jenis, guruId, tugasId };
+    const jamKe = el.dataset.jam === "" ? null : Number(el.dataset.jam);
+    const c = cariCatatan(tanggal, jenis, guruId, tugasId, jamKe);
+    pilihanAktif = { tanggal, jenis, guruId, tugasId, jamKe };
 
     document.getElementById("statusNama").textContent = el.dataset.nama;
     document.getElementById("statusSub").textContent =
         `${jenis} · ${tglIndo(tanggal)}${el.dataset.ket ? " · " + el.dataset.ket : ""}`;
+
+    /* Sehari bisa terdiri dari beberapa jam, dan biasanya seluruhnya sama.
+       Karena itu ditawarkan sekali tekan untuk seluruh jam hari itu —
+       tercentang hanya bila belum ada satu pun jam yang tercatat, supaya
+       koreksi satu jam yang menyimpang tidak diam-diam menimpa jam lain
+       yang sudah benar. Itulah justru keadaan yang membuat pencatatan ini
+       diturunkan menjadi per jam. */
+    const sehari = jamGiliran(petugasSehari(jenis, tanggal, guruId, tugasId));
+    const belumSatuPun = sehari.every((jk) => !cariCatatan(tanggal, jenis, guruId, tugasId, jk));
+    const kotak = document.getElementById("statusSemuaJam");
+    const centang = document.getElementById("fSemuaJam");
+    kotak.hidden = jamKe == null || sehari.length < 2;
+    centang.checked = !kotak.hidden && belumSatuPun;
+    if (!kotak.hidden) {
+        document.getElementById("statusSemuaJamLabel").textContent =
+            `Berlaku untuk seluruh ${sehari.length} jam jaganya hari ini (jam ke-${ringkasJam(sehari)})`;
+    }
 
     const liburBox = document.getElementById("statusLibur");
     const libur = state.libur.get(tanggal);
@@ -703,7 +836,7 @@ function bukaPilihan(el) {
     const catatan = document.getElementById("statusCatatan");
     catatan.value = c?.catatan || "";
 
-    // Bawaannya Hadir, karena umumnya memang hadir; pada baris yang sudah
+    // Bawaannya Hadir, karena umumnya memang hadir; pada jam yang sudah
     // tercatat yang disorot adalah statusnya sekarang.
     const terpilih = c ? c.status : "Hadir";
     document.querySelectorAll(".pilih-hadir button").forEach((b) =>
@@ -719,37 +852,59 @@ function tutupPilihan() {
     pilihanAktif = null;
 }
 
+/* Giliran satu petugas pada satu tanggal — dipakai dialog untuk menawarkan
+   "seluruh jam hari ini". Dihitung ulang dari jadwalnya, bukan dari yang
+   tergambar, supaya tetap benar walau yang diketuk catatan tercecer. */
+function petugasSehari(jenis, tanggal, guruId, tugasId) {
+    const tab = Object.keys(JENIS).find((k) => JENIS[k] === jenis);
+    const d = state.hari.find((x) => x.iso === tanggal);
+    if (!tab || !d) return { jam: [] };
+    const daftar = daftarPetugas(tab, d, peringkatGuru(state.guru));
+    return daftar.find((p) => p.guruId === guruId && (p.tugasId ?? null) === (tugasId ?? null))
+        || { jam: [] };
+}
+
 // status kosong = catatannya dibatalkan
 async function simpanStatus(status) {
     if (!pilihanAktif || !isUnlocked()) return;
-    const { tanggal, jenis, guruId, tugasId } = pilihanAktif;
+    const { tanggal, jenis, guruId, tugasId, jamKe } = pilihanAktif;
     const catatan = document.getElementById("statusCatatan").value.trim() || null;
-    const lama = cariCatatan(tanggal, jenis, guruId, tugasId);
+    const kotak = document.getElementById("statusSemuaJam");
+    const semuaJam = !kotak.hidden && document.getElementById("fSemuaJam").checked;
     tutupPilihan();
 
+    /* Pembatalan selalu hanya mengenai jam yang diketuk. Sekali ketuk
+       menghapus sehari penuh terlalu jauh dari yang diminta, dan untuk itu
+       sudah ada tombol "Batalkan N catatan" di atas tabel. */
     if (!status) {
+        const lama = cariCatatan(tanggal, jenis, guruId, tugasId, jamKe);
         if (lama) await hapusCatatan(lama);
         render();
         return;
     }
 
-    const isi = { tanggal, jenis, guru_id: guruId, tugas_id: tugasId, status, catatan };
+    const sasaran = semuaJam
+        ? jamGiliran(petugasSehari(jenis, tanggal, guruId, tugasId))
+        : [jamKe];
 
-    if (!isSupabaseConfigured) {
-        if (lama) Object.assign(lama, isi);
-        else state.catatan.push({ id: "D" + Date.now(), ...isi });
-        render();
-        return;
-    }
+    for (const jk of sasaran) {
+        const lama = cariCatatan(tanggal, jenis, guruId, tugasId, jk);
+        const isi = { tanggal, jenis, guru_id: guruId, tugas_id: tugasId, jam_ke: jk, status, catatan };
 
-    if (lama) {
-        const { error } = await supabaseClient.from("kg_pelaksanaan_piket").update(isi).eq("id", lama.id);
-        if (error) { laporError("Gagal menyimpan catatan piket", error); return; }
-        Object.assign(lama, isi);
-    } else {
-        const { data, error } = await supabaseClient.from("kg_pelaksanaan_piket").insert(isi).select().single();
-        if (error) { laporError("Gagal menyimpan catatan piket", error); return; }
-        state.catatan.push(data);
+        if (!isSupabaseConfigured) {
+            if (lama) Object.assign(lama, isi);
+            else state.catatan.push({ id: "D" + Date.now() + jk, ...isi });
+            continue;
+        }
+        if (lama) {
+            const { error } = await supabaseClient.from("kg_pelaksanaan_piket").update(isi).eq("id", lama.id);
+            if (error) { laporError("Gagal menyimpan catatan piket", error); break; }
+            Object.assign(lama, isi);
+        } else {
+            const { data, error } = await supabaseClient.from("kg_pelaksanaan_piket").insert(isi).select().single();
+            if (error) { laporError("Gagal menyimpan catatan piket", error); break; }
+            state.catatan.push(data);
+        }
     }
     render();
 }
@@ -825,14 +980,166 @@ async function batalkanSemua(tab) {
     if (!setuju) return;
 
     if (isSupabaseConfigured) {
-        const { error } = await supabaseClient.from("kg_pelaksanaan_piket")
-            .delete().in("id", baris.map((c) => c.id));
-        if (error) { laporError("Gagal membatalkan catatan piket", error); return; }
+        /* Dipotong per 200 id. Sejak dicatat per jam, sebulan piket meja
+           sekolah bisa lebih dari dua ribu baris, dan seluruh id-nya
+           dititipkan di alamat permintaan — cukup panjang untuk ditolak
+           peladen sebelum satu baris pun terhapus. */
+        const id = baris.map((c) => c.id);
+        for (let i = 0; i < id.length; i += 200) {
+            const { error } = await supabaseClient.from("kg_pelaksanaan_piket")
+                .delete().in("id", id.slice(i, i + 200));
+            if (error) { laporError("Gagal membatalkan catatan piket", error); return; }
+        }
     }
     state.catatan = state.catatan.filter((c) => c.jenis !== JENIS[tab]);
     render();
     kabar(`${baris.length} catatan piket ${JENIS[tab]} dalam rentang ini dibatalkan. `
         + "Petugasnya kembali berstatus belum dicatat.");
+}
+
+// ---------- Formulir paraf ----------
+/* Lembar kertas yang dibubuhi paraf petugas, sebagai bukti tersendiri di
+   luar catatan aplikasi — bendahara memakainya saat menyusun laporan.
+   Sengaja KOSONG: statusnya tidak ikut dicetak, supaya paraf dan catatan
+   aplikasi menjadi dua saksi yang berdiri sendiri dan bisa diadu.
+
+   Berapa pun rentang di layar, kertasnya selalu satu lembar per pekan —
+   alasannya ditulis di assets/formulir-piket.js. */
+const JUDUL_FORMULIR = {
+    meja: "Formulir Paraf Piket Meja Sekolah",
+    unit: "Formulir Paraf Piket Unit",
+    parkiran: "Formulir Paraf Piket Parkiran",
+};
+
+// Logo dibaca sekali; satu unduhan bisa berisi belasan lembar dengan kop yang sama.
+let logoBerkas;
+async function logoUnduhan() {
+    if (logoBerkas === undefined) logoBerkas = (await ambilLogoBase64("assets/logo-kecil.png")) || null;
+    return logoBerkas ? { base64: logoBerkas } : null;
+}
+
+function perkakasUnduhan() {
+    if (!window.ExcelJS) throw new Error("Pustaka pembuat Excel belum termuat. Periksa sambungan internet, "
+        + "lalu muat ulang halaman.");
+    if (!window.KopDokumen) throw new Error("Berkas assets/kop-dokumen.js belum termuat, sehingga kop dokumen "
+        + "tidak bisa dibuat. Muat ulang halaman.");
+    if (!window.FormulirPiket) throw new Error("Berkas assets/formulir-piket.js belum termuat, sehingga formulir "
+        + "paraf tidak bisa dibuat. Muat ulang halaman.");
+    return { ExcelJS: window.ExcelJS, Kop: window.KopDokumen, F: window.FormulirPiket };
+}
+
+/* Baris formulir: satu petugas, jam jaganya dikelompokkan per hari.
+   Dihitung ulang tiap pekan karena penugasan unit punya masa berlaku —
+   yang sudah selesai tidak boleh muncul di pekan sesudahnya. */
+function barisFormulir(tab, pekan) {
+    const urut = peringkatGuru(state.guru);
+    if (tab === "parkiran") {
+        return Object.fromEntries(state.parkiran.map((p) => [p.hari, p.nama || namaGuru(p.guru_id)]));
+    }
+
+    const per = new Map();
+    /* Jamnya diserahkan sebagai daftar angka, bukan ringkasan "1–3": di
+       kertas tiap jam mendapat lariknya sendiri, karena tiap jam diparaf
+       sendiri — sama dengan cara kehadirannya dicatat di layar. */
+    const tambahJam = (e, hari, jamKe) => {
+        if (jamKe == null) return;
+        (e.jam[hari] = e.jam[hari] || []).push(Number(jamKe));
+    };
+
+    if (tab === "meja") {
+        for (const p of state.jadwalMeja) {
+            if (!HARI_LIST.includes(p.hari)) continue;
+            if (!per.has(p.guru_id)) {
+                per.set(p.guru_id, { guruId: p.guru_id, nama: namaGuru(p.guru_id), unit: "", jam: {} });
+            }
+            tambahJam(per.get(p.guru_id), p.hari, p.jam_ke);
+        }
+    } else {
+        const berlaku = (t) => (!t.mulai || t.mulai <= pekan.jumat) && (!t.selesai || t.selesai >= pekan.senin);
+        const tugas = new Map(state.tugasUnit.map((t) => [String(t.tugas_id), t]));
+        for (const p of state.jadwalUnit) {
+            if (!HARI_LIST.includes(p.hari)) continue;
+            const t = tugas.get(String(p.tugas_id));
+            if (t && !berlaku(t)) continue;
+            const k = String(p.tugas_id);
+            if (!per.has(k)) {
+                per.set(k, { guruId: p.guru_id, nama: p.guru || t?.nama || namaGuru(p.guru_id),
+                             unit: p.unit || t?.unit || "", jam: {} });
+            }
+            tambahJam(per.get(k), p.hari, p.jam_ke);
+        }
+        // Penanggung jawab yang jam jaganya belum dijadwalkan tetap dapat
+        // barisnya — sama dengan kolom "tanpa jam" di layar.
+        const berjadwal = new Set(state.jadwalUnit.map((p) => String(p.tugas_id)));
+        for (const t of state.tugasUnit) {
+            const k = String(t.tugas_id);
+            if (berjadwal.has(k) || !berlaku(t)) continue;
+            per.set(k, { guruId: t.guru_id, nama: t.nama, unit: t.unit || "", jam: {} });
+        }
+    }
+
+    const daftar = [...per.values()];
+    for (const e of daftar) {
+        for (const h of Object.keys(e.jam)) e.jam[h] = [...new Set(e.jam[h])].sort((a, b) => a - b);
+    }
+    return daftar.sort((a, b) => String(a.unit).localeCompare(String(b.unit), "id")
+                              || urut(a.guruId) - urut(b.guruId));
+}
+
+async function unduhFormulir(tab) {
+    if (!state.hari.length) return;
+    const tombol = document.getElementById("unduh" + besar(tab));
+    const teksLama = tombol.textContent;
+    try {
+        const { ExcelJS, Kop, F } = perkakasUnduhan();
+        const pekan = F.pekanDari(state.awal, state.akhir);
+        if (!pekan.length) return;
+
+        /* Sekali tekan bisa berarti berpuluh halaman cetak, jadi jumlahnya
+           disebut lebih dulu begitu rentangnya melewati sebulan. */
+        if (pekan.length > 5 && !confirm(
+            `Rentang ini menyentuh ${pekan.length} pekan, jadi berkasnya berisi ${pekan.length} lembar — `
+            + "satu halaman cetak per pekan.\n\nLanjutkan?")) return;
+
+        tombol.disabled = true;
+        tombol.textContent = "Menyiapkan…";
+
+        const profil = state.profil || {};
+        const ttd = {
+            tempat: profil.kota || "", tanggal: null,
+            kepala: profil.kepala_sekolah || "",
+            labelKanan: "Wakasek Kurikulum,", namaKanan: profil.kurikulum || ""
+        };
+        const logo = await logoUnduhan();
+        const libur = Object.fromEntries(state.libur);
+
+        const wb = new ExcelJS.Workbook();
+        for (const p of pekan) {
+            F.lembarParaf(wb, {
+                wb, kop: Kop, logo, profil, jenis: tab,
+                judul: JUDUL_FORMULIR[tab],
+                sub: state.ta ? `Tahun Pelajaran ${state.ta}` : "",
+                namaLembar: `${F.tglRingkas(p.senin)} sd ${F.tglRingkas(p.jumat)}`,
+                pekan: p, libur, ttd, baris: barisFormulir(tab, p),
+            });
+        }
+
+        const buf = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buf], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `Formulir_Paraf_Piket_${besar(tab)}_${state.awal}_sd_${state.akhir}.xlsx`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+
+        kabar(`Formulir paraf piket ${JENIS[tab]} diunduh — ${pekan.length} lembar, satu per pekan.`);
+    } catch (err) {
+        laporError("Gagal membuat formulir paraf", err);
+    } finally {
+        tombol.disabled = false;
+        tombol.textContent = teksLama;
+    }
 }
 
 /* Kabar hasil tindakan yang berhasil. Bentuknya sama dengan banner galat

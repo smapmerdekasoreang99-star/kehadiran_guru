@@ -19,7 +19,29 @@
 // membuat tulisan kop terdorong jauh ke kanan. Karena itu semua
 // perhitungan di sini dilakukan dalam piksel, dan penerjemahan ke satuan
 // Excel terjadi di satu tempat saja — dua tetapan di bawah ini.
+//
+// ---------------------------------------------------------------------
+// Kenapa seluruh isinya dibungkus
+// ---------------------------------------------------------------------
+// Berkas ini skrip biasa, bukan modul, jadi setiap nama di dalamnya dulu
+// menjadi nama GLOBAL — sepanggung dengan app.js yang dimuat sesudahnya.
+// Di Data Induk itu berakhir buruk: app.js punya `tempatkan(siswaId,
+// kode)` untuk memindahkan siswa antar rombel, namanya sama dengan
+// `tempatkan(lebarKolomPx, x)` di sini, dan karena app.js dimuat
+// belakangan, dialah yang menang. Akibatnya kopExcel memanggil fungsi
+// pemindah siswa, menerima sebuah Promise, dan seluruh unduhan xlsx di
+// Data Induk mati dengan pesan "A Cell needs a Row" — pesan yang tidak
+// menyebut-nyebut nama maupun berkas yang sebenarnya bertabrakan.
+//
+// Pembungkus ini menutup kemungkinan itu untuk SELAMANYA, bukan hanya
+// untuk satu nama: yang keluar dari sini cuma window.KopDokumen, dan
+// keempat aplikasi memang hanya memakainya lewat nama itu. Isinya
+// sengaja tidak ikut digeser masuk supaya perubahannya tetap terbaca
+// sebagai dua baris, bukan sebagai berkas yang ditulis ulang.
 // =====================================================================
+
+(function () {
+"use strict";
 
 const PX_KOLOM  = w => w * 7 + 5;   // satuan lebar kolom Excel → piksel
 const PX_INDENT = 10;               // satu tingkat indentasi → piksel
@@ -364,3 +386,5 @@ window.KopDokumen = {
     tataLetak, susunanKop, barisIdentitas,
     kopExcel, kakiExcel, kopKanvas, tinggiKopKanvas
 };
+
+})();

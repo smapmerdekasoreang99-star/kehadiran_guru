@@ -1291,3 +1291,37 @@ tr.total td {
    berubah sesudah pelaksanaannya dicatat. Tetap tampil supaya bisa
    dibatalkan satu per satu — ditandai, karena bukan giliran terjadwal. */
 .pk-pita.tercecer { outline: 1px dotted var(--emas-teks); outline-offset: -1px; }
+
+/* Tombol pintas pekan di halaman Pelaksanaan Piket. Rentangnya tetap
+   bebas — ini cuma jalan pintas bagi yang bekerja pekan demi pekan,
+   karena lembar paraf yang dicetak memang selalu satu pekan. */
+.pekan-pintas {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    overflow: hidden;
+    background: var(--surface);
+}
+.pekan-pintas button {
+    border: 0;
+    border-right: 1px solid var(--line);
+    background: none;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-muted);
+    min-height: 38px;
+}
+.pekan-pintas button:last-child { border-right: 0; }
+.pekan-pintas button:hover { background: var(--gold-tint); color: var(--emas-teks); }
+
+/* Satuan kolom pada kepala tabel rekap piket: jam untuk meja dan unit,
+   hari untuk parkiran. Ditulis kecil supaya yang dibaca lebih dulu tetap
+   nama jenisnya — tetapi tetap tertulis, karena dua satuan yang mudah
+   tertukar itulah yang dulu membuat angka dibaca keliru. */
+.tabel-rekap .satuan-kolom {
+    font-weight: 400;
+    font-size: 11px;
+    color: var(--ink-muted);
+    white-space: nowrap;
+}

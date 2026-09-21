@@ -256,8 +256,10 @@ export async function bukuPiket({ ExcelJS, baris, total, pengaturan, awal, akhir
         judul: "REKAPITULASI PELAKSANAAN TUGAS PIKET",
         sub: labelPeriode(awal, akhir).replace(" :", ":"), kolomTerakhir: KOL });
 
-    kepalaTabel(ws, r, ["NO", "NAMA", "MEJA SEKOLAH TERJADWAL", "MEJA SEKOLAH JAGA", "UNIT TERJADWAL", "UNIT JAGA",
-                        "PARKIRAN TERJADWAL", "PARKIRAN JAGA"], { tinggi: 34 });
+    kepalaTabel(ws, r, ["NO", "NAMA",
+                        "MEJA SEKOLAH TERJADWAL (JAM)", "MEJA SEKOLAH JAGA (JAM)",
+                        "UNIT TERJADWAL (JAM)", "UNIT JAGA (JAM)",
+                        "PARKIRAN TERJADWAL (HARI)", "PARKIRAN JAGA (HARI)"], { tinggi: 34 });
     r += 1;
     baris.forEach((b, i) => {
         selData(ws, r, 1, i + 1, { align: "center" });
@@ -270,8 +272,10 @@ export async function bukuPiket({ ExcelJS, baris, total, pengaturan, awal, akhir
     [total.meja.terjadwal, total.meja.jaga, total.unit.terjadwal, total.unit.jaga, total.parkiran.terjadwal, total.parkiran.jaga]
         .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", bold: true, fill: true }));
     r += 2;
-    ws.getCell(r, 1).value = '"Jaga" dihitung per hari, termasuk hari saat yang bersangkutan menggantikan petugas lain. '
-        + '"Absen" adalah hari terjadwal yang tidak dijalankan sendiri, baik karena tidak hadir maupun karena digantikan.';
+    ws.getCell(r, 1).value = 'Satuannya mengikuti jadwalnya: Meja Sekolah dan Unit dihitung per JAM pelajaran, '
+        + 'Parkiran per HARI jaga — parkiran memang bukan jam pelajaran, melainkan sekali jaga sesudah bel pulang. '
+        + '"Jaga" adalah giliran yang benar-benar dijalankan; piket tidak mengenal pengganti, jadi selisihnya '
+        + 'berarti petugasnya tidak hadir atau gilirannya belum dicatat.';
     ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true }; ws.mergeCells(r, 1, r, KOL);
     r += 2;
     blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 8, kolomTerakhir: KOL });

@@ -115,10 +115,16 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
 
     const per = new Map();
     const baris = (gid) => {
-        if (!per.has(gid)) per.set(gid, { guru_id: gid, terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0 });
+        if (!per.has(gid)) per.set(gid, { guru_id: gid, kontrak: 0, terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0 });
         return per.get(gid);
     };
+    /* Kontrak jam = jam per MINGGU menurut jadwal, bukan jumlah jam sepanjang
+       rentang — pembanding untuk Terjadwal. Diambil dari semester tanggal
+       akhir rentang, karena rentang boleh melintasi pergantian semester dan
+       kontrak yang berlaku adalah yang terbaru. */
+    const semesterKontrak = semesterTanggal(akhir);
     for (const j of jadwal) {
+        if (semesterBaris(j) === semesterKontrak) baris(j.guru_id).kontrak += 1;
         const n = (jumlahHari[semesterBaris(j)] || {})[j.hari] || 0;
         if (n) baris(j.guru_id).terjadwal += n;
     }
@@ -139,9 +145,9 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
         hasil.push(row);
     }
     const total = hasil.reduce((t, r) => {
-        for (const k of ["terjadwal", "ST", "IT", "TK", "HTTM", "tidakHadir", "hadirTM"]) t[k] += r[k];
+        for (const k of ["kontrak", "terjadwal", "ST", "IT", "TK", "HTTM", "tidakHadir", "hadirTM"]) t[k] += r[k];
         return t;
-    }, { terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0, tidakHadir: 0, hadirTM: 0 });
+    }, { kontrak: 0, terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0, tidakHadir: 0, hadirTM: 0 });
     total.hadir = Math.round(hitungBobot(total) * 100) / 100;
     total.persen = total.terjadwal ? Math.round((total.hadir / total.terjadwal) * 10000) / 100 : null;
     return { baris: hasil, total, jumlahHariKerja: hari.length };

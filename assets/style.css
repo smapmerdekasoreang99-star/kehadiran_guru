@@ -1166,18 +1166,6 @@ tr.total td {
     box-shadow: 0 0 0 3px var(--emas-muda);
 }
 
-/* Rincian di bawah angka Hadir pada rekap Wali Kelas: berapa dari Upacara
-   dan berapa dari Bimbingan. Sengaja lebih kecil dan tipis — yang dibaca
-   lebih dulu tetap angka gabungannya, rinciannya menyusul bila dicari. */
-.rinci-hadir {
-    display: block;
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--ink-muted);
-    line-height: 1.3;
-    white-space: nowrap;
-}
-
 /* ---------- Pelaksanaan Piket: matriks pita nama ----------
    Bentuknya sengaja sama dengan matriks jadwal piket di Data Induk —
    orang yang sama memakai kedua halaman itu. Yang berbeda hanya arti

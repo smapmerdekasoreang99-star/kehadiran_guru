@@ -57,13 +57,14 @@ export function hariKerja(awal, akhir, liburSet) {
     return out;
 }
 
-/* Rekap tugas wali kelas: SATU baris per orang, tetapi kehadirannya
-   disertai rincian Upacara dan Bimbingan.
+/* Rekap tugas wali kelas: SATU baris per orang, dengan Terjadwal dan
+   Hadir dirinci per komponen — Upacara dan Bimbingan Wali Kelas.
 
-   Yang dinilai di aplikasi ini kinerja, jadi angka yang dipakai tetap
-   gabungan keduanya. Rinciannya disertakan karena maknanya berbeda:
-   tidak hadir upacara dan tidak hadir bimbingan bukan hal yang sama bagi
-   seorang wali kelas, meskipun keduanya sama-sama satu jam.
+   Rinciannya perlu karena maknanya berbeda: tidak hadir upacara dan tidak
+   hadir bimbingan bukan hal yang sama bagi seorang wali kelas, meskipun
+   keduanya sama-sama satu jam. Persentase kehadirannya tetap dihitung
+   dari gabungan keduanya (dengan bobot status yang sama seperti rekap
+   jam mengajar), karena yang dinilai di sini kinerja.
 
    Perhitungannya memanggil rekapKehadiran yang sama seperti jam mengajar —
    sekali untuk gabungan, sekali untuk tiap komponen — supaya bobot status
@@ -86,12 +87,16 @@ export function rekapWali({ jadwal, ketidakhadiran, awal, akhir, liburSet }) {
         ...gabungan,
         baris: gabungan.baris.map((b) => ({
             ...b,
+            terjadwalUpacara: ambil(perKode.UPACARA, b.guru_id, 'terjadwal'),
             hadirUpacara: ambil(perKode.UPACARA, b.guru_id, 'hadirTM'),
+            terjadwalBimbingan: ambil(perKode.BIMBINGAN, b.guru_id, 'terjadwal'),
             hadirBimbingan: ambil(perKode.BIMBINGAN, b.guru_id, 'hadirTM'),
         })),
         total: {
             ...gabungan.total,
+            terjadwalUpacara: perKode.UPACARA.total.terjadwal,
             hadirUpacara: perKode.UPACARA.total.hadirTM,
+            terjadwalBimbingan: perKode.BIMBINGAN.total.terjadwal,
             hadirBimbingan: perKode.BIMBINGAN.total.hadirTM,
         },
     };

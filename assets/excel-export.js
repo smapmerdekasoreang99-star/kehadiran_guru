@@ -188,6 +188,48 @@ function tulisSheetKehadiran(wb, namaSheet, judul, baris, total, { ExcelJS, peng
 }
 
 // =========================================================
+// 2b. REKAP TUGAS WALI KELAS
+// =========================================================
+// Susunannya sama dengan tab Wali Kelas di layar: Terjadwal dan Hadir per
+// komponen (Upacara, Bimbingan WK), lalu satu % Kehadiran dari gabungannya.
+export async function bukuWali({ ExcelJS, baris, total, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64 }) {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Tugas Wali Kelas");
+    const KOL = 7;
+    ws.columns = [{ width: 5 }, { width: 34 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 13 }];
+    let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul: "REKAPITULASI KEHADIRAN TUGAS WALI KELAS",
+        sub: `${labelPeriode(awal, akhir).replace(" :", ":")}  ·  ${jumlahHariKerja} hari kerja`, kolomTerakhir: KOL });
+    kepalaTabel(ws, r, ["NO", "NAMA WALI KELAS",
+                        "UPACARA TERJADWAL (JAM)", "UPACARA HADIR (JAM)",
+                        "BIMBINGAN WK TERJADWAL (JAM)", "BIMBINGAN WK HADIR (JAM)",
+                        "% KEHADIRAN"], { tinggi: 34 });
+    r += 1;
+    const tulisAngka = (b, opsi = {}) => {
+        [b.terjadwalUpacara, b.hadirUpacara, b.terjadwalBimbingan, b.hadirBimbingan]
+            .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", ...opsi }));
+        selData(ws, r, 7, b.persen === null || b.persen === undefined ? "" : b.persen / 100,
+                { fmt: "0.00%", align: "center", bold: true, ...opsi });
+    };
+    baris.forEach((b, i) => {
+        selData(ws, r, 1, i + 1, { align: "center" }); selData(ws, r, 2, b.nama);
+        tulisAngka(b);
+        ws.getRow(r).height = 30;
+        r += 1;
+    });
+    selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
+    tulisAngka(total, { bold: true, fill: true });
+    r += 2;
+    ws.getCell(r, 1).value = `Upacara & Bimbingan Wali Kelas, Senin jam 1-2, terpisah dari jam mengajar. % Kehadiran dihitung dari gabungan keduanya `
+        + `dengan bobot status: HTTM ${bobot.HTTM * 100}% · ST ${bobot.ST * 100}% · STT ${bobot.STT * 100}% · IT ${bobot.IT * 100}% · ITT ${bobot.ITT * 100}% · TK ${bobot.TK * 100}%.`;
+    ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true }; ws.mergeCells(r, 1, r, KOL);
+    r += 2;
+    blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 6, kolomTerakhir: KOL });
+    pengaturanCetak(ws, "portrait");
+    ws.pageSetup.printTitlesRow = "6:6";
+    return wb;
+}
+
+// =========================================================
 // 3. REKAP GURU PENGGANTI (ringkas + rincian)
 // =========================================================
 export async function bukuPengganti({ ExcelJS, ringkas, rincian, tanpaPengganti, pengaturan, awal, akhir, logoBase64 }) {
@@ -250,35 +292,39 @@ export { ambilLogoBase64 };
 export async function bukuPiket({ ExcelJS, baris, total, pengaturan, awal, akhir, logoBase64 }) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Pelaksanaan Piket");
-    const KOL = 8;
-    ws.columns = [{ width: 5 }, { width: 34 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }];
+    const KOL = 11;
+    ws.columns = [{ width: 5 }, { width: 34 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }];
     let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan,
         judul: "REKAPITULASI PELAKSANAAN TUGAS PIKET",
         sub: labelPeriode(awal, akhir).replace(" :", ":"), kolomTerakhir: KOL });
 
     kepalaTabel(ws, r, ["NO", "NAMA",
-                        "MEJA SEKOLAH TERJADWAL (JAM)", "MEJA SEKOLAH JAGA (JAM)",
-                        "UNIT TERJADWAL (JAM)", "UNIT JAGA (JAM)",
-                        "PARKIRAN TERJADWAL (HARI)", "PARKIRAN JAGA (HARI)"], { tinggi: 34 });
+                        "MEJA SEKOLAH TERJADWAL (JAM)", "MEJA SEKOLAH JAGA (JAM)", "MEJA SEKOLAH % KEHADIRAN",
+                        "UNIT TERJADWAL (JAM)", "UNIT JAGA (JAM)", "UNIT % KEHADIRAN",
+                        "PARKIRAN TERJADWAL (HARI)", "PARKIRAN JAGA (HARI)", "PARKIRAN % KEHADIRAN"], { tinggi: 34 });
     r += 1;
+    // Tiga kolom per jenis: terjadwal, jaga, lalu persentasenya (jaga ÷ terjadwal).
+    const tulisJenis = (x, c, opsi = {}) => {
+        selData(ws, r, c, x.terjadwal, { align: "center", ...opsi });
+        selData(ws, r, c + 1, x.jaga, { align: "center", ...opsi });
+        selData(ws, r, c + 2, x.terjadwal ? x.jaga / x.terjadwal : "", { fmt: "0.00%", align: "center", bold: true, ...opsi });
+    };
     baris.forEach((b, i) => {
         selData(ws, r, 1, i + 1, { align: "center" });
         selData(ws, r, 2, b.nama);
-        [b.meja.terjadwal, b.meja.jaga, b.unit.terjadwal, b.unit.jaga, b.parkiran.terjadwal, b.parkiran.jaga]
-            .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center" }));
+        tulisJenis(b.meja, 3); tulisJenis(b.unit, 6); tulisJenis(b.parkiran, 9);
         r += 1;
     });
     selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
-    [total.meja.terjadwal, total.meja.jaga, total.unit.terjadwal, total.unit.jaga, total.parkiran.terjadwal, total.parkiran.jaga]
-        .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", bold: true, fill: true }));
+    tulisJenis(total.meja, 3, { bold: true, fill: true }); tulisJenis(total.unit, 6, { bold: true, fill: true }); tulisJenis(total.parkiran, 9, { bold: true, fill: true });
     r += 2;
     ws.getCell(r, 1).value = 'Satuannya mengikuti jadwalnya: Meja Sekolah dan Unit dihitung per JAM pelajaran, '
         + 'Parkiran per HARI jaga — parkiran memang bukan jam pelajaran, melainkan sekali jaga sesudah bel pulang. '
-        + '"Jaga" adalah giliran yang benar-benar dijalankan; piket tidak mengenal pengganti, jadi selisihnya '
-        + 'berarti petugasnya tidak hadir atau gilirannya belum dicatat.';
+        + '"Jaga" adalah giliran yang benar-benar dijalankan; "% Kehadiran" = Jaga ÷ Terjadwal. Piket tidak mengenal '
+        + 'pengganti, jadi selisihnya berarti petugasnya tidak hadir atau gilirannya belum dicatat.';
     ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true }; ws.mergeCells(r, 1, r, KOL);
     r += 2;
-    blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 8, kolomTerakhir: KOL });
+    blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 10, kolomTerakhir: KOL });
     pengaturanCetak(ws, "landscape");
     ws.pageSetup.printTitlesRow = "6:6";
 

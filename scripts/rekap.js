@@ -4,8 +4,8 @@ import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas } from "../assets/kelas-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
-import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260921ad";
-import { bukuKehadiran, bukuPengganti, bukuPiket, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921ae";
+import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260922a";
+import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260922a";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
@@ -228,6 +228,10 @@ async function muatPiket() {
    hanya melaporkan jumlah harinya. */
 const KUNCI_JENIS = { "Meja Sekolah": "meja", "Unit": "unit", "Parkiran": "parkiran" };
 
+/* Persentase per jenis piket: jaga ÷ terjadwal. Tanpa bobot status,
+   karena pelaksanaan piket hanya mengenal hadir atau tidak. */
+const persenPiket = (x) => x.terjadwal ? Math.round((x.jaga / x.terjadwal) * 10000) / 100 : null;
+
 function rekapPiket(hari) {
     const per = new Map();
     const baris = (id) => {
@@ -288,6 +292,8 @@ function rekapPiket(hari) {
     return { baris: rows, total };
 }
 
+const selPiket = (x) => num(x.terjadwal) + num(x.jaga) + persenCell(persenPiket(x));
+
 function renderPiket() {
     const h = state.hasilPiket; if (!h) return;
     const rows = h.baris;
@@ -295,12 +301,12 @@ function renderPiket() {
     document.getElementById("bodyPiket").innerHTML = rows.map((r, i) => `
       <tr>
         <td class="num">${i + 1}</td><td class="nama">${r.nama}</td>
-        ${num(r.meja.terjadwal)}${num(r.meja.jaga)}${num(r.unit.terjadwal)}${num(r.unit.jaga)}${num(r.parkiran.terjadwal)}${num(r.parkiran.jaga)}
+        ${selPiket(r.meja)}${selPiket(r.unit)}${selPiket(r.parkiran)}
       </tr>`).join("");
     const t = h.total;
     document.getElementById("footPiket").innerHTML = rows.length ? `
       <tr class="total"><td></td><td>Total (${rows.length} petugas)</td>
-        ${num(t.meja.terjadwal)}${num(t.meja.jaga)}${num(t.unit.terjadwal)}${num(t.unit.jaga)}${num(t.parkiran.terjadwal)}${num(t.parkiran.jaga)}
+        ${selPiket(t.meja)}${selPiket(t.unit)}${selPiket(t.parkiran)}
       </tr>` : "";
     document.getElementById("ringkasPiket").textContent =
         `${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)} · ${state.piket.length} catatan pelaksanaan`;
@@ -308,9 +314,10 @@ function renderPiket() {
         `Satuannya mengikuti jadwalnya: Meja Sekolah dan Unit dihitung per JAM pelajaran, `
         + `Parkiran per HARI jaga — parkiran memang bukan jam pelajaran, melainkan sekali jaga `
         + `sesudah bel pulang. "Terjadwal" dihitung dari jadwal piket pada hari kerja dalam `
-        + `rentang ini, di luar hari libur; "Jaga" adalah yang benar-benar dijalankan. Piket `
-        + `tidak mengenal pengganti, jadi selisih antara keduanya berarti petugasnya tidak hadir, `
-        + `atau gilirannya belum dicatat. Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan.`;
+        + `rentang ini, di luar hari libur; "Jaga" adalah yang benar-benar dijalankan; `
+        + `"% Kehadiran" = Jaga ÷ Terjadwal. Piket tidak mengenal pengganti, jadi selisih antara `
+        + `keduanya berarti petugasnya tidak hadir, atau gilirannya belum dicatat. `
+        + `Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan.`;
 }
 
 // ---------- Render kehadiran ----------
@@ -347,23 +354,21 @@ function barisWaliTersaring() {
         .filter((r) => !q || r.nama.toLowerCase().includes(q)).sort(urutBaris);
 }
 
-/* Kolom Hadir: satu angka gabungan, disertai rinciannya dengan huruf lebih
-   kecil dan tipis. Rinciannya perlu karena tidak hadir upacara dan tidak
-   hadir bimbingan bukan hal yang sama bagi seorang wali kelas, meskipun
-   keduanya sama-sama satu jam. */
-const selHadir = (r) => `<td class="num">${fmt(r.hadirTM)}<span class="rinci-hadir">`
-    + `${fmt(r.hadirUpacara)} Up + ${fmt(r.hadirBimbingan)} BW</span></td>`;
+/* Upacara dan Bimbingan Wali Kelas masing-masing punya kolom Terjadwal
+   dan Hadir, karena tidak hadir upacara dan tidak hadir bimbingan bukan
+   hal yang sama bagi seorang wali kelas. Persentasenya satu, dari
+   gabungan keduanya: yang diukur di sini kinerja, bukan uang, dan untuk
+   itu keduanya sama beratnya. Pemisahan menurut tarif dikerjakan Induk
+   Pembiayaan. */
+const selWali = (r) => num(r.terjadwalUpacara) + num(fmt(r.hadirUpacara))
+    + num(r.terjadwalBimbingan) + num(fmt(r.hadirBimbingan)) + persenCell(r.persen);
 
-/* Upacara dan Bimbingan Wali Kelas ditampilkan sebagai satu angka.
-   Yang diukur di sini kehadiran untuk penilaian kinerja, bukan uang —
-   dan untuk itu keduanya sama saja beratnya. Pemisahan menurut tarif
-   dikerjakan Induk Pembiayaan. */
 function renderWali() {
     const w = state.hasilWali; if (!w) return;
     const rows = barisWaliTersaring();
     document.getElementById("bodyWali").innerHTML = rows.map((r) => `
-      <tr><td class="nama">${r.nama}</td>${num(r.terjadwal)}${selHadir(r)}${num(r.HTTM)}${num(r.ST)}${num(r.STT)}${num(r.IT)}${num(r.ITT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}</tr>`).join("")
-      || `<tr><td colspan="11" class="empty-state">Tidak ada jam tugas wali kelas pada rentang ini.</td></tr>`;
+      <tr><td class="nama">${r.nama}</td>${selWali(r)}</tr>`).join("")
+      || `<tr><td colspan="6" class="empty-state">Tidak ada jam tugas wali kelas pada rentang ini.</td></tr>`;
     const t = w.total;
     document.getElementById("ringkasWali").textContent =
         `${w.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
@@ -374,10 +379,11 @@ function renderWali() {
        Keduanya benar; yang membingungkan hanya karena sama-sama disebut "jam". */
     document.getElementById("footWaliTeks").textContent =
         "Terjadwal dihitung sepanjang rentang tanggal: tiap wali kelas 1 jam Upacara dan 1 jam "
-        + "Bimbingan setiap Senin, jadi dua Senin berarti 4 jam. Di aplikasi Induk Pembiayaan "
-        + "angkanya per minggu (1 jam), karena honornya dibayarkan bulanan atas dasar jam "
-        + "kontrak itu — bukan dikalikan banyaknya pekan.";
-    document.getElementById("footWali").innerHTML = `<tr class="total"><td>Total (${w.baris.length} wali kelas)</td>${num(t.terjadwal)}${selHadir(t)}${num(t.HTTM)}${num(t.ST)}${num(t.STT)}${num(t.IT)}${num(t.ITT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
+        + "Bimbingan setiap Senin, jadi dua Senin berarti 2 jam di tiap kolom. Di aplikasi Induk "
+        + "Pembiayaan angkanya per minggu (1 jam), karena honornya dibayarkan bulanan atas dasar jam "
+        + "kontrak itu — bukan dikalikan banyaknya pekan. Ketidakhadiran yang berstatus (sakit, ijin, "
+        + "HTTM) tidak masuk kolom Hadir, tetapi tetap dihitung berbobot pada % Kehadiran.";
+    document.getElementById("footWali").innerHTML = `<tr class="total"><td>Total (${w.baris.length} wali kelas)</td>${selWali(t)}</tr>`;
 }
 
 // ---------- Render pengganti ----------
@@ -450,7 +456,7 @@ const xlsKehadiran = bungkus(async () => {
 });
 const xlsWali = bungkus(async () => {
     const w = state.hasilWali; if (!w) return;
-    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisWaliTersaring(), total: w.total, wali: null, judul: "REKAPITULASI KEHADIRAN TUGAS WALI KELAS", namaSheet: "Tugas Wali Kelas", catatan: "Upacara & Bimbingan Wali Kelas, Senin jam 1-2 (terpisah dari jam mengajar), digabung sebagai satu angka kehadiran.", pengaturan: state.profil, awal: state.awal, akhir: state.akhir, jumlahHariKerja: w.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
+    const wb = await bukuWali({ ExcelJS: ExcelJSLib(), baris: barisWaliTersaring(), total: w.total, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, jumlahHariKerja: w.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Tugas Wali Kelas ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsPengganti = bungkus(async () => {

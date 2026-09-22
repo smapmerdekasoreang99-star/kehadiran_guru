@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/dasar.css?v=2">
-<link rel="stylesheet" href="assets/style.css?v=20260921ac" />
+<link rel="stylesheet" href="assets/style.css?v=20260922a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 </head>
@@ -165,16 +165,21 @@
         <table class="tabel-rekap">
           <thead>
             <tr>
-              <th>Wali Kelas</th><th class="num">Terjadwal</th><th class="num">Hadir (Up + BW)</th><th class="num">HTTM</th>
-              <th class="num">ST</th><th class="num">STT</th><th class="num">IT</th><th class="num">ITT</th><th class="num">TK</th>
-              <th class="num">Hadir (bobot)</th><th class="num">% Hadir</th>
+              <th rowspan="2">Wali Kelas</th>
+              <th colspan="2">Upacara <span class="satuan-kolom">(jam)</span></th>
+              <th colspan="2">Bimbingan WK <span class="satuan-kolom">(jam)</span></th>
+              <th rowspan="2" class="num">% Kehadiran</th>
+            </tr>
+            <tr>
+              <th class="num">Terjadwal</th><th class="num">Hadir</th>
+              <th class="num">Terjadwal</th><th class="num">Hadir</th>
             </tr>
           </thead>
           <tbody id="bodyWali"></tbody>
           <tfoot id="footWali"></tfoot>
         </table>
       </div>
-      <div class="table-foot">Upacara &amp; Bimbingan Wali Kelas, Senin jam 1–2 — direkap terpisah dari jam mengajar. Bobot dan rumus % Hadir sama dengan rekap kehadiran.</div>
+      <div class="table-foot">Upacara &amp; Bimbingan Wali Kelas, Senin jam 1–2 — direkap terpisah dari jam mengajar. % Kehadiran dihitung dari gabungan keduanya, dengan bobot status dan rumus yang sama seperti rekap kehadiran.</div>
       <div class="table-foot" id="footWaliTeks"></div>
     </section>
 
@@ -191,14 +196,14 @@
           <thead>
             <tr>
               <th rowspan="2">No</th><th rowspan="2">Nama</th>
-              <th colspan="2">Meja Sekolah <span class="satuan-kolom">(jam)</span></th>
-              <th colspan="2">Unit <span class="satuan-kolom">(jam)</span></th>
-              <th colspan="2">Parkiran <span class="satuan-kolom">(hari)</span></th>
+              <th colspan="3">Meja Sekolah <span class="satuan-kolom">(jam)</span></th>
+              <th colspan="3">Unit <span class="satuan-kolom">(jam)</span></th>
+              <th colspan="3">Parkiran <span class="satuan-kolom">(hari)</span></th>
             </tr>
             <tr>
-              <th class="num">Terjadwal</th><th class="num">Jaga</th>
-              <th class="num">Terjadwal</th><th class="num">Jaga</th>
-              <th class="num">Terjadwal</th><th class="num">Jaga</th>
+              <th class="num">Terjadwal</th><th class="num">Jaga</th><th class="num">% Kehadiran</th>
+              <th class="num">Terjadwal</th><th class="num">Jaga</th><th class="num">% Kehadiran</th>
+              <th class="num">Terjadwal</th><th class="num">Jaga</th><th class="num">% Kehadiran</th>
             </tr>
           </thead>
           <tbody id="bodyPiket"></tbody>
@@ -252,6 +257,6 @@
 </div>
 
 <script src="assets/kop-dokumen.js?v=3"></script>
-<script type="module" src="scripts/rekap.js?v=20260921ae"></script>
+<script type="module" src="scripts/rekap.js?v=20260922a"></script>
 </body>
 </html>

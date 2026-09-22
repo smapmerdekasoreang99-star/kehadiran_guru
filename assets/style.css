@@ -1287,6 +1287,15 @@ tr.total td {
    dibatalkan satu per satu — ditandai, karena bukan giliran terjadwal. */
 .pk-pita.tercecer { outline: 1px dotted var(--emas-teks); outline-offset: -1px; }
 
+/* ---- Kehadiran Staf: baris orang, kolom tanggal ---- */
+.matriks.staf thead th.m-sudut { width: 190px; }
+.matriks.staf tbody th.m-label { width: 190px; }
+.matriks.staf td.pk-staf-sel { height: 40px; padding: 5px 4px; vertical-align: middle; }
+.matriks.staf th.m-hari.pk-libur { background: var(--flame-tint); }
+.matriks.staf .pk-pita.lebar { margin-bottom: 0; justify-content: center; }
+/* Masuk lebih lambat dari ketentuan: tetap hijau (hadir), diberi garis emas. */
+.pk-pita.terlambat { box-shadow: inset 0 -2px 0 var(--gold); }
+
 /* Tombol pintas pekan di halaman Pelaksanaan Piket. Rentangnya tetap
    bebas — ini cuma jalan pintas bagi yang bekerja pekan demi pekan,
    karena lembar paraf yang dicetak memang selalu satu pekan. */

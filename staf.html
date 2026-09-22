@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kehadiran Staf — Guru Pengganti SMA Plus Merdeka Soreang</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/dasar.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=20260922c" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="assets/logo.png" alt="Lambang SMA Plus Merdeka Soreang" />
+      <div class="name">SMA Plus<br/>Merdeka Soreang</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="index.html">Beranda</a>
+      <a href="jadwal.html">Jadwal Kegiatan Sekolah</a>
+      <a href="ketidakhadiran.html">Ketidakhadiran Guru</a>
+      <a href="penugasan.html">Penugasan Pengganti</a>
+      <a href="piket.html">Pelaksanaan Piket</a>
+      <a href="staf.html" class="active">Kehadiran Staf</a>
+      <a href="rekap.html">Rekap</a>
+    </nav>
+
+    <div class="sidebar-foot">Sistem Guru Pengganti<br/>Tahun Ajaran 2026/2027</div>
+  </aside>
+
+  <main class="lebar">
+    <div class="page-head">
+      <div>
+        <h1>Kehadiran Staf</h1>
+        <p>Hari hadir tenaga kependidikan yang honornya bergantung kedatangan — satpam, petugas
+          kebersihan, staf kontrak. Baris adalah orang, kolom adalah tanggal; hari libur kerjanya
+          mengikuti ketentuan di Data Induk &rarr; Jam Kerja Staf. <b>Ketuk selnya</b>, lalu pilih
+          kehadirannya. Jam masuk dan pulang boleh diisi bila perlu dibandingkan dengan ketentuan.</p>
+      </div>
+      <div class="page-head-actions">
+        <div class="date-field">
+          <label for="tglAwal">Dari</label>
+          <input type="date" id="tglAwal" />
+          <label for="tglAkhir">sampai</label>
+          <input type="date" id="tglAkhir" />
+          <span class="hari-badge" id="rentangLabel">—</span>
+        </div>
+        <div class="pekan-pintas" role="group" aria-label="Pilih sepekan sekaligus">
+          <button type="button" id="pekanMundur" title="Pekan sebelumnya">◀</button>
+          <button type="button" id="pekanIni">Pekan ini</button>
+          <button type="button" id="pekanMaju" title="Pekan berikutnya">▶</button>
+        </div>
+        <button id="lockToggle" class="btn-lock">🔒 Buka Kunci Edit</button>
+      </div>
+    </div>
+
+    <div id="notice" class="notice" hidden>
+      Mode pratinjau — belum terhubung ke Supabase. Halaman ini tidak punya data contoh.
+    </div>
+
+    <div id="pesanRentang" class="weekend-notice" hidden></div>
+    <div id="liburNotice" class="notice" hidden></div>
+
+    <div id="mainCard">
+      <div class="rekap-tabs">
+        <button type="button" class="rekap-tab active" data-tab="matriks">Catat kehadiran</button>
+        <button type="button" class="rekap-tab" data-tab="rekap">Rekap hari hadir</button>
+      </div>
+
+      <section id="tab-matriks" class="card">
+        <div class="piket-legenda">
+          <span class="pk-legenda hadir">Hadir</span>
+          <span class="pk-legenda absen">Tidak hadir</span>
+          <span class="pk-legenda draf">Belum dicatat</span>
+          <span class="pk-legenda-teks">Sel bergaris merah adalah hari libur kerja orang itu.</span>
+        </div>
+        <div class="toolbar">
+          <span id="ringkasMatriks" class="tugas-note"></span>
+          <div class="toolbar-actions">
+            <button type="button" id="batalSemua" class="btn btn-danger-text" hidden></button>
+            <button type="button" id="simpanSemua" class="btn btn-primary">Simpan yang belum tercatat</button>
+          </div>
+        </div>
+        <div class="matriks-scroll"><table id="matriksStaf" class="matriks staf"></table></div>
+        <div id="kosongStaf" class="empty-state" hidden>Belum ada staf yang hari hadirnya perlu dicatat. Di Data Induk &rarr; Tugas Guru, tugas Staf dengan pola honor <b>bulanan + insentif kedatangan</b> atau <b>upah harian</b> akan muncul di sini.</div>
+        <div class="table-foot" id="footMatriks"></div>
+      </section>
+
+      <section id="tab-rekap" class="card" hidden>
+        <div class="toolbar">
+          <span id="ringkasRekap" class="tugas-note"></span>
+        </div>
+        <div class="table-scroll">
+          <table class="tabel-rekap" id="tabelRekap">
+            <thead><tr>
+              <th>No</th><th>Nama</th><th>Jabatan</th><th>Pola honor</th>
+              <th class="num" title="Hari kerja menurut ketentuan jam kerja, di luar hari libur">Hari kerja</th>
+              <th class="num">Hadir</th><th class="num">Tidak hadir</th>
+              <th class="num">Belum dicatat</th>
+              <th class="num" title="Jam masuk tercatat lebih lambat dari ketentuan">Terlambat</th>
+              <th class="num">% Hadir</th>
+            </tr></thead>
+            <tbody id="bodyRekap"></tbody>
+            <tfoot id="footRekap"></tfoot>
+          </table>
+        </div>
+        <div class="table-foot">Hari kerja dihitung dari ketentuan Jam Kerja Staf di Data Induk pada rentang ini, di luar hari libur sekolah.
+          % Hadir = Hadir ÷ Hari kerja. Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan menurut pola honor masing-masing.</div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- Modal: kehadiran satu staf pada satu tanggal -->
+<div id="statusModal" class="modal-backdrop" hidden>
+  <div class="modal" style="max-width:420px;">
+    <h2 id="statusNama">&mdash;</h2>
+    <p id="statusSub" style="margin:-10px 0 16px;color:#6E6455;font-size:13.5px;"></p>
+    <p id="statusLibur" class="notice" hidden style="margin-bottom:16px;"></p>
+
+    <div class="field" style="display:flex;gap:12px;">
+      <div style="flex:1"><label for="statusMasuk">Jam masuk</label><input type="time" id="statusMasuk" /></div>
+      <div style="flex:1"><label for="statusPulang">Jam pulang</label><input type="time" id="statusPulang" /></div>
+    </div>
+    <p class="field-hint" id="statusKetentuan" style="margin:-8px 0 12px;"></p>
+
+    <div class="field">
+      <label for="statusCatatan">Catatan (opsional)</label>
+      <input type="text" id="statusCatatan" placeholder="mis. izin setengah hari, tukar hari" />
+      <p class="field-hint">Isi dulu bila perlu, lalu pilih kehadirannya di bawah &mdash; pilihan langsung tersimpan.</p>
+    </div>
+
+    <div class="pilih-hadir">
+      <button type="button" class="pilih-ya" data-status="Hadir">Hadir</button>
+      <button type="button" class="pilih-tidak" data-status="Tidak Hadir">Tidak Hadir</button>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" id="statusHapus" class="btn btn-danger-text" hidden>Batalkan catatan</button>
+      <button type="button" id="statusTutup" class="btn btn-ghost">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: PIN (satu kali per sesi browser) -->
+<div id="pinModal" class="modal-backdrop" hidden>
+  <div class="modal" style="max-width:360px;">
+    <h2>Buka Kunci Edit</h2>
+    <p style="margin:-8px 0 16px;color:#6E6455;font-size:13.5px;">Masukkan PIN untuk mencatat kehadiran staf.</p>
+    <form id="pinForm">
+      <div class="field">
+        <label for="pinInput">PIN</label>
+        <input type="password" id="pinInput" inputmode="text" autocomplete="off" required />
+        <p id="pinError" hidden style="color:#A8432E;font-size:12.5px;margin:6px 0 0;">PIN salah, coba lagi.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="pinCancel" class="btn btn-ghost">Batal</button>
+        <button type="submit" class="btn btn-primary">Konfirmasi</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script type="module" src="scripts/staf.js?v=20260922c"></script>
+</body>
+</html>

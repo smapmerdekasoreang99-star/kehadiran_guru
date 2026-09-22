@@ -1,5 +1,5 @@
 // =========================================================
-// Jadwal Kegiatan Sekolah — halaman baca saja
+// Jadwal Kegiatan Guru — halaman baca saja
 // =========================================================
 // Satu halaman untuk seluruh jadwal tetap sekolah, dari tiga sudut pandang:
 //
@@ -548,7 +548,7 @@ function render() {
     document.getElementById("isi").innerHTML = `
     <div class="page-head">
       <div>
-        <h1>Jadwal Kegiatan Sekolah</h1>
+        <h1>Jadwal Kegiatan Guru</h1>
         <p>Disusun di Data Induk; halaman ini hanya menampilkan. Tahun ajaran ${esc(state.tahunAjaran)}, semester ${smt} (${smt === 1 ? "Juli–Desember" : "Januari–Juni"}${smt === semesterSekarang() ? ", berjalan" : ""}).</p>
       </div>
       <div class="page-head-actions">

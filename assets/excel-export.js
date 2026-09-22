@@ -165,7 +165,9 @@ function tulisSheetKehadiran(wb, namaSheet, judul, baris, total, { ExcelJS, peng
     kepalaTabel(ws, r, ["NO", "NAMA GURU", "KONTRAK (JP/MINGGU)", "TERJADWAL (JP)", "HADIR", "HTTM", "ST", "IT", "TK", "HADIR (BOBOT)", "% HADIR"], { tinggi: 30 });
     r += 1;
     const tulisAngka = (b, opsi = {}) => {
-        [b.kontrak ?? "", b.terjadwal, b.hadirTM, b.HTTM, b.ST, b.IT, b.TK]
+        // Kontrak ditulis "20 (+1)" bila ada jam Tugas Tambahan, sama seperti di layar.
+        [b.kontrak == null ? "" : b.tambahan ? `${b.kontrak} (+${b.tambahan})` : b.kontrak,
+         b.terjadwal, b.hadirTM, b.HTTM, b.ST, b.IT, b.TK]
             .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", ...opsi }));
         selData(ws, r, 10, b.hadir, { fmt: "0.00", align: "center", ...opsi });
         selData(ws, r, 11, b.persen === null || b.persen === undefined ? "" : b.persen / 100,
@@ -180,7 +182,7 @@ function tulisSheetKehadiran(wb, namaSheet, judul, baris, total, { ExcelJS, peng
     selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
     tulisAngka(total, { bold: true, fill: true });
     r += 2;
-    ws.getCell(r, 1).value = `Bobot kehadiran: HTTM ${bobot.HTTM * 100}% · ST ${bobot.ST * 100}% · IT ${bobot.IT * 100}% · TK ${bobot.TK * 100}%.  % Hadir = (Hadir + jumlah berbobot) ÷ Terjadwal.  ${catatan || ""}`;
+    ws.getCell(r, 1).value = `Kontrak = jam per minggu menurut jadwal KBM; (+n) = jam Tugas Tambahan per minggu.  Bobot kehadiran: HTTM ${bobot.HTTM * 100}% · ST ${bobot.ST * 100}% · IT ${bobot.IT * 100}% · TK ${bobot.TK * 100}%.  % Hadir = (Hadir + jumlah berbobot) ÷ Terjadwal.  ${catatan || ""}`;
     ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true }; ws.mergeCells(r, 1, r, KOL);
     r += 2;
     blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 11, kolomTerakhir: KOL });

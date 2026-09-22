@@ -4,8 +4,8 @@ import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas } from "../assets/kelas-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
-import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260922c";
-import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260922c";
+import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260922d";
+import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260922d";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
@@ -38,6 +38,7 @@ let state = {
     hasilKehadiran: null, hasilWali: null, hasilPengganti: null, jamWaliDikecualikan: 0,
     saring: "", saringWali: "", viewPengganti: "ringkas",
     profil: null,
+    tambahan: new Map(),   // guru_id -> jam tugas tambahan per minggu
     piket: [], hasilPiket: null,
     jadwalPiket: { meja: [], unitJam: [], unit: [], parkiran: [] },
 };
@@ -93,6 +94,7 @@ async function boot() {
                     ["guru", "kelas", "mapel", "jadwal", "piketMeja", "piketUnit", "guruUnit", "parkiran", "profil", "tahunAjaran"],
                     (r) => { terapkanRujukan(r); hitungLagi(); }),
                 muatLibur(),
+                muatJamTambahan(),
             ]);
         } catch (err) { laporError("Gagal memuat data rujukan", err); return; }
         terapkanRujukan(rujukan);
@@ -114,6 +116,20 @@ function terapkanRujukan(r) {
     state.jadwalPiket = { meja: r.piketMeja, unitJam: r.piketUnit, unit: r.guruUnit, parkiran: r.parkiran };
     susunProfil(r.profil[0], (r.tahunAjaran[0] || {}).kode);
 }
+
+/* Jam Tugas Tambahan per guru (Data Induk → Tugas Guru): jam per minggu yang
+   dibayar sebagai jam mengajar tetapi tidak ada di jadwal KBM. Ditampilkan
+   sebagai (+n) di samping Kontrak Jam, sama seperti di Honor Mengajar Induk
+   Pembiayaan, supaya jam kontrak yang lebih besar dari jadwalnya terbaca
+   sebabnya. */
+async function muatJamTambahan() {
+    const { data, error } = await supabaseClient.from("kg_jam_tambahan").select("guru_id, jam");
+    if (error) { laporError("Gagal memuat jam tugas tambahan (penanda (+n) tidak tampil)", error); state.tambahan = new Map(); return; }
+    state.tambahan = new Map((data || []).map((t) => [t.guru_id, Number(t.jam) || 0]));
+}
+const jamTambahan = (gid) => (state.tambahan && state.tambahan.get(gid)) || 0;
+const selKontrak = (r) => `<td class="num">${r.kontrak}${jamTambahan(r.guru_id)
+    ? ` <small class="satuan-kolom">(+${jamTambahan(r.guru_id)})</small>` : ""}</td>`;
 
 async function muatLibur() {
     const { data, error } = await supabaseClient.from("kg_hari_libur").select("tanggal, keterangan").order("tanggal");
@@ -338,11 +354,11 @@ function renderKehadiran() {
     const rows = barisKehadiranTersaring();
     document.getElementById("bodyKehadiran").innerHTML = rows.map((r) => `
       <tr>
-        <td class="nama">${r.nama}</td>${num(r.kontrak)}${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.IT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}
+        <td class="nama">${r.nama}</td>${selKontrak(r)}${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.IT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}
       </tr>`).join("") || `<tr><td colspan="10" class="empty-state">Tidak ada data pada rentang ini.</td></tr>`;
     const t = h.total;
     document.getElementById("footKehadiran").innerHTML = `
-      <tr class="total"><td>Total (${h.baris.length} guru)</td>${num(t.kontrak)}${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.IT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
+      <tr class="total"><td>Total (${h.baris.length} guru)</td><td class="num">${t.kontrak}${(() => { const s = h.baris.reduce((a, r) => a + jamTambahan(r.guru_id), 0); return s ? ` <small class="satuan-kolom">(+${s})</small>` : ""; })()}</td>${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.IT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
     document.getElementById("ringkasKehadiran").textContent = `${h.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
     renderWali();
     tandaiPerluHitung();
@@ -451,7 +467,9 @@ const bungkus = (fn) => async () => { try { await fn(); } catch (err) { laporErr
 
 const xlsKehadiran = bungkus(async () => {
     const h = state.hasilKehadiran; if (!h) return;
-    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris: barisKehadiranTersaring(), total: h.total, wali: null, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
+    // Jam tambahan ikut ke berkas sebagai teks "20 (+1)" pada kolom kontrak.
+    const baris = barisKehadiranTersaring().map((r) => ({ ...r, tambahan: jamTambahan(r.guru_id) }));
+    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris, total: { ...h.total, tambahan: baris.reduce((a, r) => a + r.tambahan, 0) }, wali: null, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Kehadiran Guru ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsWali = bungkus(async () => {

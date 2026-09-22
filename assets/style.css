@@ -1220,6 +1220,8 @@ tr.total td {
 .pk-pita.draf  { --pk-bg: var(--surface);    --pk-aksen: var(--garis-2);
     border: 1px dashed var(--garis-2); border-left: 3px solid var(--garis-2); color: var(--ink-muted); }
 .pk-tanda { margin-left: 4px; color: var(--emas-teks); }
+.pk-pita small { margin-left: 5px; font-size: 10px; font-weight: 400; color: var(--ink-muted); }
+.pk-pita.dari-kiri small { color: transparent; }
 
 .matriks.bisa-ubah .pk-pita { cursor: pointer; }
 .matriks.bisa-ubah .pk-pita:hover { filter: brightness(0.94); }

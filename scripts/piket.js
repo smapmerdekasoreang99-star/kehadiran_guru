@@ -500,7 +500,7 @@ function labelJam(jamKe) {
     return `Jam ke-${jamKe}` + (j?.mulai ? ` (${jam5(j.mulai)}–${jam5(j.selesai)})` : "");
 }
 
-function pitaHtml(iso, jenis, p, jamKe = null, extra = "") {
+function pitaHtml(iso, jenis, p, jamKe = null, extra = "", panjang = 1) {
     const c = cariCatatan(iso, jenis, p.guruId, p.tugasId, jamKe);
     const status = c ? (c.status === "Tidak Hadir" ? "absen" : "hadir") : "draf";
     const kelas = ["pk-pita", status, p.tercecer && "tercecer", extra].filter(Boolean).join(" ");
@@ -520,6 +520,7 @@ function pitaHtml(iso, jenis, p, jamKe = null, extra = "") {
         data-jam="${jamKe == null ? "" : esc(jamKe)}"
         data-nama="${esc(p.nama)}" data-ket="${esc(ket)}"
         title="${esc(judul)}">${esc(namaPendek(p.nama))}${
+            panjang > 1 ? `<small>${panjang} jam</small>` : ""}${
             c?.catatan ? '<span class="pk-tanda" aria-hidden="true">•</span>' : ""}</div>`;
 }
 
@@ -592,7 +593,11 @@ function renderMatriksJam(tab) {
                 const dariKiri = kiri && !kiri.sela && sambung(p, kiri.jamKe);
                 const keKanan = kanan && !kanan.sela && sambung(p, kanan.jamKe);
                 const extra = [dariKiri && "dari-kiri", keKanan && "ke-kanan"].filter(Boolean).join(" ");
-                return pitaHtml(d.iso, jenis, p, c.jamKe, extra);
+                // Pita yang melintasi beberapa kolom menyebut panjangnya di
+                // samping nama, supaya tidak terbaca sebagai satu jam.
+                let panjang = 1;
+                if (!dariKiri) for (let k = ci + 1; k < kolom.length && !kolom[k].sela && sambung(p, kolom[k].jamKe); k++) panjang++;
+                return pitaHtml(d.iso, jenis, p, c.jamKe, extra, panjang);
             }).join("");
             html.push(`<td class="m-sel pk-sel${ada ? "" : " pk-nol"}">${pita}</td>`);
         });

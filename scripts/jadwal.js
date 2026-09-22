@@ -456,6 +456,9 @@ function render() {
             if (s.sela) return `<td class="m-sela"></td>`;
             const skr = b.hari === hariSkr && sekarang === s.jamKe ? " sekarang" : "";
             const sambung = (s.kiri ? " dari-kiri" : "") + (s.kanan ? " ke-kanan" : "");
+            // Blok awal rangkaian jam berturut-turut menyebut panjangnya, supaya
+            // satu blok panjang tidak terbaca sebagai satu jam.
+            const jam = !s.kiri && s.rentang > 1 ? `<small class="jam">${s.rentang} jam</small>` : "";
             const gaya = (bg, aksen) => `style="--blok-bg:${bg};--blok-aksen:${aksen};--rentang:${s.rentang}"`;
             if (s.ringkas) {
                 if (!s.ringkas.length) return `<td class="m-sel${skr}"></td>`;
@@ -463,11 +466,11 @@ function render() {
                 const [bg, aksen] = warnaProgram(b.grup);
                 return `<td class="m-sel${skr}"><div class="m-blok m-ringkas${sambung}" data-lingkup="${escAttr(b.grup)}" ${gaya(bg, aksen)}
                     title="${escAttr(`Kelompok ${b.grup} · ${ket}\nKlik untuk membuka matriks ${b.grup}`)}">
-                    <span class="m-utama">Kelompok ${esc(b.grup)}</span><span class="m-kedua">${esc(ket)}</span></div></td>`;
+                    <span class="m-utama">Kelompok ${esc(b.grup)}</span><span class="m-kedua">${esc(ket)}${jam}</span></div></td>`;
             }
             if (s.kunci) return `<td class="m-sel${skr}"><div class="m-blok kunci${sambung}" style="--rentang:${s.rentang}"
                     title="${escAttr(`${s.kunci.join(" · ")} — siswa berangkat ke kelompoknya masing-masing.\nDisusun dari jadwal kelompoknya.`)}">
-                    <span class="m-utama">${esc(s.kunci.join(" · "))}</span><span class="m-kedua">jam kelompok</span></div></td>`;
+                    <span class="m-utama">${esc(s.kunci.join(" · "))}</span><span class="m-kedua">jam kelompok${jam}</span></div></td>`;
             if (!s.daftar.length) return `<td class="m-sel kosong${skr}"></td>`;
             const bentrok = sudut === "guru" && new Set(s.daftar.map((k) => k.tempat)).size > 1;
             const banyak = s.daftar.length > 1;
@@ -477,7 +480,7 @@ function render() {
                     + (k.jenis === "kbm" ? (sudut === "guru" ? "\nKlik untuk membuka jadwal kelasnya" : "\nKlik untuk membuka jadwal gurunya") : "");
                 const data = k.jenis === "kbm" ? `data-kelas="${escAttr(k.kelasId)}" data-guru="${escAttr(k.guruId)}"` : "";
                 return `<div class="m-blok${sambung}${banyak ? " rapat" : ""}${k.jenis === "kbm" ? " bisa-lompat" : ""}" ${data} ${gaya(k.bg, k.aksen)} title="${escAttr(judul)}">
-                    <span class="m-utama">${esc(k.utama)}</span><span class="m-kedua">${esc(k.kedua)}</span></div>`;
+                    <span class="m-utama">${esc(k.utama)}</span><span class="m-kedua">${esc(k.kedua)}${jam}</span></div>`;
             }).join("");
             return `<td class="m-sel${skr}${bentrok ? " bentrok" : ""}">${banyak ? `<div class="m-tumpuk">${blok}</div>` : blok}</td>`;
         }).join("");

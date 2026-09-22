@@ -169,9 +169,7 @@ const catatanUntuk = (jadwalId) => state.ketidakhadiran.find((k) => k.jadwal_id 
 
 const STATUS_LABEL = {
     ST: "Sakit dengan Tugas",
-    STT: "Sakit tanpa Tugas",
     IT: "Ijin dengan Tugas",
-    ITT: "Ijin tanpa Tugas",
     TK: "Tanpa Keterangan",
     HTTM: "Hadir tanpa Tatap Muka",
 };

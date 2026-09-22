@@ -4,8 +4,8 @@ import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas } from "../assets/kelas-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
-import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260922a";
-import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260922a";
+import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260922b";
+import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260922b";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
@@ -26,7 +26,7 @@ function laporError(konteks, error) {
     box.querySelector(".error-close").addEventListener("click", () => box.remove());
 }
 
-const STATUS_LABEL = { ST: "Sakit dengan Tugas", STT: "Sakit tanpa Tugas", IT: "Ijin dengan Tugas", ITT: "Ijin tanpa Tugas", TK: "Tanpa Keterangan", HTTM: "Hadir tanpa Tatap Muka" };
+const STATUS_LABEL = { ST: "Sakit dengan Tugas", IT: "Ijin dengan Tugas", TK: "Tanpa Keterangan", HTTM: "Hadir tanpa Tatap Muka" };
 const HARI_FROM_JS_DAY = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
 // Penyimpanan hari libur di mode pratinjau
@@ -338,11 +338,11 @@ function renderKehadiran() {
     const rows = barisKehadiranTersaring();
     document.getElementById("bodyKehadiran").innerHTML = rows.map((r) => `
       <tr>
-        <td class="nama">${r.nama}</td>${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.STT)}${num(r.IT)}${num(r.ITT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}
-      </tr>`).join("") || `<tr><td colspan="11" class="empty-state">Tidak ada data pada rentang ini.</td></tr>`;
+        <td class="nama">${r.nama}</td>${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.IT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}
+      </tr>`).join("") || `<tr><td colspan="9" class="empty-state">Tidak ada data pada rentang ini.</td></tr>`;
     const t = h.total;
     document.getElementById("footKehadiran").innerHTML = `
-      <tr class="total"><td>Total (${h.baris.length} guru)</td>${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.STT)}${num(t.IT)}${num(t.ITT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
+      <tr class="total"><td>Total (${h.baris.length} guru)</td>${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.IT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
     document.getElementById("ringkasKehadiran").textContent = `${h.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
     renderWali();
     tandaiPerluHitung();

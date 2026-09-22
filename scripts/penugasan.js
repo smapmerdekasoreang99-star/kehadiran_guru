@@ -37,9 +37,7 @@ const HARI_FROM_JS_DAY = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat",
 
 const STATUS_LABEL = {
     ST: "Sakit dengan Tugas",
-    STT: "Sakit tanpa Tugas",
     IT: "Ijin dengan Tugas",
-    ITT: "Ijin tanpa Tugas",
     TK: "Tanpa Keterangan",
     HTTM: "Hadir tanpa Tatap Muka",
 };

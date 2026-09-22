@@ -5,7 +5,7 @@
 import { semesterTanggal, semesterBaris } from "./semester.js?v=20260921ad";
 
 const HARI_FROM_JS_DAY = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-export const STATUS_ABSEN = ["ST", "STT", "IT", "ITT", "TK", "HTTM"];
+export const STATUS_ABSEN = ["ST", "IT", "TK", "HTTM"];
 
 /* Mata pelajaran yang termasuk TUGAS WALI KELAS (Senin jam 1-2): dihitung
    terpisah dari jam mengajar.
@@ -37,7 +37,7 @@ export function pisahWaliKelas(jadwal, ketidakhadiran) {
 }
 
 // Bobot kehadiran per status (kebijakan sekolah): dianggap hadir sekian persen
-export const BOBOT_HADIR = { HTTM: 1.0, ST: 0.20, STT: 0.15, IT: 0.10, ITT: 0.05, TK: 0.0 };
+export const BOBOT_HADIR = { HTTM: 1.0, ST: 0.20, IT: 0.10, TK: 0.0 };
 
 export function isoTanggal(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -115,7 +115,7 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
 
     const per = new Map();
     const baris = (gid) => {
-        if (!per.has(gid)) per.set(gid, { guru_id: gid, terjadwal: 0, ST: 0, STT: 0, IT: 0, ITT: 0, TK: 0, HTTM: 0 });
+        if (!per.has(gid)) per.set(gid, { guru_id: gid, terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0 });
         return per.get(gid);
     };
     for (const j of jadwal) {
@@ -131,7 +131,7 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
         b.hadirTM + STATUS_ABSEN.reduce((a, st) => a + b[st] * (BOBOT_HADIR[st] ?? 0), 0);
     const hasil = [];
     for (const b of per.values()) {
-        const tidakHadir = b.ST + b.STT + b.IT + b.ITT + b.TK;
+        const tidakHadir = b.ST + b.IT + b.TK;
         const hadirTM = Math.max(0, b.terjadwal - tidakHadir - b.HTTM);
         const row = { ...b, tidakHadir, hadirTM };
         row.hadir = Math.round(hitungBobot(row) * 100) / 100; // jam hadir berbobot
@@ -139,9 +139,9 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
         hasil.push(row);
     }
     const total = hasil.reduce((t, r) => {
-        for (const k of ["terjadwal", "ST", "STT", "IT", "ITT", "TK", "HTTM", "tidakHadir", "hadirTM"]) t[k] += r[k];
+        for (const k of ["terjadwal", "ST", "IT", "TK", "HTTM", "tidakHadir", "hadirTM"]) t[k] += r[k];
         return t;
-    }, { terjadwal: 0, ST: 0, STT: 0, IT: 0, ITT: 0, TK: 0, HTTM: 0, tidakHadir: 0, hadirTM: 0 });
+    }, { terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0, tidakHadir: 0, hadirTM: 0 });
     total.hadir = Math.round(hitungBobot(total) * 100) / 100;
     total.persen = total.terjadwal ? Math.round((total.hadir / total.terjadwal) * 10000) / 100 : null;
     return { baris: hasil, total, jumlahHariKerja: hari.length };

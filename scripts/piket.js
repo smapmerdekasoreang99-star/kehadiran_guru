@@ -2,9 +2,9 @@
 // Pelaksanaan Piket — Guru Pengganti SMA Plus Merdeka Soreang
 // =========================================================
 // Halaman ini hanya mencatat PELAKSANAAN. Penugasannya ada di tempat lain:
-//   Meja Sekolah : tabel piket (Data Induk → Piket & Honor)
+//   Meja Sekolah : tabel piket (Data Induk → Jadwal Piket)
 //   Unit         : piket_unit + guru_tugas "Diperbantukan" (Data Induk)
-//   Parkiran     : tabel piket_parkiran (Data Induk → Piket & Honor)
+//   Parkiran     : tabel piket_parkiran (Data Induk → Jadwal Piket)
 // Semua catatan masuk ke satu tabel kg_pelaksanaan_piket dengan pembeda
 // kolom `jenis`, karena bentuk datanya sama: satu petugas, satu giliran,
 // hadir atau tidak.

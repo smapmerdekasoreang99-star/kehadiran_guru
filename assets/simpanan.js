@@ -60,7 +60,7 @@ const RUJUKAN = {
     mapel:  (sb) => sb.from("kg_mapel").select("id, nama_mapel, rumpun_mapel").order("nama_mapel"),
     jam:    (sb) => sb.from("kg_jam_pelajaran").select("jam_ke, mulai, selesai, keterangan").order("jam_ke"),
     jadwal: (sb) => ambilJadwalSepekan(sb),
-    // Jadwal piket tiga jenis, disusun di Data Induk → Piket & Honor.
+    // Jadwal piket tiga jenis, disusun di Data Induk → Jadwal Piket.
     piketMeja: (sb) => sb.from("kg_piket").select("guru_id, hari, jam_ke"),
     piketUnit: (sb) => sb.from("v_jadwal_piket_unit").select("tugas_id, guru_id, guru, unit, hari, jam_ke"),
     guruUnit:  (sb) => sb.from("v_guru_unit").select("tugas_id, guru_id, nama, unit, jam_per_minggu, mulai, selesai"),

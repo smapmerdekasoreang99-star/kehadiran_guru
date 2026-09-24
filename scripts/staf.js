@@ -99,13 +99,21 @@ function daftarStaf() {
         per.get(r.guru_id).jam.set(r.hari, { bekerja: !!r.bekerja, masuk: r.masuk, pulang: r.pulang, sumber: r.sumber });
     }
     // Yang punya catatan dalam rentang tetapi bukan pemegang tugas Staf — guru
-    // biasa yang terekam mesin fingerprint. Tanpa hari kerja (kehadirannya
-    // tidak menentukan honor), ketentuannya jam kerja bawaan sekolah.
+    // biasa yang terekam mesin fingerprint. Ketentuan jamnya (untuk
+    // membandingkan masuk/pulang) jam kerja bawaan sekolah. Hari kerjanya
+    // hanya bagi yang DITANDAI di peta pengguna mesin (ukur_hari_kerja,
+    // mis. guru BK yang kehadirannya tidak terukur dari kelas): hari kerja
+    // mengikuti jam kerja bawaan supaya persentase kehadirannya dihitung.
+    // Kehadirannya tidak menentukan honor, jadi tidak ikut "Simpan yang
+    // belum tercatat" (perluCatat = false).
+    const diukur = new Set([...state.peta.values()].filter((p) => p.ukur_hari_kerja && p.guru_id).map((p) => p.guru_id));
     for (const c of state.catatan) {
         if (per.has(c.guru_id)) continue;
         const g = state.guru.find((x) => x.id === c.guru_id);
+        const ukur = diukur.has(c.guru_id);
         per.set(c.guru_id, { guruId: c.guru_id, nama: g?.nama || c.guru_id, jabatan: "Guru", pola: "",
-                             sumber: "fingerprint", jam: new Map(), perluCatat: false, tanpaKetentuan: true });
+                             sumber: "fingerprint", jam: ukur ? new Map(state.jamBawaan) : new Map(), perluCatat: false,
+                             tanpaKetentuan: true, tanpaHariKerja: !ukur });
     }
     const urut = peringkatGuru(state.guru);
     const semua = [...per.values()].sort((a, b) => urut(a.guruId) - urut(b.guruId) || a.nama.localeCompare(b.nama, "id"));
@@ -137,7 +145,7 @@ async function boot() {
         } catch (err) { laporError("Gagal memuat daftar guru", err); return; }
         const [jb, pt] = await Promise.all([
             supabaseClient.from("jam_kerja").select("hari, urutan, aktif, masuk, pulang"),
-            supabaseClient.from("kg_fingerprint_pengguna").select("no_id, nama_mesin, guru_id, abaikan"),
+            supabaseClient.from("kg_fingerprint_pengguna").select("no_id, nama_mesin, guru_id, abaikan, ukur_hari_kerja"),
         ]);
         if (jb.error) laporError("Gagal memuat jam kerja bawaan sekolah", jb.error);
         else state.jamBawaan = new Map((jb.data || []).map((r) => [r.hari, { bekerja: !!r.aktif, masuk: r.masuk, pulang: r.pulang, sumber: "bawaan" }]));
@@ -287,16 +295,16 @@ function renderMatriks() {
         const nHadir = state.hari.filter((d) => cariCatatan(d.iso, s.guruId)?.status === "Hadir").length;
         const nKerja = state.hari.filter((d) => bekerjaPada(s, d)).length;
         html.push(`<tr><th scope="row" class="m-label"><span title="${esc(s.nama)}">${esc(s.nama)}</span>
-            <small>${esc(labelStaf(s))} · ${s.tanpaKetentuan ? `${nHadir} hadir` : `${nHadir}/${nKerja} hadir`}</small></th>`);
+            <small>${esc(labelStaf(s))} · ${s.tanpaHariKerja ? `${nHadir} hadir` : `${nHadir}/${nKerja} hadir`}</small></th>`);
         for (const d of state.hari) {
             const kerja = bekerjaPada(s, d);
             const c = cariCatatan(d.iso, s.guruId);
             const kelas = ["m-sel", "pk-hari-sel", "pk-staf-sel", d.iso === hariNyata && "sekarang", !kerja && "pk-libur"].filter(Boolean).join(" ");
             // Hari libur kerja tetap bisa dicatat (mis. lembur Sabtu), tetapi
             // sel kosongnya tidak menggoda: cukup tulisan "libur".
-            // Yang tanpa ketentuan (bukan Staf) tidak punya "hari libur kerja":
-            // sel tanpa rekaman dibiarkan kosong, bukan bertuliskan libur.
-            html.push(`<td class="${kelas}">${kerja || c ? pitaHtml(d, s) : s.tanpaKetentuan ? "" : '<span class="pk-kosong-teks">libur</span>'}</td>`);
+            // Yang tanpa hari kerja (bukan Staf, tidak ditandai diukur) tidak
+            // punya "hari libur kerja": sel tanpa rekaman dibiarkan kosong.
+            html.push(`<td class="${kelas}">${kerja || c ? pitaHtml(d, s) : s.tanpaHariKerja ? "" : '<span class="pk-kosong-teks">libur</span>'}</td>`);
         }
         html.push("</tr>");
     }
@@ -355,7 +363,7 @@ function hitungStaf(s) {
         const r = { iso: d.iso, hari: d.hari, hariKerja, ketentuan: k?.masuk && k?.pulang ? `${jam5(k.masuk)}–${jam5(k.pulang)}` : "",
                     durasi: hariKerja ? durasi : 0, status: c ? c.status : "", masuk: c?.masuk ? jam5(c.masuk) : "", pulang: c?.pulang ? jam5(c.pulang) : "",
                     telat: 0, cepat: 0, dihitung: 0, sumber: c?.sumber || "", catatan: c?.catatan || "",
-                    keterangan: state.libur.has(d.iso) ? `libur sekolah${state.libur.get(d.iso) ? ` (${state.libur.get(d.iso)})` : ""}` : !hariKerja && !s.tanpaKetentuan ? "libur kerja" : "" };
+                    keterangan: state.libur.has(d.iso) ? `libur sekolah${state.libur.get(d.iso) ? ` (${state.libur.get(d.iso)})` : ""}` : !hariKerja && !s.tanpaHariKerja ? "libur kerja" : "" };
         rincian.push(r);
         if (!c) { if (hariKerja) { belum++; r.keterangan = "belum dicatat"; } continue; }
         if (c.status === "Tidak Hadir") { tidak++; continue; }
@@ -649,7 +657,7 @@ function bukaPilihan(el) {
         : "Menurut ketentuan, hari ini bukan hari kerjanya.";
     const liburBox = document.getElementById("statusLibur");
     const libur = state.libur.has(tanggal);
-    liburBox.hidden = !libur && (!!k?.bekerja || s.tanpaKetentuan);
+    liburBox.hidden = !libur && (!!k?.bekerja || !!s.tanpaHariKerja);
     liburBox.textContent = libur
         ? `Tanggal ini hari libur sekolah${state.libur.get(tanggal) ? ` (${state.libur.get(tanggal)})` : ""}. Isi hanya bila memang bertugas.`
         : "Hari libur kerja orang ini. Isi hanya bila memang bertugas, misalnya lembur.";
@@ -994,11 +1002,22 @@ function renderTabelFinger() {
                 <option value="">— belum dipilih: dilewati —</option>
                 <option value="__abaikan">Abaikan (tidak dicatat)</option>
                 ${opsi}</select>
-                ${tebakan ? '<span class="tebakan">tebakan dari nama — periksa</span>' : peta?.guru_id || peta?.abaikan ? '<span class="tebakan">dari unggahan sebelumnya</span>' : ""}</td>
+                ${tebakan ? '<span class="tebakan">tebakan dari nama — periksa</span>' : peta?.guru_id || peta?.abaikan ? '<span class="tebakan">dari unggahan sebelumnya</span>' : ""}
+                <label class="ukur-hari" title="Bagi yang bukan pemegang tugas Staf: hari kerjanya mengikuti jam kerja bawaan sekolah sehingga persentase kehadirannya dihitung di Kehadiran Staf">
+                  <input type="checkbox" class="ukur" ${peta?.ukur_hari_kerja ? "checked" : ""}> hitung hari kerja (jam kerja bawaan)</label></td>
         </tr>`;
     }).join("");
     tbody.querySelectorAll("select").forEach((sel) => { sel.value = sel.dataset.nilai; if (sel.value !== sel.dataset.nilai) sel.value = ""; });
     tbody.querySelectorAll("tr").forEach(perbaruiBarisFinger);
+    // Kotak centang hanya berarti bagi guru yang bukan Staf: pemegang tugas
+    // Staf sudah punya hari kerja sendiri dari Data Induk.
+    const staf = new Set(state.jamKerja.map((r) => r.guru_id));
+    const aturUkur = (tr) => {
+        const v = tr.querySelector("select").value;
+        const label = tr.querySelector(".ukur-hari");
+        label.hidden = !v || v === "__abaikan" || staf.has(v);
+    };
+    tbody.querySelectorAll("tr").forEach((tr) => { aturUkur(tr); tr.querySelector("select").addEventListener("change", () => aturUkur(tr)); });
     document.getElementById("fingerIsi").hidden = false;
     perbaruiTombolFinger();
 }
@@ -1023,6 +1042,8 @@ async function simpanUnggahan() {
     const timpaManual = document.getElementById("fingerTimpa").checked;
     const pilihan = new Map([...document.querySelectorAll("#fingerTabel tr[data-no-id]")]
         .map((tr) => [tr.dataset.noId, tr.querySelector("select").value]));
+    const ukur = new Map([...document.querySelectorAll("#fingerTabel tr[data-no-id]")]
+        .map((tr) => [tr.dataset.noId, !tr.querySelector(".ukur-hari").hidden && tr.querySelector(".ukur").checked]));
     const tombol = document.getElementById("fingerSimpan");
     tombol.disabled = true; tombol.textContent = "Menyimpan…";
     const gagal = (konteks, err) => { laporError(konteks, err); perbaruiTombolFinger(); };
@@ -1030,7 +1051,8 @@ async function simpanUnggahan() {
     // 1. Peta No. ID -> guru, diingat untuk unggahan berikutnya.
     const peta = berkas.orang.map((o) => {
         const v = pilihan.get(o.noId) || "";
-        return { no_id: o.noId, nama_mesin: o.nama || null, guru_id: v && v !== "__abaikan" ? v : null, abaikan: v === "__abaikan", diperbarui_pada: new Date().toISOString() };
+        return { no_id: o.noId, nama_mesin: o.nama || null, guru_id: v && v !== "__abaikan" ? v : null, abaikan: v === "__abaikan",
+                 ukur_hari_kerja: !!ukur.get(o.noId), diperbarui_pada: new Date().toISOString() };
     });
     {
         const { error } = await supabaseClient.from("kg_fingerprint_pengguna").upsert(peta, { onConflict: "no_id" });

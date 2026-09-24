@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/dasar.css?v=2">
-<link rel="stylesheet" href="assets/style.css?v=20260924a" />
+<link rel="stylesheet" href="assets/style.css?v=20260924b" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -102,18 +102,20 @@
               <th>No</th><th>Nama</th><th>Jabatan</th><th>Pola honor</th>
               <th class="num" title="Hari kerja menurut ketentuan jam kerja, di luar hari libur">Hari kerja</th>
               <th class="num">Hadir</th><th class="num">Tidak hadir</th>
-              <th class="num">Belum dicatat</th>
-              <th class="num" title="Jam masuk tercatat lebih lambat dari ketentuan">Terlambat</th>
-              <th class="num" title="Jumlah menit terlambat dalam rentang">Menit terlambat</th>
-              <th class="num" title="Jam pulang tercatat lebih awal dari ketentuan">Pulang cepat</th>
-              <th class="num">% Hadir</th>
+              <th class="num" title="Jumlah menit masuk lebih lambat dari ketentuan, dalam rentang">Menit terlambat</th>
+              <th class="num" title="Jumlah menit pulang lebih awal dari ketentuan, dalam rentang">Menit pulang cepat</th>
+              <th class="num" title="Jumlah jam kerja menurut ketentuan pada hari kerjanya (jam:menit). Bisa dikoreksi saat kunci edit terbuka.">Jam terjadwal</th>
+              <th class="num" title="Jam terjadwal pada hari ia hadir, dikurangi menit terlambat dan pulang cepat (jam:menit). Bisa dikoreksi saat kunci edit terbuka.">Jam hadir</th>
+              <th class="num" title="Jam hadir ÷ Jam terjadwal">% Hadir</th>
             </tr></thead>
             <tbody id="bodyRekap"></tbody>
             <tfoot id="footRekap"></tfoot>
           </table>
         </div>
         <div class="table-foot">Hari kerja dihitung dari ketentuan Jam Kerja Staf di Data Induk pada rentang ini, di luar hari libur sekolah.
-          % Hadir = Hadir ÷ Hari kerja. Terlambat dan pulang cepat dibandingkan dengan ketentuan jam kerja orang itu; bagi yang bukan pemegang tugas Staf dipakai jam kerja bawaan sekolah. Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan menurut pola honor masing-masing.</div>
+          Jam terjadwal = jumlah jam ketentuan pada hari kerja itu; Jam hadir = jam ketentuan pada hari ia hadir dikurangi menit terlambat dan pulang cepat (hadir di luar hari kerja dihitung dari jam masuk–pulang yang tercatat); % Hadir = Jam hadir ÷ Jam terjadwal.
+          Terlambat dan pulang cepat dibandingkan dengan ketentuan jam kerja orang itu; bagi yang bukan pemegang tugas Staf dipakai jam kerja bawaan sekolah.
+          Saat kunci edit terbuka, Jam terjadwal dan Jam hadir bisa dikoreksi langsung di tabel (jam:menit) — koreksi tersimpan untuk rentang tanggal yang sama persis, kosongkan untuk kembali ke hitungan. Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan menurut pola honor masing-masing.</div>
       </section>
     </div>
   </main>
@@ -209,6 +211,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/staf.js?v=20260924b"></script>
+<script type="module" src="scripts/staf.js?v=20260924c"></script>
 </body>
 </html>

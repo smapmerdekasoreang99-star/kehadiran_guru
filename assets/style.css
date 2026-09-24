@@ -1525,3 +1525,44 @@ tr.total td {
 .peta-finger tr.belum td { background: rgba(214, 110, 45, 0.08); }
 .peta-finger tr.abaikan td { color: var(--ink-muted); }
 .peta-finger .tebakan { display: block; font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
+
+/* =========================================================
+   Kehadiran Staf → tab Rekap
+   ========================================================= */
+/* Kolom No dan Nama tetap terlihat saat tabel digulir mendatar.
+   Lebar kolom No diukur oleh staf.js dan disimpan di --lebar-no. */
+#tabelRekap { --lebar-no: 48px; }
+#tabelRekap th:nth-child(1), #tabelRekap td:nth-child(1),
+#tabelRekap th:nth-child(2), #tabelRekap td:nth-child(2) {
+    position: sticky;
+    background: var(--surface);
+}
+#tabelRekap th:nth-child(1), #tabelRekap td:nth-child(1) { left: 0; }
+#tabelRekap th:nth-child(2), #tabelRekap td:nth-child(2) {
+    left: var(--lebar-no);
+    box-shadow: 6px 0 8px -6px rgba(43,38,32,.18);
+}
+#tabelRekap thead th:nth-child(1), #tabelRekap thead th:nth-child(2) { background: var(--kertas-3); z-index: 3; }
+#tabelRekap tfoot td:nth-child(1), #tabelRekap tfoot td:nth-child(2) { background: var(--kertas-3); z-index: 1; }
+#tabelRekap tbody tr:nth-child(even) td:nth-child(-n+2) { background: var(--emas-kabut); }
+#tabelRekap tbody tr:hover td:nth-child(-n+2) { background: var(--gold-tint); }
+
+/* Jam terjadwal / jam hadir: isian saat kunci edit terbuka; yang dikoreksi
+   tangan ditandai supaya jelas bukan angka hitungan. */
+#tabelRekap td.jam { font-variant-numeric: tabular-nums; }
+#tabelRekap td.jam.dikoreksi { color: var(--emas-teks); font-weight: 700; }
+#tabelRekap td.jam.dikoreksi::after { content: " *"; font-weight: 400; color: var(--ink-muted); }
+#tabelRekap td.jam.dikoreksi:has(input)::after { content: none; }
+#tabelRekap .jam-koreksi {
+    width: 84px;
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--bg);
+    color: inherit;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+#tabelRekap td.jam.dikoreksi .jam-koreksi { border-color: var(--gold); box-shadow: inset 3px 0 0 var(--gold); }
+#tabelRekap .jam-koreksi:focus { outline: 2px solid var(--gold); outline-offset: 1px; }

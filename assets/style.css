@@ -1527,25 +1527,54 @@ tr.total td {
 .peta-finger .tebakan { display: block; font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
 
 /* =========================================================
-   Kehadiran Staf → tab Rekap
+   Tabel rekap: kolom nama tetap terlihat saat digulir mendatar
    ========================================================= */
-/* Kolom No dan Nama tetap terlihat saat tabel digulir mendatar.
-   Lebar kolom No diukur oleh staf.js dan disimpan di --lebar-no. */
-#tabelRekap { --lebar-no: 48px; }
-#tabelRekap th:nth-child(1), #tabelRekap td:nth-child(1),
-#tabelRekap th:nth-child(2), #tabelRekap td:nth-child(2) {
+/* Kepala tabel sudah beku di atas (aturan table thead th di atas). Di sini
+   kolom kirinya: .beku-1 membekukan kolom pertama (nama), .beku-2 kolom
+   No dan Nama. Hanya baris pertama thead yang dibekukan, karena pada kepala
+   dua baris (Wali Kelas, Piket) sel nama ber-rowspan dan baris keduanya
+   berisi sub-kolom angka. Lebar kolom No DIKUNCI 52 px supaya kolom Nama
+   bisa menempel tepat di kanannya tanpa diukur. */
+.tabel-rekap.beku-1 thead tr:first-child th:nth-child(1),
+.tabel-rekap.beku-1 tbody td:nth-child(1),
+.tabel-rekap.beku-1 tfoot td:nth-child(1),
+.tabel-rekap.beku-2 thead tr:first-child th:nth-child(-n+2),
+.tabel-rekap.beku-2 tbody td:nth-child(-n+2),
+.tabel-rekap.beku-2 tfoot td:nth-child(-n+2) {
     position: sticky;
+    left: 0;
     background: var(--surface);
 }
-#tabelRekap th:nth-child(1), #tabelRekap td:nth-child(1) { left: 0; }
-#tabelRekap th:nth-child(2), #tabelRekap td:nth-child(2) {
-    left: var(--lebar-no);
+.tabel-rekap.beku-1 thead tr:first-child th:nth-child(1),
+.tabel-rekap.beku-1 tbody td:nth-child(1),
+.tabel-rekap.beku-1 tfoot td:nth-child(1),
+.tabel-rekap.beku-2 thead tr:first-child th:nth-child(2),
+.tabel-rekap.beku-2 tbody td:nth-child(2),
+.tabel-rekap.beku-2 tfoot td:nth-child(2) {
     box-shadow: 6px 0 8px -6px rgba(43,38,32,.18);
 }
-#tabelRekap thead th:nth-child(1), #tabelRekap thead th:nth-child(2) { background: var(--kertas-3); z-index: 3; }
-#tabelRekap tfoot td:nth-child(1), #tabelRekap tfoot td:nth-child(2) { background: var(--kertas-3); z-index: 1; }
-#tabelRekap tbody tr:nth-child(even) td:nth-child(-n+2) { background: var(--emas-kabut); }
-#tabelRekap tbody tr:hover td:nth-child(-n+2) { background: var(--gold-tint); }
+.tabel-rekap.beku-2 thead tr:first-child th:nth-child(1),
+.tabel-rekap.beku-2 tbody td:nth-child(1),
+.tabel-rekap.beku-2 tfoot td:nth-child(1) {
+    width: 52px; min-width: 52px; max-width: 52px; box-sizing: border-box;
+}
+.tabel-rekap.beku-2 thead tr:first-child th:nth-child(2),
+.tabel-rekap.beku-2 tbody td:nth-child(2),
+.tabel-rekap.beku-2 tfoot td:nth-child(2) { left: 52px; }
+.tabel-rekap.beku-1 thead tr:first-child th:nth-child(1),
+.tabel-rekap.beku-2 thead tr:first-child th:nth-child(-n+2) { background: var(--kertas-3); z-index: 3; }
+.tabel-rekap.beku-1 tfoot td:nth-child(1),
+.tabel-rekap.beku-2 tfoot td:nth-child(-n+2) { background: var(--kertas-3); z-index: 1; }
+.tabel-rekap.beku-1 tbody tr:nth-child(even) td:nth-child(1),
+.tabel-rekap.beku-2 tbody tr:nth-child(even) td:nth-child(-n+2) { background: var(--emas-kabut); }
+.tabel-rekap.beku-1 tbody tr:hover td:nth-child(1),
+.tabel-rekap.beku-2 tbody tr:hover td:nth-child(-n+2) { background: var(--gold-tint); }
+/* Sel "tidak ada data" ber-colspan tidak perlu dibekukan. */
+.tabel-rekap.beku-1 tbody td.empty-state, .tabel-rekap.beku-2 tbody td.empty-state { position: static; }
+
+/* =========================================================
+   Kehadiran Staf → tab Rekap
+   ========================================================= */
 
 /* Jam terjadwal / jam hadir: isian saat kunci edit terbuka; yang dikoreksi
    tangan ditandai supaya jelas bukan angka hitungan. */

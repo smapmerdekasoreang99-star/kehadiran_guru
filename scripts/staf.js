@@ -494,9 +494,6 @@ function renderRekap() {
 
     const table = document.getElementById("tabelRekap");
     table.classList.toggle("bisa-ubah", unlocked);
-    // Kolom Nama menempel tepat di kanan kolom No yang lebarnya mengikuti isi.
-    const no = table.tHead?.rows[0]?.cells[0];
-    if (no) table.style.setProperty("--lebar-no", `${no.offsetWidth}px`);
     table.querySelectorAll(".jam-koreksi").forEach((input) => {
         input.addEventListener("change", () => simpanKoreksi(input));
         input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); input.blur(); } });

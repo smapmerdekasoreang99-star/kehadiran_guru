@@ -621,9 +621,80 @@ function pasangModalFinger() {
     modal.addEventListener("click", (ev) => { if (ev.target === modal) tutupUnggahFinger(); });
     document.getElementById("fingerBerkas").addEventListener("change", pilihBerkasFinger);
     document.getElementById("fingerSimpan").addEventListener("click", simpanUnggahan);
+    document.getElementById("fingerTemplate").addEventListener("click", (ev) => { ev.preventDefault(); unduhTemplateFinger(); });
+    document.getElementById("fingerPrompt").addEventListener("click", (ev) => { ev.preventDefault(); unduhPromptFinger(); });
     document.getElementById("fingerTabel").addEventListener("change", (ev) => {
         if (ev.target.tagName === "SELECT") { perbaruiBarisFinger(ev.target.closest("tr")); perbaruiTombolFinger(); }
     });
+}
+
+/* Template dan prompt: bentuk paling sederhana yang dibaca uraiEksporMesin
+   — enam kolom, satu baris per orang per tanggal. Dipakai bila mesinnya
+   lain atau laporannya sudah diolah, dengan ChatGPT (atau tangan) sebagai
+   pengubah bentuk. Nama kolom di sini harus sama persis dengan yang dicari
+   uraiEksporMesin. */
+const KOLOM_TEMPLATE = ["No. ID", "Nama", "Tanggal", "Scan Masuk", "Scan Pulang", "Absent"];
+const PROMPT_FINGER = `Saya punya berkas keluaran mesin absensi fingerprint (terlampir). Ubah menjadi SATU berkas Excel (.xlsx) dengan format yang TEPAT seperti di bawah, karena akan diunggah ke aplikasi sekolah yang membaca kolom berdasarkan namanya.
+
+Sheet pertama. Baris pertama adalah judul kolom, dengan ejaan dan urutan persis:
+No. ID | Nama | Tanggal | Scan Masuk | Scan Pulang | Absent
+
+Aturan isi:
+1. Satu baris = satu orang pada satu tanggal. Tidak boleh ada baris judul laporan, rekap, total, atau baris kosong di antara data.
+2. No. ID = nomor identitas pengguna di mesin (bukan nomor urut baris). Angka saja, dan tetap sama untuk orang yang sama.
+3. Nama = nama sebagaimana tertulis di mesin, tanpa diubah.
+4. Tanggal dalam format dd/mm/yyyy sebagai teks, contoh 03/08/2026.
+5. Scan Masuk dan Scan Pulang dalam jam 24 jam HH:MM, contoh 06:27. Kosongkan bila tidak ada rekaman. Bila hanya ada satu scan pada hari itu, isi ke Scan Masuk saja. Bila ada lebih dari dua scan, ambil yang paling awal untuk Scan Masuk dan yang paling akhir untuk Scan Pulang.
+6. Absent diisi True hanya bila pada hari kerja itu orangnya tidak punya scan sama sekali; selain itu kosongkan. Jangan menulis False.
+7. Sertakan semua orang dan semua tanggal yang ada di berkas sumber, termasuk hari tanpa scan (Absent = True). Jangan menambah tanggal yang tidak ada di sumber dan jangan menebak jam.
+8. Jangan mengubah, menyingkat, atau menerjemahkan nama kolom.
+
+Berikan hasilnya sebagai berkas .xlsx yang bisa diunduh, lalu tulis ringkasan singkat: jumlah orang, rentang tanggal, dan jumlah baris.`;
+
+function unduhBerkas(blob, nama) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = nama;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+function unduhTemplateFinger() {
+    if (!window.XLSX) { pesanFinger("Pembuat Excel (SheetJS) belum termuat — periksa sambungan internet, lalu muat ulang halaman."); return; }
+    const X = window.XLSX;
+    const wb = X.utils.book_new();
+    const rekaman = X.utils.aoa_to_sheet([
+        KOLOM_TEMPLATE,
+        ["2", "YUYUN WAHYUNI", "30/07/2026", "06:27", "16:36", ""],
+        ["2", "YUYUN WAHYUNI", "31/07/2026", "", "", "True"],
+        ["11", "Firman", "30/07/2026", "06:17", "", ""],
+    ]);
+    rekaman["!cols"] = [{ wch: 8 }, { wch: 24 }, { wch: 12 }, { wch: 11 }, { wch: 12 }, { wch: 8 }];
+    X.utils.book_append_sheet(wb, rekaman, "Rekaman");
+    const petunjuk = X.utils.aoa_to_sheet([
+        ["Template unggah rekaman fingerprint — Kehadiran Guru → Kehadiran Staf"],
+        [],
+        ["Isi sheet Rekaman: satu baris per orang per tanggal. Tiga baris contoh di sana boleh dihapus."],
+        ["Kolom", "Isi"],
+        ["No. ID", "Nomor pengguna di mesin. Dipetakan ke guru sekali saat unggah pertama, lalu diingat."],
+        ["Nama", "Nama sebagaimana terdaftar di mesin (hanya untuk memudahkan pemetaan)."],
+        ["Tanggal", "dd/mm/yyyy, contoh 03/08/2026. Tanggal Excel juga terbaca."],
+        ["Scan Masuk", "Jam 24 jam HH:MM, contoh 06:27. Kosong bila tidak ada scan masuk."],
+        ["Scan Pulang", "Jam 24 jam HH:MM. Kosong bila tidak ada scan pulang."],
+        ["Absent", "True bila tidak ada scan sama sekali pada hari kerja itu; selain itu kosong."],
+        [],
+        ["Yang dilakukan aplikasi:"],
+        ["• Ada scan (masuk atau pulang) → Hadir, jamnya ikut tersimpan."],
+        ["• Absent = True tanpa scan → Tidak Hadir, kecuali hari libur sekolah atau hari libur kerja orang itu."],
+        ["• Tanpa scan dan tanpa Absent → baris dilewati."],
+        ["• Nama kolom harus persis; urutan kolom bebas; kolom lain diabaikan."],
+    ]);
+    petunjuk["!cols"] = [{ wch: 14 }, { wch: 92 }];
+    X.utils.book_append_sheet(wb, petunjuk, "Petunjuk");
+    X.writeFile(wb, "Template_Fingerprint_Kehadiran_Staf.xlsx");
+}
+
+function unduhPromptFinger() {
+    unduhBerkas(new Blob([PROMPT_FINGER], { type: "text/plain;charset=utf-8" }), "Prompt_ChatGPT_Konversi_Fingerprint.txt");
 }
 
 function bukaUnggahFinger() {

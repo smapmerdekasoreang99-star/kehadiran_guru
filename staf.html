@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/dasar.css?v=2">
-<link rel="stylesheet" href="assets/style.css?v=20260924c" />
+<link rel="stylesheet" href="assets/style.css?v=20260924d" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -209,13 +209,14 @@
           <th class="num" title="Menit masuk lebih lambat dari ketentuan">Terlambat</th>
           <th class="num" title="Menit pulang lebih awal dari ketentuan">Pulang cepat</th>
           <th class="num" title="Terjadwal dikurangi terlambat dan pulang cepat; hadir di luar hari kerja dari jam masuk–pulang">Jam dihitung</th>
-          <th>Keterangan</th>
+          <th>Keterangan</th><th></th>
         </tr></thead>
         <tbody></tbody>
         <tfoot></tfoot>
       </table>
     </div>
-    <p class="field-hint" style="margin:10px 0 0;">Jam terjadwal = jumlah kolom Terjadwal; Jam hadir = jumlah kolom Jam dihitung. Baris merah tidak hadir, baris abu-abu bukan hari kerja.</p>
+    <p class="field-hint" style="margin:10px 0 0;">Jam terjadwal = jumlah kolom Terjadwal; Jam hadir = jumlah kolom Jam dihitung. Baris merah tidak hadir, baris abu-abu bukan hari kerja, baris kuning belum dicatat.</p>
+    <p class="field-hint" id="rincianPetunjuk" style="margin:6px 0 0;"></p>
     <div class="modal-actions">
       <button type="button" id="rincianUnduh" class="btn btn-ghost">Unduh (xlsx)</button>
       <button type="button" id="rincianTutup" class="btn btn-primary">Tutup</button>
@@ -242,6 +243,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/staf.js?v=20260924d"></script>
+<script type="module" src="scripts/staf.js?v=20260924e"></script>
 </body>
 </html>

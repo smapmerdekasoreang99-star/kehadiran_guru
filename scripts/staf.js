@@ -250,6 +250,8 @@ async function muatRentang() {
 function render() {
     if (!state.hari.length) return;
     if (state.tab === "rekap") renderRekap(); else renderMatriks();
+    // Rincian yang sedang terbuka ikut dihitung ulang sesudah catatan berubah.
+    if (rincianAktif && !document.getElementById("rincianModal").hidden) bukaRincian(rincianAktif.s.guruId);
 }
 
 function pitaHtml(d, s) {
@@ -513,6 +515,7 @@ function bukaRincian(guruId) {
     if (!s) return;
     const h = hitungStaf(s);
     const j = jamEfektif(s, h);
+    const unlocked = isUnlocked();
     rincianAktif = { s, h, j };
     document.getElementById("rincianNama").textContent = s.nama;
     document.getElementById("rincianSub").textContent = `${labelStaf(s)} · ${tglIndo(state.awal)} – ${tglIndo(state.akhir)}`;
@@ -525,12 +528,20 @@ function bukaRincian(guruId) {
             <td class="num">${esc(r.masuk)}</td><td class="num">${esc(r.pulang)}</td>
             <td class="num">${menit(r.telat)}</td><td class="num">${menit(r.cepat)}</td>
             <td class="num">${r.status === "Hadir" ? jamMenit(r.dihitung) : ""}</td>
-            <td class="ket">${esc([r.keterangan, r.catatan, r.sumber === "fingerprint" && r.status ? "fingerprint" : ""].filter(Boolean).join(" · "))}</td></tr>`;
+            <td class="ket">${esc([r.keterangan, r.catatan, r.sumber === "fingerprint" && r.status ? "fingerprint" : ""].filter(Boolean).join(" · "))}</td>
+            <td>${unlocked ? `<button type="button" class="btn btn-ghost btn-kecil" data-ubah="${esc(r.iso)}" title="Ubah catatan ${esc(HARI_PENDEK[r.hari])} ${esc(tglPendek(r.iso))}">Ubah</button>` : ""}</td></tr>`;
     }).join("");
+    // Perbaikan detail langsung dari rincian: dialog kehadiran satu tanggal
+    // yang sama dengan di matriks; sesudah tersimpan, rincian digambar ulang.
+    document.querySelectorAll("#rincianTabel [data-ubah]").forEach((b) =>
+        b.addEventListener("click", () => bukaPilihan({ dataset: { tanggal: b.dataset.ubah, guru: s.guruId } })));
+    document.getElementById("rincianPetunjuk").textContent = unlocked
+        ? "Ketuk Ubah pada baris yang perlu diperbaiki — misalnya tercatat tidak hadir tetapi setelah dikonfirmasi ternyata hadir. Perubahannya tersimpan sebagai catatan manual dan rincian ini langsung dihitung ulang."
+        : "Buka kunci edit untuk memperbaiki catatan tiap tanggal dari sini.";
     document.querySelector("#rincianTabel tfoot").innerHTML = `<tr class="total">
         <td colspan="3">Jumlah · ${h.hariKerja} hari kerja · ${h.hadir} hadir · ${h.tidak} tidak hadir${h.belum ? ` · ${h.belum} belum dicatat` : ""}</td>
         <td class="num">${jamMenit(h.menitTerjadwal)}</td><td></td><td></td><td></td>
-        <td class="num">${h.menitTerlambat}</td><td class="num">${h.menitPulangCepat}</td><td class="num">${jamMenit(h.menitHadir)}</td><td></td></tr>`;
+        <td class="num">${h.menitTerlambat}</td><td class="num">${h.menitPulangCepat}</td><td class="num">${jamMenit(h.menitHadir)}</td><td></td><td></td></tr>`;
     const koreksi = [];
     if (j.terjadwalDikoreksi) koreksi.push(`Jam terjadwal dikoreksi tangan menjadi ${jamMenit(j.terjadwal)} (hitungan ${jamMenit(h.menitTerjadwal)})`);
     if (j.hadirDikoreksi) koreksi.push(`Jam hadir dikoreksi tangan menjadi ${jamMenit(j.hadir)} (hitungan ${jamMenit(h.menitHadir)})`);
@@ -611,8 +622,9 @@ function pasangModal() {
     modal.addEventListener("click", (ev) => { if (ev.target === modal) tutupPilihan(); });
     document.addEventListener("keydown", (ev) => {
         if (ev.key !== "Escape") return;
-        if (!modal.hidden) tutupPilihan();
-        if (!document.getElementById("fingerModal").hidden) tutupUnggahFinger();
+        // Hanya dialog teratas yang ditutup: dialog kehadiran bisa terbuka di atas Rincian.
+        if (!modal.hidden) { tutupPilihan(); return; }
+        if (!document.getElementById("fingerModal").hidden) { tutupUnggahFinger(); return; }
         if (!document.getElementById("rincianModal").hidden) tutupRincian();
     });
     const rincian = document.getElementById("rincianModal");

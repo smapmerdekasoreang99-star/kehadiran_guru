@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/dasar.css?v=2">
-<link rel="stylesheet" href="assets/style.css?v=20260924b" />
+<link rel="stylesheet" href="assets/style.css?v=20260924c" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -96,6 +96,7 @@
         <div class="toolbar">
           <span id="ringkasRekap" class="tugas-note"></span>
         </div>
+        <p id="hariEfektif" class="hari-efektif"></p>
         <div class="table-scroll">
           <table class="tabel-rekap" id="tabelRekap">
             <thead><tr>
@@ -107,6 +108,7 @@
               <th class="num" title="Jumlah jam kerja menurut ketentuan pada hari kerjanya (jam:menit). Bisa dikoreksi saat kunci edit terbuka.">Jam terjadwal</th>
               <th class="num" title="Jam terjadwal pada hari ia hadir, dikurangi menit terlambat dan pulang cepat (jam:menit). Bisa dikoreksi saat kunci edit terbuka.">Jam hadir</th>
               <th class="num" title="Jam hadir ÷ Jam terjadwal">% Hadir</th>
+              <th></th>
             </tr></thead>
             <tbody id="bodyRekap"></tbody>
             <tfoot id="footRekap"></tfoot>
@@ -192,6 +194,35 @@
   </div>
 </div>
 
+<!-- Modal: rincian hitung kehadiran satu staf, tanggal demi tanggal -->
+<div id="rincianModal" class="modal-backdrop" hidden>
+  <div class="modal modal-rincian">
+    <h2 id="rincianNama">&mdash;</h2>
+    <p id="rincianSub" style="margin:-10px 0 12px;color:#6E6455;font-size:13.5px;"></p>
+    <p id="rincianKoreksi" class="notice" hidden style="margin-bottom:12px;"></p>
+    <div class="table-scroll" style="max-height:56vh;">
+      <table class="tabel-rekap rincian" id="rincianTabel">
+        <thead><tr>
+          <th>Tanggal</th><th>Hari</th><th>Ketentuan</th>
+          <th class="num" title="Lama kerja menurut ketentuan pada hari kerja">Terjadwal</th>
+          <th>Status</th><th class="num">Masuk</th><th class="num">Pulang</th>
+          <th class="num" title="Menit masuk lebih lambat dari ketentuan">Terlambat</th>
+          <th class="num" title="Menit pulang lebih awal dari ketentuan">Pulang cepat</th>
+          <th class="num" title="Terjadwal dikurangi terlambat dan pulang cepat; hadir di luar hari kerja dari jam masuk–pulang">Jam dihitung</th>
+          <th>Keterangan</th>
+        </tr></thead>
+        <tbody></tbody>
+        <tfoot></tfoot>
+      </table>
+    </div>
+    <p class="field-hint" style="margin:10px 0 0;">Jam terjadwal = jumlah kolom Terjadwal; Jam hadir = jumlah kolom Jam dihitung. Baris merah tidak hadir, baris abu-abu bukan hari kerja.</p>
+    <div class="modal-actions">
+      <button type="button" id="rincianUnduh" class="btn btn-ghost">Unduh (xlsx)</button>
+      <button type="button" id="rincianTutup" class="btn btn-primary">Tutup</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: PIN (satu kali per sesi browser) -->
 <div id="pinModal" class="modal-backdrop" hidden>
   <div class="modal" style="max-width:360px;">
@@ -211,6 +242,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/staf.js?v=20260924c"></script>
+<script type="module" src="scripts/staf.js?v=20260924d"></script>
 </body>
 </html>

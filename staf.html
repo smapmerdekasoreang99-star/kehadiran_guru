@@ -7,8 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/dasar.css?v=2">
-<link rel="stylesheet" href="assets/style.css?v=20260922c" />
+<link rel="stylesheet" href="assets/style.css?v=20260924a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -82,6 +83,7 @@
           <span id="ringkasMatriks" class="tugas-note"></span>
           <div class="toolbar-actions">
             <button type="button" id="batalSemua" class="btn btn-danger-text" hidden></button>
+            <button type="button" id="unggahFinger" class="btn btn-ghost" title="Unggah berkas ekspor mesin fingerprint (.xls/.xlsx)">Unggah fingerprint</button>
             <button type="button" id="simpanSemua" class="btn btn-primary">Simpan yang belum tercatat</button>
           </div>
         </div>
@@ -102,6 +104,8 @@
               <th class="num">Hadir</th><th class="num">Tidak hadir</th>
               <th class="num">Belum dicatat</th>
               <th class="num" title="Jam masuk tercatat lebih lambat dari ketentuan">Terlambat</th>
+              <th class="num" title="Jumlah menit terlambat dalam rentang">Menit terlambat</th>
+              <th class="num" title="Jam pulang tercatat lebih awal dari ketentuan">Pulang cepat</th>
               <th class="num">% Hadir</th>
             </tr></thead>
             <tbody id="bodyRekap"></tbody>
@@ -109,7 +113,7 @@
           </table>
         </div>
         <div class="table-foot">Hari kerja dihitung dari ketentuan Jam Kerja Staf di Data Induk pada rentang ini, di luar hari libur sekolah.
-          % Hadir = Hadir ÷ Hari kerja. Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan menurut pola honor masing-masing.</div>
+          % Hadir = Hadir ÷ Hari kerja. Terlambat dan pulang cepat dibandingkan dengan ketentuan jam kerja orang itu; bagi yang bukan pemegang tugas Staf dipakai jam kerja bawaan sekolah. Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan menurut pola honor masing-masing.</div>
       </section>
     </div>
   </main>
@@ -146,6 +150,42 @@
   </div>
 </div>
 
+<!-- Modal: unggah rekaman mesin fingerprint -->
+<div id="fingerModal" class="modal-backdrop" hidden>
+  <div class="modal modal-lebar">
+    <h2>Unggah rekaman fingerprint</h2>
+    <p style="margin:-10px 0 16px;color:#6E6455;font-size:13.5px;">Berkas ekspor mesin (menu laporan kehadiran, .xls atau .xlsx): satu baris per orang per tanggal
+      dengan kolom <b>No. ID</b>, <b>Nama</b>, <b>Tanggal</b>, <b>Scan Masuk</b>, <b>Scan Pulang</b>, dan <b>Absent</b>.
+      Matriks rekap yang sudah diolah tangan tidak bisa dibaca, karena angka 0 di situ tidak membedakan tepat waktu dan tidak hadir.</p>
+
+    <div class="field">
+      <label for="fingerBerkas">Berkas ekspor mesin</label>
+      <input type="file" id="fingerBerkas" accept=".xls,.xlsx" />
+    </div>
+    <p id="fingerPesan" class="notice" hidden></p>
+
+    <div id="fingerIsi" hidden>
+      <p id="fingerRingkas" class="field-hint" style="margin:0 0 10px;"></p>
+      <div class="table-scroll" style="max-height:46vh;">
+        <table class="tabel-rekap peta-finger" id="fingerTabel">
+          <thead><tr><th>No. ID</th><th>Nama di mesin</th><th class="num" title="Hari dengan rekaman scan">Hadir</th><th class="num" title="Hari tanpa scan (Absent)">Absen</th><th>Dicatat sebagai</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="field-hint" style="margin:10px 0 0;">Pilihan di kolom terakhir diingat untuk unggahan berikutnya. Pilih <i>Abaikan</i> untuk akun mesin yang memang tidak dicatat (Admin, orang yang sudah keluar).</p>
+      <label class="cek-baris" style="display:flex;gap:8px;align-items:flex-start;margin-top:14px;font-size:13.5px;">
+        <input type="checkbox" id="fingerTimpa" style="margin-top:3px;" />
+        <span>Timpa juga catatan yang dicatat <b>manual</b> pada tanggal yang sama. Bawaannya catatan manual dipertahankan, karena biasanya itu koreksi petugas (izin, tukar hari) yang tidak diketahui mesin.</span>
+      </label>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" id="fingerTutup" class="btn btn-ghost">Tutup</button>
+      <button type="button" id="fingerSimpan" class="btn btn-primary" disabled>Simpan ke kehadiran staf</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: PIN (satu kali per sesi browser) -->
 <div id="pinModal" class="modal-backdrop" hidden>
   <div class="modal" style="max-width:360px;">
@@ -165,6 +205,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/staf.js?v=20260922c"></script>
+<script type="module" src="scripts/staf.js?v=20260924a"></script>
 </body>
 </html>

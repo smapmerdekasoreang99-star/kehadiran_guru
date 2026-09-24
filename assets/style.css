@@ -1517,3 +1517,11 @@ tr.total td {
 .m-blok.bisa-lompat:hover { filter: brightness(0.95); }
 .m-blok.m-ringkas { cursor: pointer; }
 @media (max-width: 720px) { .toolbar-info { margin-left: 0; white-space: normal; } .jd-select { min-width: 0; flex: 1 1 200px; } }
+
+/* ---------- Kehadiran Staf: unggah fingerprint ---------- */
+.modal.modal-lebar { max-width: 760px; }
+.peta-finger td, .peta-finger th { font-size: 13px; padding: 6px 8px; }
+.peta-finger select { width: 100%; min-width: 200px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.peta-finger tr.belum td { background: rgba(214, 110, 45, 0.08); }
+.peta-finger tr.abaikan td { color: var(--ink-muted); }
+.peta-finger .tebakan { display: block; font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }

@@ -79,6 +79,14 @@ let state = {
     koreksi: new Map(),   // guru_id -> { jam_terjadwal_menit, jam_hadir_menit } untuk rentang awal–akhir yang sedang tampil
 };
 const TABEL_KOREKSI = "kg_koreksi_jam_staf";
+/* Kehadiran Kepala Sekolah (keputusan 25 September 2026): secara bawaan
+   dianggap PENUH — tiap hari kerjanya dihitung hadir sepanjang ketentuan,
+   apa pun rekaman fingerprint-nya. Mengubahnya menjadi "menurut fingerprint"
+   seperti pimpinan lain (dan mengembalikannya) memerlukan PIN khusus.
+   Pilihannya disimpan di kg_pengaturan_staf supaya Induk Pembiayaan
+   (f_ip_kehadiran_staf, f_ip_honor_staf) membaca keadaan yang sama. */
+const TABEL_PENGATURAN = "kg_pengaturan_staf";
+const PIN_KEPSEK = "kepsek2026";
 
 const cariCatatan = (tanggal, guruId) => state.catatan.find((c) => c.tanggal === tanggal && c.guru_id === guruId);
 
@@ -92,6 +100,8 @@ function daftarStaf() {
             const pola = r.pola_honor || "bulanan";
             per.set(r.guru_id, { guruId: r.guru_id, nama: r.nama, jabatan: r.jabatan || "Staf",
                                  pola, sumber: r.sumber_hadir || "fingerprint", jam: new Map(),
+                                 // Kepala Sekolah: kehadirannya dianggap penuh kecuali diubah lewat PIN.
+                                 kepsek: r.kelompok_tarif === "kepala_sekolah",
                                  // Hari hadirnya menentukan honor: hanya mereka yang
                                  // boleh diisi Hadir sekaligus lewat "Simpan yang belum tercatat".
                                  perluCatat: pola !== "bulanan" });
@@ -119,8 +129,9 @@ function daftarStaf() {
     const semua = [...per.values()].sort((a, b) => urut(a.guruId) - urut(b.guruId) || a.nama.localeCompare(b.nama, "id"));
     const punyaCatatan = new Set(state.catatan.map((c) => c.guru_id));
     return {
-        tampil: semua.filter((s) => s.perluCatat || punyaCatatan.has(s.guruId)),
-        bulanan: semua.filter((s) => !s.perluCatat && !punyaCatatan.has(s.guruId)).length,
+        // Kepala Sekolah selalu tampil, supaya mode kehadirannya terlihat.
+        tampil: semua.filter((s) => s.perluCatat || punyaCatatan.has(s.guruId) || s.kepsek),
+        bulanan: semua.filter((s) => !s.perluCatat && !punyaCatatan.has(s.guruId) && !s.kepsek).length,
     };
 }
 
@@ -128,7 +139,8 @@ function daftarStaf() {
 // ia tidak punya baris jam kerja (bukan Staf). Dipakai untuk membandingkan
 // jam masuk/pulang — BUKAN untuk menentukan hari kerja (lihat bekerjaPada).
 const ketentuanPada = (s, hari) => s.jam.get(hari) || state.jamBawaan.get(hari) || null;
-const labelStaf = (s) => [s.jabatan, POLA[s.pola] || s.pola, s.sumber === "fingerprint" && "fingerprint"].filter(Boolean).join(" · ");
+const labelStaf = (s) => [s.jabatan, POLA[s.pola] || s.pola, s.sumber === "fingerprint" && "fingerprint",
+                          s.kepsek && state.kepsekPenuh && "dianggap hadir 100 %"].filter(Boolean).join(" · ");
 const menitDari = (t) => { const [h, m] = jam5(t).split(":").map(Number); return h * 60 + (m || 0); };
 
 // Hari kerja orang itu pada tanggal itu: menurut ketentuannya, dan bukan hari libur sekolah.
@@ -143,10 +155,13 @@ async function boot() {
             const r = await muatRujukan(supabaseClient, ["guru"], (baru) => { state.guru = baru.guru; render(); });
             state.guru = r.guru;
         } catch (err) { laporError("Gagal memuat daftar guru", err); return; }
-        const [jb, pt] = await Promise.all([
+        const [jb, pt, pg] = await Promise.all([
             supabaseClient.from("jam_kerja").select("hari, urutan, aktif, masuk, pulang"),
             supabaseClient.from("kg_fingerprint_pengguna").select("no_id, nama_mesin, guru_id, abaikan, ukur_hari_kerja"),
+            supabaseClient.from(TABEL_PENGATURAN).select("kunci, nilai").eq("kunci", "kepsek_kehadiran"),
         ]);
+        if (pg.error) laporError("Gagal memuat pengaturan kehadiran Kepala Sekolah (dianggap penuh)", pg.error);
+        state.kepsekPenuh = (((pg.data || [])[0] || {}).nilai || "penuh") !== "fingerprint";
         if (jb.error) laporError("Gagal memuat jam kerja bawaan sekolah", jb.error);
         else state.jamBawaan = new Map((jb.data || []).map((r) => [r.hari, { bekerja: !!r.aktif, masuk: r.masuk, pulang: r.pulang, sumber: "bawaan" }]));
         if (pt.error) laporError("Gagal memuat peta pengguna mesin fingerprint (unggahan fingerprint tidak akan bisa disimpan)", pt.error);
@@ -224,7 +239,7 @@ async function muatRentang() {
     if (isSupabaseConfigured) {
         const [jk, catatan, libur, koreksi] = await Promise.all([
             supabaseClient.from("v_jam_kerja_guru")
-                .select("guru_id, nama, hari, urutan, sumber, bekerja, masuk, pulang, jabatan, pola_honor, sumber_hadir"),
+                .select("guru_id, nama, hari, urutan, sumber, bekerja, masuk, pulang, jabatan, pola_honor, sumber_hadir, kelompok_tarif"),
             supabaseClient.from(TABEL).select("id, tanggal, guru_id, status, masuk, pulang, sumber, catatan")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir),
             supabaseClient.from("kg_hari_libur").select("tanggal, keterangan")
@@ -255,7 +270,42 @@ async function muatRentang() {
 }
 
 // ---------- Render ----------
+/* Pemberitahuan mode kehadiran Kepala Sekolah dan tombol pengubahnya. */
+function renderKepsek() {
+    const el = document.getElementById("kepsekNotice");
+    if (!el) return;
+    const ada = state.jamKerja.some((r) => r.kelompok_tarif === "kepala_sekolah");
+    el.hidden = !ada;
+    if (!ada) return;
+    el.innerHTML = state.kepsekPenuh
+        ? `<b>Kehadiran Kepala Sekolah dianggap penuh (100 %).</b> Setiap hari kerjanya dihitung hadir sepanjang
+           ketentuan, apa pun rekaman fingerprint-nya; begitu pula di Induk Pembiayaan.
+           <button type="button" id="kepsekUbah" class="btn btn-ghost btn-kecil">Hitung menurut fingerprint…</button>`
+        : `<b>Kehadiran Kepala Sekolah dihitung menurut fingerprint</b>, seperti pimpinan lain.
+           <button type="button" id="kepsekUbah" class="btn btn-ghost btn-kecil">Kembalikan ke 100 %…</button>`;
+    el.querySelector("#kepsekUbah").addEventListener("click", ubahModeKepsek);
+}
+
+async function ubahModeKepsek() {
+    const keFingerprint = state.kepsekPenuh;
+    const pin = window.prompt(keFingerprint
+        ? "PIN khusus untuk menghitung kehadiran Kepala Sekolah menurut fingerprint:"
+        : "PIN khusus untuk mengembalikan kehadiran Kepala Sekolah ke 100 %:");
+    if (pin == null) return;
+    if (pin !== PIN_KEPSEK) { kabar("PIN salah. Kehadiran Kepala Sekolah tidak diubah."); return; }
+    const nilai = keFingerprint ? "fingerprint" : "penuh";
+    if (isSupabaseConfigured) {
+        const { error } = await supabaseClient.from(TABEL_PENGATURAN)
+            .upsert({ kunci: "kepsek_kehadiran", nilai, diubah_pada: new Date().toISOString() }, { onConflict: "kunci" });
+        if (error) { laporError("Gagal menyimpan pengaturan kehadiran Kepala Sekolah", error); return; }
+    }
+    state.kepsekPenuh = nilai !== "fingerprint";
+    kabar(state.kepsekPenuh ? "Kehadiran Kepala Sekolah kembali dianggap penuh (100 %)." : "Kehadiran Kepala Sekolah kini dihitung menurut fingerprint.");
+    render();
+}
+
 function render() {
+    renderKepsek();
     if (!state.hari.length) return;
     if (state.tab === "rekap") renderRekap(); else renderMatriks();
     // Rincian yang sedang terbuka ikut dihitung ulang sesudah catatan berubah.
@@ -341,7 +391,31 @@ function renderMatriks() {
    tidak lengkap. */
 const durasiKetentuan = (k) => k?.masuk && k?.pulang ? Math.max(0, menitDari(k.pulang) - menitDari(k.masuk)) : 0;
 
+/* Kepala Sekolah dalam mode penuh: tiap hari kerja dihitung hadir sepanjang
+   ketentuan, tanpa terlambat, tanpa pulang cepat, tanpa "belum dicatat".
+   Rekaman fingerprint-nya tetap tersimpan dan tampil di matriks, hanya tidak
+   dihitung. */
+function hitungPenuh(s) {
+    let menitTerjadwal = 0, n = 0;
+    const rincian = [];
+    for (const d of state.hari) {
+        const k = ketentuanPada(s, d.hari);
+        const hariKerja = bekerjaPada(s, d);
+        const durasi = hariKerja ? durasiKetentuan(k) : 0;
+        if (hariKerja) { n++; menitTerjadwal += durasi; }
+        const c = cariCatatan(d.iso, s.guruId);
+        rincian.push({ iso: d.iso, hari: d.hari, hariKerja, ketentuan: k?.masuk && k?.pulang ? `${jam5(k.masuk)}–${jam5(k.pulang)}` : "",
+                       durasi, status: hariKerja ? "Hadir" : (c ? c.status : ""), masuk: c?.masuk ? jam5(c.masuk) : "", pulang: c?.pulang ? jam5(c.pulang) : "",
+                       telat: 0, cepat: 0, dihitung: durasi, sumber: hariKerja ? "bawaan penuh" : (c?.sumber || ""), catatan: c?.catatan || "",
+                       keterangan: state.libur.has(d.iso) ? `libur sekolah${state.libur.get(d.iso) ? ` (${state.libur.get(d.iso)})` : ""}`
+                                 : hariKerja ? "dianggap hadir penuh (bawaan Kepala Sekolah)" : "libur kerja" });
+    }
+    return { hariKerja: n, hadir: n, tidak: 0, terlambat: 0, belum: 0, menitTerlambat: 0, pulangCepat: 0, menitPulangCepat: 0,
+             menitTerjadwal, menitHadir: menitTerjadwal, rincian };
+}
+
 function hitungStaf(s) {
+    if (s.kepsek && state.kepsekPenuh) return hitungPenuh(s);
     const kerja = state.hari.filter((d) => bekerjaPada(s, d));
     let hadir = 0, tidak = 0, terlambat = 0, belum = 0, menitTerlambat = 0, pulangCepat = 0, menitPulangCepat = 0;
     // Jam terjadwal: menit ketentuan pada tiap hari kerjanya dalam rentang.
@@ -719,7 +793,7 @@ async function hapusCatatan(baris) {
 function draf(tampil) {
     const out = [];
     for (const s of tampil) for (const d of state.hari) {
-        if (!s.perluCatat || !bekerjaPada(s, d) || cariCatatan(d.iso, s.guruId)) continue;
+        if (!s.perluCatat || (s.kepsek && state.kepsekPenuh) || !bekerjaPada(s, d) || cariCatatan(d.iso, s.guruId)) continue;
         out.push({ tanggal: d.iso, guru_id: s.guruId, status: "Hadir", sumber: "manual" });
     }
     return out;

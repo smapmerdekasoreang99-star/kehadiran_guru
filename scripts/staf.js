@@ -270,29 +270,11 @@ async function muatRentang() {
 }
 
 // ---------- Render ----------
-/* Pemberitahuan mode kehadiran Kepala Sekolah dan tombol pengubahnya. */
-function renderKepsek() {
-    const el = document.getElementById("kepsekNotice");
-    if (!el) return;
-    const ada = state.jamKerja.some((r) => r.kelompok_tarif === "kepala_sekolah");
-    el.hidden = !ada;
-    if (!ada) return;
-    el.innerHTML = state.kepsekPenuh
-        ? `<b>Kehadiran Kepala Sekolah dianggap penuh (100 %).</b> Setiap hari kerjanya dihitung hadir sepanjang
-           ketentuan, apa pun rekaman fingerprint-nya; begitu pula di Induk Pembiayaan.
-           <button type="button" id="kepsekUbah" class="btn btn-ghost btn-kecil">Hitung menurut fingerprint…</button>`
-        : `<b>Kehadiran Kepala Sekolah dihitung menurut fingerprint</b>, seperti pimpinan lain.
-           <button type="button" id="kepsekUbah" class="btn btn-ghost btn-kecil">Kembalikan ke 100 %…</button>`;
-    el.querySelector("#kepsekUbah").addEventListener("click", ubahModeKepsek);
-}
-
-async function ubahModeKepsek() {
+/* Mode kehadiran Kepala Sekolah hanya diubah dari dialog Rincian di Rekap
+   hari hadir, yang untuk Kepala Sekolah sudah dijaga PIN khusus. Tidak ada
+   pemberitahuan di halaman; matriks hanya menyebutnya di label namanya. */
+async function ubahModeKepsek(guruId) {
     const keFingerprint = state.kepsekPenuh;
-    const pin = window.prompt(keFingerprint
-        ? "PIN khusus untuk menghitung kehadiran Kepala Sekolah menurut fingerprint:"
-        : "PIN khusus untuk mengembalikan kehadiran Kepala Sekolah ke 100 %:");
-    if (pin == null) return;
-    if (pin !== PIN_KEPSEK) { kabar("PIN salah. Kehadiran Kepala Sekolah tidak diubah."); return; }
     const nilai = keFingerprint ? "fingerprint" : "penuh";
     if (isSupabaseConfigured) {
         const { error } = await supabaseClient.from(TABEL_PENGATURAN)
@@ -302,10 +284,10 @@ async function ubahModeKepsek() {
     state.kepsekPenuh = nilai !== "fingerprint";
     kabar(state.kepsekPenuh ? "Kehadiran Kepala Sekolah kembali dianggap penuh (100 %)." : "Kehadiran Kepala Sekolah kini dihitung menurut fingerprint.");
     render();
+    if (guruId) bukaRincian(guruId, true);   // rincian digambar ulang dengan mode baru, tanpa PIN lagi
 }
 
 function render() {
-    renderKepsek();
     if (!state.hari.length) return;
     if (state.tab === "rekap") renderRekap(); else renderMatriks();
     // Rincian yang sedang terbuka ikut dihitung ulang sesudah catatan berubah.
@@ -589,9 +571,15 @@ function renderRekap() {
    koreksi tangan punya dasar. Bisa diunduh sebagai xlsx. */
 let rincianAktif = null;
 
-function bukaRincian(guruId) {
+function bukaRincian(guruId, sudahPin) {
     const s = daftarStaf().tampil.find((x) => x.guruId === guruId);
     if (!s) return;
+    // Rincian Kepala Sekolah dijaga PIN khusus: di sinilah mode kehadirannya diubah.
+    if (s.kepsek && !sudahPin) {
+        const pin = window.prompt("Masukkan PIN khusus untuk membuka rincian kehadiran Kepala Sekolah:");
+        if (pin == null) return;
+        if (pin !== PIN_KEPSEK) { kabar("PIN salah. Rincian Kepala Sekolah tidak dibuka."); return; }
+    }
     const h = hitungStaf(s);
     const j = jamEfektif(s, h);
     const unlocked = isUnlocked();
@@ -626,6 +614,18 @@ function bukaRincian(guruId) {
     if (j.hadirDikoreksi) koreksi.push(`Jam hadir dikoreksi tangan menjadi ${jamMenit(j.hadir)} (hitungan ${jamMenit(h.menitHadir)})`);
     const box = document.getElementById("rincianKoreksi");
     box.hidden = !koreksi.length; box.textContent = koreksi.join(". ");
+    // Kepala Sekolah: mode kehadiran dan tombol pengubahnya, hanya di sini.
+    const kp = document.getElementById("rincianKepsek");
+    kp.hidden = !s.kepsek;
+    if (s.kepsek) {
+        kp.innerHTML = state.kepsekPenuh
+            ? `<b>Kehadiran Kepala Sekolah dianggap penuh (100 %).</b> Setiap hari kerja dihitung hadir sepanjang ketentuan,
+               apa pun rekaman fingerprint-nya; Induk Pembiayaan membaca hal yang sama.
+               <button type="button" id="rincianKepsekUbah" class="btn btn-ghost btn-kecil">Hitung menurut fingerprint</button>`
+            : `<b>Kehadiran Kepala Sekolah dihitung menurut fingerprint</b>, seperti pimpinan lain.
+               <button type="button" id="rincianKepsekUbah" class="btn btn-ghost btn-kecil">Kembalikan ke 100 %</button>`;
+        kp.querySelector("#rincianKepsekUbah").addEventListener("click", () => ubahModeKepsek(s.guruId));
+    }
     document.getElementById("rincianModal").hidden = false;
 }
 function tutupRincian() { document.getElementById("rincianModal").hidden = true; rincianAktif = null; }

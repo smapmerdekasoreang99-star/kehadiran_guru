@@ -282,6 +282,94 @@ function kakiExcel(ws, r, opsi) {
 }
 
 // ---------------------------------------------------------------------
+// Blok tanda tangan untuk Excel (28 September 2026) — satu aturan untuk
+// semua unduhan, supaya proporsional terhadap lebar kop di atasnya.
+//
+// Dulu tiap pengunduh menaruh tulisan tanda tangan di SATU kolom pilihan
+// (mis. kolom B dan E). Karena lebar kolom berbeda-beda, jarak blok kanan
+// ke tepi kanan kop tidak sama dengan jarak blok kiri ke tepi kiri —
+// tampak berat sebelah. Di sini lebar kolom sebenarnya dihitung, lalu:
+//   1 blok  → di kanan, selebar ±40 % kop;
+//   2 blok  → kiri dan kanan dengan lebar hampir SAMA (±25–48 % kop),
+//             masing-masing menempel tepi, jadi jaraknya ke tepi simetris;
+//   3 blok  → kiri dan kanan simetris seperti di atas, satu di tengah.
+// Tulisan tiap blok digabung selebar rentangnya dan dirata tengah.
+// Baris atas tiap blok disejajarkan (yang lebih pendek diberi baris
+// kosong sebelum jabatan), lalu ruang tanda tangan, lalu nama.
+//
+//   kolomAwal, kolomAkhir  rentang kop / bingkai (bawaan 1 s.d. 1)
+//   blok   [{ atas: ['Mengetahui,', 'Kepala Sekolah,'], nama, nip }]
+//          baris atas boleh string atau { teks, tebal }
+//   ruang  jumlah baris kosong untuk tanda tangan (bawaan 4)
+//   font, ukuran
+//
+// Mengembalikan nomor baris kosong sesudah blok.
+// ---------------------------------------------------------------------
+function rentangTtd(lebar, n) {
+    const N = lebar.length, W = lebar.reduce((a, b) => a + b, 0);
+    const kiri = k => lebar.slice(0, k).reduce((a, b) => a + b, 0);       // lebar kolom 1..k
+    const kanan = k => lebar.slice(N - k).reduce((a, b) => a + b, 0);     // lebar k kolom terakhir
+    if (n === 1) {
+        let k = 1;
+        while (k < N && kanan(k) < W * 0.4) k++;
+        return [[N - k + 1, N]];
+    }
+    if (N < 2) return Array.from({ length: n }, () => [1, 1]);
+    const bawah = n === 3 ? 0.22 : 0.25, atas = n === 3 ? 0.36 : 0.48, sasaran = n === 3 ? 0.3 : 0.38;
+    let terbaik = null;
+    for (let a = 1; a < N; a++) {
+        for (let b = 1; a + b <= N - (n === 3 ? 1 : 0); b++) {
+            const wl = kiri(a), wr = kanan(b);
+            const sah = wl >= W * bawah && wl <= W * atas && wr >= W * bawah && wr <= W * atas;
+            const nilai = Math.abs(wl - wr) * 3 + Math.abs(wl - W * sasaran) + Math.abs(wr - W * sasaran) + (sah ? 0 : W * 10);
+            if (!terbaik || nilai < terbaik.nilai) terbaik = { a, b, nilai };
+        }
+    }
+    const L = [1, terbaik.a], R = [N - terbaik.b + 1, N];
+    return n === 3 ? [L, [terbaik.a + 1, N - terbaik.b], R] : [L, R];
+}
+
+function ttdExcel(ws, r, opsi) {
+    const awal = Math.max(1, opsi.kolomAwal || 1);
+    const akhir = Math.max(awal, opsi.kolomAkhir || awal);
+    const font = opsi.font || 'Calibri', ukuran = opsi.ukuran || 10;
+    const ruang = opsi.ruang == null ? 4 : opsi.ruang;
+    const blok = (opsi.blok || []).filter(Boolean).slice(0, 3);
+    if (!blok.length) return r;
+
+    const lebar = [];
+    for (let k = awal; k <= akhir; k++) lebar.push(PX_KOLOM(ws.getColumn(k).width || 10));
+    const rentang = rentangTtd(lebar, blok.length).map(([x, y]) => [x + awal - 1, y + awal - 1]);
+
+    // Baris atas disejajarkan: yang lebih pendek diberi baris kosong sebelum baris terakhirnya (jabatan).
+    const tinggi = Math.max(...blok.map(b => (b.atas || []).length));
+    const atasRata = blok.map(b => {
+        const a = (b.atas || []).slice();
+        while (a.length < tinggi) a.splice(Math.max(0, a.length - 1), 0, '');
+        return a;
+    });
+
+    const tulis = (baris, [k1, k2], isi, gaya) => {
+        if (k2 > k1) { try { ws.mergeCells(baris, k1, baris, k2); } catch (e) { /* sudah tergabung */ } }
+        const c = ws.getCell(baris, k1);
+        c.value = isi;
+        c.font = Object.assign({ name: font, size: ukuran }, gaya || {});
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
+    };
+    blok.forEach((b, i) => {
+        atasRata[i].forEach((baris, j) => {
+            const teks = typeof baris === 'string' ? baris : (baris && baris.teks) || '';
+            if (teks) tulis(r + j, rentang[i], teks, typeof baris === 'object' && baris.tebal ? { bold: true } : null);
+        });
+        const rNama = r + tinggi + ruang;
+        tulis(rNama, rentang[i], b.nama || '……………………', { bold: true, underline: true });
+        if (b.nip) tulis(rNama + 1, rentang[i], b.nip, { size: ukuran - 1 });
+    });
+    const adaNip = blok.some(b => b.nip);
+    return r + tinggi + ruang + 1 + (adaNip ? 1 : 0) + 1;
+}
+
+// ---------------------------------------------------------------------
 // Kop untuk gambar PNG (kanvas). Di sini piksel berarti piksel — tidak
 // ada penerjemahan satuan sama sekali, jadi hasilnya tepat.
 //
@@ -384,7 +472,7 @@ function tinggiKopKanvas(profil, judul = 'x', sub = 'x') {
 window.KopDokumen = {
     TATA_LETAK_BAWAAN, LANGKAH_GESER,
     tataLetak, susunanKop, barisIdentitas,
-    kopExcel, kakiExcel, kopKanvas, tinggiKopKanvas
+    kopExcel, kakiExcel, ttdExcel, kopKanvas, tinggiKopKanvas
 };
 
 })();

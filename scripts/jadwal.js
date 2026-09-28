@@ -31,7 +31,7 @@ import { demoData, demoKegiatan } from "../assets/demo-data.js?v=20260921v";
 import { urutkanKelas, indeksKelas, jenisKelas } from "../assets/kelas-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
 import { semesterSekarang, semesterBaris, LABEL_SEMESTER } from "../assets/semester.js?v=20260921ad";
-import { bukuJadwal, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260921ae";
+import { bukuJadwal, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260928a";
 
 // ---------- Pelaporan error ke layar ----------
 function laporError(konteks, error) {

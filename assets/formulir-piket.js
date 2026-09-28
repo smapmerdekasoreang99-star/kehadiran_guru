@@ -113,6 +113,17 @@
        selalu di kiri, dan penanggung jawabnya di kanan sejajar dengan
        tanggal — susunan yang sama dengan berkas rekap Kehadiran Guru. */
     function blokTtd(ws, r, o) {
+        /* Letaknya proporsional terhadap lebar kop (28 September 2026):
+           aturan bersama KopDokumen.ttdExcel bila tersedia. */
+        if (o.kop && o.kop.ttdExcel) {
+            const jarak = o.rapat ? 3 : 5;
+            o.kop.ttdExcel(ws, r, { kolomAkhir: o.kolomAkhir, font: FONT, ruang: jarak - 2, blok: [
+                { atas: ["Mengetahui,", "Kepala Sekolah,"], nama: o.kepala },
+                { atas: [`${o.tempat || ""}${o.tempat ? ", " : ""}${o.tanggal ? tglIndo(o.tanggal) : "……………………"}`,
+                         o.labelKanan || "Petugas Piket,"], nama: o.namaKanan }
+            ] });
+            return r + jarak + 2;
+        }
         const tulis = (baris, kolom, teks, tebal, garisBawah) => {
             const cell = ws.getCell(baris, kolom);
             cell.value = teks;
@@ -351,6 +362,7 @@
         }
 
         blokTtd(ws, r, {
+            kop: o.kop, kolomAkhir: KOL,
             kolomKiri: parkiran ? 3 : 2,
             kolomKanan: KOL,
             rapat: !parkiran,

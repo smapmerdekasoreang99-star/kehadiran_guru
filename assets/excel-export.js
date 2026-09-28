@@ -109,6 +109,15 @@ function pengaturanCetak(ws, orientasi = "portrait") {
    pejabat penanggung jawabnya di kanan sejajar dengan tanggal. */
 function blokTandaTangan(ws, baris, { pengaturan, tanggal, kolomKiri, kolomKanan, kolomTerakhir }) {
     const tgl = `${pengaturan.tempat}, ${tglIndo(tanggal)}`;
+    /* Proporsional terhadap lebar kop (28 September 2026): kolomKiri/kolomKanan
+       tidak lagi dipakai; rentangnya dihitung KopDokumen.ttdExcel dari lebar kolom. */
+    if (window.KopDokumen && window.KopDokumen.ttdExcel && kolomTerakhir) {
+        kopBersama().ttdExcel(ws, baris, { kolomAkhir: kolomTerakhir, font: FONT, ruang: 4, blok: [
+            { atas: ["Mengetahui,", "Kepala Sekolah,"], nama: pengaturan.kepala_sekolah },
+            { atas: [tgl, "Wakasek Kurikulum,"], nama: pengaturan.kurikulum }
+        ] });
+        return baris + 8;
+    }
     const set = (r, c, v, bold = false) => { const cell = ws.getCell(r, c); cell.value = v; cell.font = { name: FONT, size: 10, bold }; cell.alignment = { horizontal: "center" }; };
     set(baris, kolomKiri, "Mengetahui,");
     set(baris, kolomKanan, tgl);

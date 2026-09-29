@@ -115,7 +115,7 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
 
     const per = new Map();
     const baris = (gid) => {
-        if (!per.has(gid)) per.set(gid, { guru_id: gid, kontrak: 0, terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0 });
+        if (!per.has(gid)) per.set(gid, { guru_id: gid, kontrak: 0, terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0, hariTerjadwal: 0, hariDatang: 0 });
         return per.get(gid);
     };
     /* Kontrak jam = jam per MINGGU menurut jadwal, bukan jumlah jam sepanjang
@@ -133,6 +133,30 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
         const b = baris(k.guru_id);
         if (b[k.status] !== undefined) b[k.status] += 1;
     }
+    /* Hari terjadwal = hari kerja yang ada jam mengajarnya; hari datang = hari
+       terjadwal yang tidak absen pada seluruh jamnya (HTTM dihitung tidak datang).
+       Hitungannya sama dengan f_ip_kehadiran_guru di Induk Pembiayaan, dasar
+       Konsumsi Kedatangan (29 September 2026). */
+    const jamHari = new Map();   // guru|semester|hari -> jam
+    for (const j of jadwal) {
+        const kunci = `${j.guru_id}|${semesterBaris(j)}|${j.hari}`;
+        jamHari.set(kunci, (jamHari.get(kunci) || 0) + 1);
+    }
+    const absenTanggal = new Map();   // guru|tanggal -> jam tidak hadir (semua status)
+    for (const k of ketidakhadiran) {
+        if (!tanggalSet.has(k.tanggal)) continue;
+        const kunci = `${k.guru_id}|${k.tanggal}`;
+        absenTanggal.set(kunci, (absenTanggal.get(kunci) || 0) + 1);
+    }
+    for (const [kunci, jam] of jamHari) {
+        const [gid, sem, namaHari] = kunci.split("|");
+        for (const h of hari) {
+            if (String(h.semester) !== sem || h.hari !== namaHari) continue;
+            const b = baris(gid);
+            b.hariTerjadwal += 1;
+            if ((absenTanggal.get(`${gid}|${h.tanggal}`) || 0) < jam) b.hariDatang += 1;
+        }
+    }
     const hitungBobot = (b) =>
         b.hadirTM + STATUS_ABSEN.reduce((a, st) => a + b[st] * (BOBOT_HADIR[st] ?? 0), 0);
     const hasil = [];
@@ -145,9 +169,9 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
         hasil.push(row);
     }
     const total = hasil.reduce((t, r) => {
-        for (const k of ["kontrak", "terjadwal", "ST", "IT", "TK", "HTTM", "tidakHadir", "hadirTM"]) t[k] += r[k];
+        for (const k of ["kontrak", "terjadwal", "ST", "IT", "TK", "HTTM", "tidakHadir", "hadirTM", "hariTerjadwal", "hariDatang"]) t[k] += r[k];
         return t;
-    }, { kontrak: 0, terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0, tidakHadir: 0, hadirTM: 0 });
+    }, { kontrak: 0, terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0, tidakHadir: 0, hadirTM: 0, hariTerjadwal: 0, hariDatang: 0 });
     total.hadir = Math.round(hitungBobot(total) * 100) / 100;
     total.persen = total.terjadwal ? Math.round((total.hadir / total.terjadwal) * 10000) / 100 : null;
     return { baris: hasil, total, jumlahHariKerja: hari.length };

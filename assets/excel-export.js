@@ -167,19 +167,26 @@ export async function bukuKehadiran({ ExcelJS, baris, total, wali, pengaturan, a
 
 function tulisSheetKehadiran(wb, namaSheet, judul, baris, total, { ExcelJS, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64, catatan }) {
     const ws = wb.addWorksheet(namaSheet);
-    const KOL = 11;
-    ws.columns = [{ width: 5 }, { width: 34 }, { width: 9 }, { width: 10 }, { width: 8 }, { width: 7 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 10 }, { width: 10 }];
+    // Kolom sama dengan Induk Pembiayaan → Kehadiran dan Piket → Kehadiran Guru (29 September 2026);
+    // Hari Terjadwal / Hari Datang hanya bila barisnya membawa angka itu (sheet wali kelas tidak).
+    const hari = total && total.hariTerjadwal != null;
+    const H = hari ? 2 : 0;
+    const KOL = 11 + H;
+    ws.columns = [{ width: 5 }, { width: 34 }, { width: 9 }, ...(hari ? [{ width: 10 }, { width: 9 }] : []),
+                  { width: 10 }, { width: 8 }, { width: 7 }, { width: 6 }, { width: 6 }, { width: 6 }, { width: 10 }, { width: 11 }];
     let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul, sub: `${labelPeriode(awal, akhir).replace(" :", ":")}  ·  ${jumlahHariKerja} hari kerja`, kolomTerakhir: KOL });
     // Kontrak = jam per minggu menurut jadwal; Terjadwal = jam sepanjang rentang.
-    kepalaTabel(ws, r, ["NO", "NAMA GURU", "KONTRAK (JP/MINGGU)", "TERJADWAL (JP)", "HADIR", "HTTM", "ST", "IT", "TK", "HADIR (BOBOT)", "% HADIR"], { tinggi: 30 });
+    kepalaTabel(ws, r, ["NO", "NAMA GURU", "KONTRAK JAM", ...(hari ? ["HARI TERJADWAL", "HARI DATANG"] : []),
+                        "JAM TERJADWAL", "JAM HADIR", "HTTM", "ST", "IT", "TK", "BOBOT HADIR", "% KEHADIRAN"], { tinggi: 30 });
     r += 1;
     const tulisAngka = (b, opsi = {}) => {
         // Kontrak ditulis "20 (+1)" bila ada jam Tugas Tambahan, sama seperti di layar.
         [b.kontrak == null ? "" : b.tambahan ? `${b.kontrak} (+${b.tambahan})` : b.kontrak,
+         ...(hari ? [b.hariTerjadwal, b.hariDatang] : []),
          b.terjadwal, b.hadirTM, b.HTTM, b.ST, b.IT, b.TK]
             .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", ...opsi }));
-        selData(ws, r, 10, b.hadir, { fmt: "0.00", align: "center", ...opsi });
-        selData(ws, r, 11, b.persen === null || b.persen === undefined ? "" : b.persen / 100,
+        selData(ws, r, 10 + H, b.hadir, { fmt: "0.00", align: "center", ...opsi });
+        selData(ws, r, 11 + H, b.persen === null || b.persen === undefined ? "" : b.persen / 100,
                 { fmt: "0.00%", align: "center", bold: true, ...opsi });
     };
     baris.forEach((b, i) => {
@@ -191,10 +198,10 @@ function tulisSheetKehadiran(wb, namaSheet, judul, baris, total, { ExcelJS, peng
     selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
     tulisAngka(total, { bold: true, fill: true });
     r += 2;
-    ws.getCell(r, 1).value = `Kontrak = jam per minggu menurut jadwal KBM; (+n) = jam Tugas Tambahan per minggu.  Bobot kehadiran: HTTM ${bobot.HTTM * 100}% · ST ${bobot.ST * 100}% · IT ${bobot.IT * 100}% · TK ${bobot.TK * 100}%.  % Hadir = (Hadir + jumlah berbobot) ÷ Terjadwal.  ${catatan || ""}`;
+    ws.getCell(r, 1).value = `Kontrak = jam per minggu menurut jadwal KBM; (+n) = jam Tugas Tambahan per minggu.  Bobot kehadiran: HTTM ${bobot.HTTM * 100}% · ST ${bobot.ST * 100}% · IT ${bobot.IT * 100}% · TK ${bobot.TK * 100}%.  ${hari ? "Hari Datang = hari terjadwal yang tidak absen pada seluruh jamnya.  " : ""}Bobot Hadir = Jam Hadir + HTTM + 20% ST + 10% IT; % Kehadiran = Bobot Hadir ÷ Jam Terjadwal.  ${catatan || ""}`;
     ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true }; ws.mergeCells(r, 1, r, KOL);
     r += 2;
-    blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 11, kolomTerakhir: KOL });
+    blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: KOL, kolomTerakhir: KOL });
     pengaturanCetak(ws, "portrait");
     ws.pageSetup.printTitlesRow = "6:6";
 }

@@ -82,21 +82,23 @@
             <tr>
               <th>Guru</th>
               <th class="num" title="Jam mengajar per minggu menurut jadwal KBM pada semester tanggal akhir rentang">Kontrak Jam</th>
-              <th class="num" title="Jam pelajaran terjadwal pada hari kerja dalam rentang">Terjadwal</th>
-              <th class="num" title="Hadir tatap muka">Hadir</th>
+              <th class="num" title="Hari kerja yang ada jam mengajarnya">Hari Terjadwal</th>
+              <th class="num" title="Hari terjadwal yang tidak absen pada seluruh jamnya (HTTM dihitung tidak datang)">Hari Datang</th>
+              <th class="num" title="Jam pelajaran terjadwal pada hari kerja dalam rentang">Jam Terjadwal</th>
+              <th class="num" title="Jam hadir tatap muka">Jam Hadir</th>
               <th class="num" title="Hadir tanpa Tatap Muka (bobot 100%)">HTTM</th>
               <th class="num" title="Sakit dengan Tugas (bobot 20%)">ST</th>
               <th class="num" title="Ijin dengan Tugas (bobot 10%)">IT</th>
               <th class="num" title="Tanpa Keterangan (bobot 0%)">TK</th>
-              <th class="num" title="Jam hadir setelah pembobotan">Hadir (bobot)</th>
-              <th class="num">% Hadir</th>
+              <th class="num" title="Jam Hadir + HTTM + 20% ST + 10% IT">Bobot Hadir</th>
+              <th class="num">% Kehadiran</th>
             </tr>
           </thead>
           <tbody id="bodyKehadiran"></tbody>
           <tfoot id="footKehadiran"></tfoot>
         </table>
       </div>
-      <div class="table-foot">Kontrak Jam = jam mengajar per minggu menurut jadwal KBM pada semester tanggal akhir rentang; (+n) = jam Tugas Tambahan per minggu dari Data Induk, di luar jadwal KBM. Bobot kehadiran per status: HTTM 100% · ST 20% · IT 10% · TK 0%. % Hadir = (Hadir tatap muka + jumlah berbobot) ÷ Terjadwal. Sabtu–Minggu dan tanggal di tab Hari Libur tidak dihitung sebagai hari kerja. <strong>Upacara dan Bimbingan Wali Kelas (Senin jam 1–2) tidak termasuk</strong> — lihat tab Tugas Wali Kelas.</div>
+      <div class="table-foot">Kontrak Jam = jam mengajar per minggu menurut jadwal KBM pada semester tanggal akhir rentang; (+n) = jam Tugas Tambahan per minggu dari Data Induk, di luar jadwal KBM. Hari Terjadwal = hari kerja yang ada jam mengajarnya; Hari Datang = hari terjadwal yang tidak absen pada seluruh jamnya (HTTM dihitung tidak datang) — dasar Konsumsi Kedatangan di Induk Pembiayaan. Jam Terjadwal = jam sepanjang rentang; Jam Hadir = jam hadir tatap muka. Bobot kehadiran per status: HTTM 100% · ST 20% · IT 10% · TK 0%. Bobot Hadir = Jam Hadir + HTTM + 20% ST + 10% IT; % Kehadiran = Bobot Hadir ÷ Jam Terjadwal. Sabtu–Minggu dan tanggal di tab Hari Libur tidak dihitung sebagai hari kerja. <strong>Upacara dan Bimbingan Wali Kelas (Senin jam 1–2) tidak termasuk</strong> — lihat tab Tugas Wali Kelas.</div>
 
     </section>
 
@@ -257,6 +259,6 @@
 </div>
 
 <script src="assets/kop-dokumen.js?v=5"></script>
-<script type="module" src="scripts/rekap.js?v=20260922d"></script>
+<script type="module" src="scripts/rekap.js?v=20260929a"></script>
 </body>
 </html>

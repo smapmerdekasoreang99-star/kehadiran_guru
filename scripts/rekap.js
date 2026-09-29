@@ -4,8 +4,8 @@ import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas } from "../assets/kelas-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
-import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260922d";
-import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260928a";
+import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260929a";
+import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260929a";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
@@ -354,11 +354,11 @@ function renderKehadiran() {
     const rows = barisKehadiranTersaring();
     document.getElementById("bodyKehadiran").innerHTML = rows.map((r) => `
       <tr>
-        <td class="nama">${r.nama}</td>${selKontrak(r)}${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.IT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}
-      </tr>`).join("") || `<tr><td colspan="10" class="empty-state">Tidak ada data pada rentang ini.</td></tr>`;
+        <td class="nama">${r.nama}</td>${selKontrak(r)}${num(r.hariTerjadwal)}${num(r.hariDatang)}${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.IT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}
+      </tr>`).join("") || `<tr><td colspan="12" class="empty-state">Tidak ada data pada rentang ini.</td></tr>`;
     const t = h.total;
     document.getElementById("footKehadiran").innerHTML = `
-      <tr class="total"><td>Total (${h.baris.length} guru)</td><td class="num">${t.kontrak}${(() => { const s = h.baris.reduce((a, r) => a + jamTambahan(r.guru_id), 0); return s ? ` <small class="satuan-kolom">(+${s})</small>` : ""; })()}</td>${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.IT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
+      <tr class="total"><td>Total (${h.baris.length} guru)</td><td class="num">${t.kontrak}${(() => { const s = h.baris.reduce((a, r) => a + jamTambahan(r.guru_id), 0); return s ? ` <small class="satuan-kolom">(+${s})</small>` : ""; })()}</td>${num(t.hariTerjadwal)}${num(t.hariDatang)}${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.IT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
     document.getElementById("ringkasKehadiran").textContent = `${h.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
     renderWali();
     tandaiPerluHitung();

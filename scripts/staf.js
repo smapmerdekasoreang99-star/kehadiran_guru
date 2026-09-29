@@ -76,7 +76,7 @@ let state = {
     hari: [],          // [{ iso, hari }] Senin–Sabtu dalam rentang
     jamBawaan: new Map(), // hari -> ketentuan bawaan sekolah (jam_kerja), bagi yang bukan Staf
     peta: new Map(),      // no_id mesin -> { nama_mesin, guru_id, abaikan }
-    koreksi: new Map(),   // guru_id -> { jam_terjadwal_menit, jam_hadir_menit } untuk rentang awal–akhir yang sedang tampil
+    koreksi: new Map(),   // guru_id -> { jam_terjadwal_menit, jam_hadir_menit, hari_hadir } untuk rentang awal–akhir yang sedang tampil
 };
 const TABEL_KOREKSI = "kg_koreksi_jam_staf";
 /* Kehadiran Kepala Sekolah (keputusan 25 September 2026): secara bawaan
@@ -245,7 +245,7 @@ async function muatRentang() {
             supabaseClient.from("kg_hari_libur").select("tanggal, keterangan")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir),
             // Koreksi jam di tab Rekap berlaku untuk rentang yang persis sama.
-            supabaseClient.from(TABEL_KOREKSI).select("guru_id, jam_terjadwal_menit, jam_hadir_menit")
+            supabaseClient.from(TABEL_KOREKSI).select("guru_id, jam_terjadwal_menit, jam_hadir_menit, hari_hadir")
                 .eq("awal", state.awal).eq("akhir", state.akhir),
         ]);
         if (jk.error) { laporError("Gagal memuat ketentuan jam kerja staf", jk.error); return; }
@@ -254,7 +254,7 @@ async function muatRentang() {
         state.jamKerja = jk.data || [];
         state.catatan = catatan.data || [];
         state.libur = new Map((libur.data || []).map((l) => [l.tanggal, l.keterangan || ""]));
-        state.koreksi = new Map((koreksi.data || []).map((k) => [k.guru_id, { jam_terjadwal_menit: k.jam_terjadwal_menit, jam_hadir_menit: k.jam_hadir_menit }]));
+        state.koreksi = new Map((koreksi.data || []).map((k) => [k.guru_id, { jam_terjadwal_menit: k.jam_terjadwal_menit, jam_hadir_menit: k.jam_hadir_menit, hari_hadir: k.hari_hadir }]));
     } else {
         state.jamKerja = []; state.catatan = []; state.libur = new Map(); state.koreksi = new Map();
     }
@@ -466,13 +466,15 @@ function ringkasHariEfektif() {
         + ". Staf dengan ketentuan sendiri (Jam Kerja Staf) mengikuti ketentuannya.";
 }
 
-/* Jam terjadwal dan jam hadir yang dipakai rekap: koreksi tangan bila ada,
-   selain itu hasil hitungan. */
+/* Jam terjadwal, jam hadir, dan hari hadir yang dipakai rekap: koreksi tangan
+   bila ada, selain itu hasil hitungan. Induk Pembiayaan membaca koreksi yang
+   sama (hari hadir: kolom Hadir, konsumsi staf, komponen pendukung per hari). */
 function jamEfektif(s, h) {
     const k = state.koreksi.get(s.guruId) || {};
     return {
         terjadwal: k.jam_terjadwal_menit ?? h.menitTerjadwal, terjadwalDikoreksi: k.jam_terjadwal_menit != null,
         hadir: k.jam_hadir_menit ?? h.menitHadir, hadirDikoreksi: k.jam_hadir_menit != null,
+        hariHadir: k.hari_hadir ?? h.hadir, hariHadirDikoreksi: k.hari_hadir != null,
     };
 }
 const jamMenit = (m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
@@ -516,14 +518,17 @@ function renderRekap() {
     const persen = (a, b) => b ? `<span class="persen ${a / b >= 0.95 ? "baik" : a / b >= 0.85 ? "sedang" : "rendah"}">${(a / b * 100).toFixed(2).replace(".", ",")}%</span>` : "—";
     // Sel jam: saat kunci edit terbuka berupa isian; nilai yang dikoreksi
     // tangan ditandai dan tetap menyebut angka hitungannya.
+    const LABEL_KOREKSI = { terjadwal: "Jam terjadwal", hadir: "Jam hadir", harihadir: "Hadir" };
     const selJam = (s, kolom, nilai, dikoreksi, hitungan) => {
-        const judul = dikoreksi ? `Dikoreksi tangan · hitungan: ${jamMenit(hitungan)}` : "";
+        const hari = kolom === "harihadir";   // hari hadir: angka bulat, bukan jam:menit
+        const teks = (v) => hari ? String(v) : jamMenit(v);
+        const judul = dikoreksi ? `Dikoreksi tangan · hitungan: ${teks(hitungan)}${hari ? " hari" : ""}` : "";
         const kelas = `num jam${dikoreksi ? " dikoreksi" : ""}`;
-        if (!unlocked) return `<td class="${kelas}" title="${esc(judul)}">${jamMenit(nilai)}</td>`;
-        return `<td class="${kelas}"><input type="text" class="jam-koreksi" inputmode="numeric" value="${jamMenit(nilai)}"
+        if (!unlocked) return `<td class="${kelas}" title="${esc(judul)}">${teks(nilai)}</td>`;
+        return `<td class="${kelas}"><input type="text" class="jam-koreksi${hari ? " hari-koreksi" : ""}" inputmode="numeric" value="${teks(nilai)}"
             data-guru="${esc(s.guruId)}" data-kolom="${kolom}" data-hitungan="${hitungan}"
-            aria-label="${kolom === "terjadwal" ? "Jam terjadwal" : "Jam hadir"} ${esc(s.nama)}"
-            title="${esc(judul || "Ubah untuk mengoreksi (jam:menit); kosongkan untuk kembali ke hitungan")}"></td>`;
+            aria-label="${LABEL_KOREKSI[kolom]} ${esc(s.nama)}"
+            title="${esc(judul || (hari ? "Ubah untuk mengoreksi jumlah hari hadir; kosongkan untuk kembali ke hitungan" : "Ubah untuk mengoreksi (jam:menit); kosongkan untuk kembali ke hitungan"))}"></td>`;
     };
     const baris = tampil.map((s) => { const h = hitungStaf(s); return { s, h, j: jamEfektif(s, h) }; });
     // Keterangan sel: tanggal, hari, dan jam di balik angkanya — supaya
@@ -541,7 +546,7 @@ function renderRekap() {
     document.getElementById("bodyRekap").innerHTML = baris.map(({ s, h, j }, i) => `<tr>
         <td class="num">${i + 1}</td><td class="nama">${esc(s.nama)}</td><td>${esc(s.jabatan)}</td>
         <td>${esc(POLA[s.pola] || s.pola || "—")}${s.sumber === "fingerprint" ? ' <small style="color:var(--tinta-3)">fingerprint</small>' : ""}</td>
-        ${selKet(h.hariKerja, ketKerja(h))}${num(h.hadir)}${selKet(h.tidak, ketTidak(h))}${selKet(h.menitTerlambat, ketTelat(h))}${selKet(h.menitPulangCepat, ketCepat(h))}
+        ${selKet(h.hariKerja, ketKerja(h))}${selJam(s, "harihadir", j.hariHadir, j.hariHadirDikoreksi, h.hadir)}${selKet(h.tidak, ketTidak(h))}${selKet(h.menitTerlambat, ketTelat(h))}${selKet(h.menitPulangCepat, ketCepat(h))}
         ${selJam(s, "terjadwal", j.terjadwal, j.terjadwalDikoreksi, h.menitTerjadwal)}${selJam(s, "hadir", j.hadir, j.hadirDikoreksi, h.menitHadir)}
         <td class="num">${persen(j.hadir, j.terjadwal)}</td>
         <td><button type="button" class="btn btn-ghost btn-kecil" data-rincian="${esc(s.guruId)}" title="Jejak hitung per tanggal ${esc(s.nama)}">Rincian</button></td></tr>`).join("")
@@ -549,11 +554,11 @@ function renderRekap() {
     document.getElementById("hariEfektif").textContent = ringkasHariEfektif();
     const t = baris.reduce((a, { h, j }) => {
         for (const k in h) a[k] += h[k];
-        a.terjadwal += j.terjadwal; a.jamHadir += j.hadir; return a;
-    }, { hariKerja: 0, hadir: 0, tidak: 0, terlambat: 0, belum: 0, menitTerlambat: 0, pulangCepat: 0, menitPulangCepat: 0, menitTerjadwal: 0, menitHadir: 0, terjadwal: 0, jamHadir: 0 });
+        a.terjadwal += j.terjadwal; a.jamHadir += j.hadir; a.hariHadir += j.hariHadir; return a;
+    }, { hariHadir: 0, hariKerja: 0, hadir: 0, tidak: 0, terlambat: 0, belum: 0, menitTerlambat: 0, pulangCepat: 0, menitPulangCepat: 0, menitTerjadwal: 0, menitHadir: 0, terjadwal: 0, jamHadir: 0 });
     document.getElementById("footRekap").innerHTML = baris.length ? `<tr class="total"><td></td><td colspan="3">Total (${baris.length} orang)</td>
-        ${num(t.hariKerja)}${num(t.hadir)}${num(t.tidak)}${num(t.menitTerlambat)}${num(t.menitPulangCepat)}${num(jamMenit(t.terjadwal))}${num(jamMenit(t.jamHadir))}<td class="num">${persen(t.jamHadir, t.terjadwal)}</td><td></td></tr>` : "";
-    const nKoreksi = baris.filter(({ j }) => j.terjadwalDikoreksi || j.hadirDikoreksi).length;
+        ${num(t.hariKerja)}${num(t.hariHadir)}${num(t.tidak)}${num(t.menitTerlambat)}${num(t.menitPulangCepat)}${num(jamMenit(t.terjadwal))}${num(jamMenit(t.jamHadir))}<td class="num">${persen(t.jamHadir, t.terjadwal)}</td><td></td></tr>` : "";
+    const nKoreksi = baris.filter(({ j }) => j.terjadwalDikoreksi || j.hadirDikoreksi || j.hariHadirDikoreksi).length;
     document.getElementById("ringkasRekap").textContent = `${tglIndo(state.awal)} – ${tglIndo(state.akhir)} · ${state.catatan.length} catatan${nKoreksi ? ` · ${nKoreksi} dikoreksi tangan` : ""}`;
 
     const table = document.getElementById("tabelRekap");
@@ -612,6 +617,7 @@ function bukaRincian(guruId, sudahPin) {
     const koreksi = [];
     if (j.terjadwalDikoreksi) koreksi.push(`Jam terjadwal dikoreksi tangan menjadi ${jamMenit(j.terjadwal)} (hitungan ${jamMenit(h.menitTerjadwal)})`);
     if (j.hadirDikoreksi) koreksi.push(`Jam hadir dikoreksi tangan menjadi ${jamMenit(j.hadir)} (hitungan ${jamMenit(h.menitHadir)})`);
+    if (j.hariHadirDikoreksi) koreksi.push(`Hadir dikoreksi tangan menjadi ${j.hariHadir} hari (hitungan ${h.hadir} hari)`);
     const box = document.getElementById("rincianKoreksi");
     box.hidden = !koreksi.length; box.textContent = koreksi.join(". ");
     // Kepala Sekolah: mode kehadiran dan tombol pengubahnya, hanya di sini.
@@ -648,6 +654,7 @@ function unduhRincian() {
     ];
     if (j.terjadwalDikoreksi) baris.push(["Koreksi tangan", "", "Jam terjadwal", jamMenit(j.terjadwal), "", "", "", "", "", "", `hitungan ${jamMenit(h.menitTerjadwal)}`]);
     if (j.hadirDikoreksi) baris.push(["Koreksi tangan", "", "Jam hadir", "", "", "", "", "", "", jamMenit(j.hadir), `hitungan ${jamMenit(h.menitHadir)}`]);
+    if (j.hariHadirDikoreksi) baris.push(["Koreksi tangan", "", "Hadir (hari)", "", String(j.hariHadir), "", "", "", "", "", `hitungan ${h.hadir} hari`]);
     baris.push([], [ringkasHariEfektif()]);
     const ws = X.utils.aoa_to_sheet(baris);
     ws["!cols"] = [{ wch: 9 }, { wch: 6 }, { wch: 13 }, { wch: 12 }, { wch: 14 }, { wch: 7 }, { wch: 7 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 40 }];
@@ -657,29 +664,32 @@ function unduhRincian() {
     X.writeFile(wb, `Rincian_Kehadiran_${aman}_${state.awal}_${state.akhir}.xlsx`);
 }
 
-/* Koreksi tangan atas jam terjadwal / jam hadir satu orang untuk rentang
-   yang sedang tampil. Kosong, atau sama dengan hitungan, berarti koreksinya
-   dicabut; bila kedua kolom tidak lagi dikoreksi, barisnya dihapus. */
+/* Koreksi tangan atas jam terjadwal / jam hadir / hari hadir satu orang untuk
+   rentang yang sedang tampil. Kosong, atau sama dengan hitungan, berarti
+   koreksinya dicabut; bila tidak ada kolom yang dikoreksi lagi, barisnya dihapus. */
 async function simpanKoreksi(input) {
     if (!isUnlocked()) return;
     const guruId = input.dataset.guru;
-    const kunci = input.dataset.kolom === "terjadwal" ? "jam_terjadwal_menit" : "jam_hadir_menit";
+    const kolom = input.dataset.kolom;
+    const hari = kolom === "harihadir";
+    const kunci = { terjadwal: "jam_terjadwal_menit", hadir: "jam_hadir_menit", harihadir: "hari_hadir" }[kolom];
     const hitungan = Number(input.dataset.hitungan);
     const teks = input.value.trim();
-    let menit = null;
+    let menit = null;   // untuk hari hadir: jumlah hari
     if (teks) {
-        menit = menitDariTeks(teks);
+        menit = hari ? (/^\d+$/.test(teks) ? Number(teks) : null) : menitDariTeks(teks);
         if (menit == null) {
-            kabar("Tulis dalam bentuk jam:menit, misalnya 152:30 — menitnya 0–59.");
-            input.value = jamMenit(state.koreksi.get(guruId)?.[kunci] ?? hitungan);
+            kabar(hari ? "Tulis jumlah hari hadir sebagai angka bulat, misalnya 20." : "Tulis dalam bentuk jam:menit, misalnya 152:30 — menitnya 0–59.");
+            const v = state.koreksi.get(guruId)?.[kunci] ?? hitungan;
+            input.value = hari ? String(v) : jamMenit(v);
             input.focus(); input.select();
             return;
         }
         if (menit === hitungan) menit = null;
     }
-    const lama = state.koreksi.get(guruId) || { jam_terjadwal_menit: null, jam_hadir_menit: null };
-    const baru = { ...lama, [kunci]: menit };
-    const kosong = baru.jam_terjadwal_menit == null && baru.jam_hadir_menit == null;
+    const lama = state.koreksi.get(guruId) || { jam_terjadwal_menit: null, jam_hadir_menit: null, hari_hadir: null };
+    const baru = { jam_terjadwal_menit: null, jam_hadir_menit: null, hari_hadir: null, ...lama, [kunci]: menit };
+    const kosong = baru.jam_terjadwal_menit == null && baru.jam_hadir_menit == null && baru.hari_hadir == null;
     if (isSupabaseConfigured) {
         const { error } = kosong
             ? await supabaseClient.from(TABEL_KOREKSI).delete().eq("guru_id", guruId).eq("awal", state.awal).eq("akhir", state.akhir)

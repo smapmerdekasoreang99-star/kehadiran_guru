@@ -552,8 +552,8 @@ function render() {
         <p>Disusun di Data Induk; halaman ini hanya menampilkan. Tahun ajaran ${esc(state.tahunAjaran)}, semester ${smt} (${smt === 1 ? "Juli–Desember" : "Januari–Juni"}${smt === semesterSekarang() ? ", berjalan" : ""}).</p>
       </div>
       <div class="page-head-actions">
-        ${sudut !== "hari" ? `<button type="button" class="btn" id="bUnduh" ${pilih ? "" : "disabled"}>Unduh (xlsx)</button>` : ""}
-        <button type="button" class="btn" id="bUnduhSemua">Unduh semua ${sudut === "guru" ? "guru" : "kelas"}</button>
+        ${sudut !== "hari" ? `<button type="button" class="btn-unduh" data-fmt="xlsx" id="bUnduh" ${pilih ? "" : "disabled"}>Unduh</button>` : ""}
+        <button type="button" class="btn-unduh" data-fmt="xlsx" id="bUnduhSemua">Unduh semua ${sudut === "guru" ? "guru" : "kelas"}</button>
       </div>
     </div>
     ${kosong}

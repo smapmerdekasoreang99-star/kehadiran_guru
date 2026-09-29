@@ -769,7 +769,7 @@ textarea {
 }
 .pratinjau-wrap canvas { width: 100%; height: auto; display: block; border-radius: 4px; }
 .bagikan-aksi { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.bagikan-aksi .btn { flex: 1 1 auto; }
+.bagikan-aksi .btn, .bagikan-aksi .btn-unduh { flex: 1 1 auto; justify-content: center; }
 .bagikan-utama { font-size: 15px; padding: 12px 20px; }
 .bagikan-sekunder { margin-top: 8px; }
 .bagikan-sekunder .btn { font-size: 13px; padding: 8px 12px; }

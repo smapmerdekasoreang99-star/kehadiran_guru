@@ -173,3 +173,67 @@
    supaya kolomnya berbaris lurus ke bawah; tanpa ini digit 1 lebih sempit
    dan deretan angkanya terlihat bergelombang. */
 .angka,.rp,.jumlah,td.angka,th.angka{font-variant-numeric:tabular-nums}
+
+/* ---------------------------------------------------------------------
+   Tombol unduh dan unggah — satu rupa di kelima aplikasi (29 September 2026)
+   ---------------------------------------------------------------------
+   Pengecualian yang disengaja dari "komponen di style.css masing-masing":
+   tombol unduh harus terbaca sama di mana pun, jadi rupanya ditulis sekali
+   di sini dan TIDAK bergantung pada .btn / .tbl / .ghost milik aplikasi.
+
+     <button class="btn-unduh" data-fmt="xlsx">Unduh rekap</button>
+     <button class="btn-unduh utama" data-fmt="xlsx">Unduh rekap</button>
+     <button class="btn-unduh unggah" data-fmt="xlsx">Unggah isian</button>
+
+   Dua tingkat:
+     .btn-unduh        garis emas di latar krem — unduhan pendukung
+                       (template, blanko, kuitansi, cadangan)
+     .btn-unduh.utama  emas penuh — SATU per halaman, laporan pokoknya
+   Ikon panah dan lencana format (XLSX, DOCX, …) digambar CSS dari
+   data-fmt, bukan ditulis di label. Karena itu label cukup "Unduh rekap",
+   tanpa "(xlsx)", dan bila skrip mengganti tulisan tombol sementara
+   ("Menyiapkan…") ikon dan lencananya tidak ikut hilang.
+   Warna lencana memakai makna yang sudah ada: hijau untuk lembar kerja
+   (xlsx, csv), biru untuk dokumen (docx), netral untuk lainnya. */
+.btn-unduh{
+  display:inline-flex;align-items:center;gap:var(--j2);
+  padding:var(--j2) var(--j3);
+  border:1px solid var(--emas-tua);border-radius:var(--r1);
+  background:var(--emas-kabut);color:var(--emas-teks);
+  font:inherit;font-size:var(--h-s);font-weight:600;line-height:1.2;
+  white-space:nowrap;cursor:pointer;text-decoration:none;
+  box-shadow:var(--bayang-1);
+  transition:background-color .15s,border-color .15s,box-shadow .15s,transform .05s;
+}
+.btn-unduh:hover{background:var(--emas-muda);box-shadow:var(--bayang-2)}
+.btn-unduh:active{transform:translateY(1px)}
+.btn-unduh::before{
+  content:"";flex:none;width:16px;height:16px;background:currentColor;
+  -webkit-mask:var(--ikon-unduh) center/contain no-repeat;
+          mask:var(--ikon-unduh) center/contain no-repeat;
+}
+.btn-unduh.unggah::before{
+  -webkit-mask-image:var(--ikon-unggah);mask-image:var(--ikon-unggah);
+}
+.btn-unduh[data-fmt]::after{
+  content:attr(data-fmt);text-transform:uppercase;
+  padding:1px var(--j2);border-radius:var(--j1);
+  font-size:var(--h-xs);font-weight:700;letter-spacing:.04em;line-height:1.35;
+  background:var(--netral-muda);color:var(--tinta-2);
+}
+.btn-unduh:is([data-fmt="xlsx"],[data-fmt="csv"])::after{background:var(--hadir-muda);color:var(--hadir-tua)}
+.btn-unduh[data-fmt="docx"]::after{background:var(--sakit-muda);color:var(--sakit-tua)}
+.btn-unduh.utama{
+  background:var(--utama);border-color:var(--utama-tua);color:var(--utama-teks);
+  box-shadow:var(--bayang-2);
+}
+.btn-unduh.utama:hover{background:var(--utama);filter:brightness(1.07)}   /* lebih terang, bukan lebih gelap: tulisan gelapnya tetap di atas 4,5:1 */
+.btn-unduh:disabled{opacity:.5;cursor:not-allowed;box-shadow:none;transform:none}
+.btn-unduh:disabled:hover{background:var(--emas-kabut)}
+.btn-unduh.utama:disabled:hover{filter:none}
+/* Di layar sentuh setinggi ukuran sentuh terkecil. */
+@media (pointer:coarse){ .btn-unduh{min-height:var(--sentuh)} }
+:root{
+  --ikon-unduh:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4v11M7 10l5 5 5-5M5 20h14'/%3E%3C/svg%3E");
+  --ikon-unggah:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 16V5M7 10l5-5 5 5M5 20h14'/%3E%3C/svg%3E");
+}

@@ -6,7 +6,7 @@
 <title>Rekapitulasi Kehadiran — Guru Pengganti SMA Plus Merdeka Soreang</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/dasar.css?v=2">
+<link rel="stylesheet" href="assets/dasar.css?v=3">
 <link rel="stylesheet" href="assets/style.css?v=20260924e" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -73,7 +73,7 @@
         </div>
         <div class="toolbar-actions">
           <span id="ringkasKehadiran" class="tugas-note"></span>
-          <button type="button" id="xlsKehadiran" class="btn btn-primary">⬇ Unduh Excel</button>
+          <button type="button" id="xlsKehadiran" class="btn-unduh utama" data-fmt="xlsx">Unduh rekap</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -113,7 +113,7 @@
         </div>
         <div class="toolbar-actions">
           <span id="ringkasPengganti" class="tugas-note"></span>
-          <button type="button" id="xlsPengganti" class="btn btn-primary">⬇ Unduh Excel</button>
+          <button type="button" id="xlsPengganti" class="btn-unduh utama" data-fmt="xlsx">Unduh rekap</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -160,7 +160,7 @@
         </div>
         <div class="toolbar-actions">
           <span id="ringkasWali" class="tugas-note"></span>
-          <button type="button" id="xlsWali" class="btn btn-primary">⬇ Unduh Excel</button>
+          <button type="button" id="xlsWali" class="btn-unduh utama" data-fmt="xlsx">Unduh rekap</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -190,7 +190,7 @@
       <div class="toolbar">
         <span id="ringkasPiket" class="tugas-note"></span>
         <div class="toolbar-actions">
-          <button type="button" id="xlsPiket" class="btn btn-primary">⬇ Unduh Excel</button>
+          <button type="button" id="xlsPiket" class="btn-unduh utama" data-fmt="xlsx">Unduh rekap</button>
         </div>
       </div>
       <div class="table-scroll">

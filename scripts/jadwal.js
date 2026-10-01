@@ -26,7 +26,7 @@
 // sekali lihat terbaca mana mengajar, mana tugas lain.
 // =========================================================
 
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261001a";
 import { demoData, demoKegiatan } from "../assets/demo-data.js?v=20260921v";
 import { urutkanKelas, indeksKelas, jenisKelas } from "../assets/kelas-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";

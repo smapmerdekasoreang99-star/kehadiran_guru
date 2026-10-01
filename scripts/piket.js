@@ -28,7 +28,7 @@
 //   Parkiran    : baris = pekan,   kolom = Senin–Jumat  (parkiran per hari,
 //                 bukan per jam, jadi kolom jam tidak ada artinya di situ)
 
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20260921v";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261001a";
 import { demoData } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";

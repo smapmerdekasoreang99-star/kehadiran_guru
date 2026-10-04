@@ -75,14 +75,54 @@ function tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul, sub, kolomTe
     });
 }
 
+/* Kepala tabel: satu kata tidak pernah terpotong di tengah (4 Oktober 2026).
+   Dulu hurufnya tetap 10 pt, sehingga di kolom sempit "KONTRAK" menjadi
+   "KONTRA / K" dan "TERJADWAL" menjadi "TERJADW / AL". Sekarang ukurannya
+   satu untuk seluruh baris kepala — yang terbesar (paling tinggi 10 pt) yang
+   membuat kata terpanjang di tiap kolom muat utuh — sehingga teks hanya
+   berpindah baris di antara kata. Bila kolomnya terlalu sempit bahkan untuk
+   ukuran terkecil yang nyaman dibaca saat dicetak (8 pt), kolomnya yang
+   dilebarkan sedikit.
+   Tinggi barisnya mengikuti jumlah baris teks terbanyak.
+
+   Lebar ditaksir: satuan lebar kolom Excel = lebar angka "0" huruf bawaan
+   (Calibri 11 = 7 piksel), sel memakan ±6 piksel tepi, dan huruf kapital
+   Arial Bold rata-rata 0,74 em — ditaksir agak longgar supaya huruf lebar
+   seperti M dan W tetap muat. */
+const KEPALA_MAKS = 10, KEPALA_MIN = 8, LEBAR_KAPITAL = 0.74;
+const pxIsiKolom = (lebar) => Math.floor((lebar ?? 8.43) * 7 + 5) - 6;
+const pxTeks = (n, pt) => n * LEBAR_KAPITAL * pt * 96 / 72;
+const lebarUntukPx = (px) => Math.ceil(((px + 6 - 5) / 7) * 2) / 2;
+
 function kepalaTabel(ws, baris, labels, opsi = {}) {
+    const kata = labels.map((t) => String(t ?? "").split(/\s+/).filter(Boolean));
+    let ukuran = KEPALA_MAKS;
+    kata.forEach((k, i) => {
+        if (!k.length) return;
+        const terpanjang = Math.max(...k.map((x) => x.length));
+        const kolom = ws.getColumn(i + 1);
+        let muat = Math.floor((pxIsiKolom(kolom.width) / pxTeks(terpanjang, 1)) * 2) / 2;
+        if (muat < KEPALA_MIN) { kolom.width = lebarUntukPx(pxTeks(terpanjang, KEPALA_MIN)); muat = KEPALA_MIN; }
+        ukuran = Math.min(ukuran, muat);
+    });
+    // Jumlah baris teks tiap sel bila dilipat di antara kata pada ukuran itu.
+    const jumlahBaris = (k, lebarPx) => {
+        let n = 1, isi = 0;
+        for (const x of k) {
+            const p = pxTeks(x.length, ukuran), spasi = pxTeks(1, ukuran) * 0.4;
+            if (isi && isi + spasi + p > lebarPx) { n += 1; isi = p; } else isi += (isi ? spasi : 0) + p;
+        }
+        return n;
+    };
+    let terbanyak = 1;
     labels.forEach((t, i) => {
         const c = ws.getCell(baris, i + 1);
-        c.value = t; c.font = { name: FONT, size: 10, bold: true };
+        c.value = t; c.font = { name: FONT, size: ukuran, bold: true };
         c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         c.border = BORDER; c.fill = HEAD_FILL;
+        if (kata[i].length) terbanyak = Math.max(terbanyak, jumlahBaris(kata[i], pxIsiKolom(ws.getColumn(i + 1).width)));
     });
-    ws.getRow(baris).height = opsi.tinggi || 24;
+    ws.getRow(baris).height = Math.max(opsi.tinggi || 24, Math.ceil(terbanyak * ukuran * 1.25 + 6));
 }
 
 function selData(ws, r, c, v, opsi = {}) {

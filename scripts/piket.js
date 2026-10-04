@@ -33,7 +33,7 @@ import { demoData } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
-import { ambilLogoBase64 } from "../assets/excel-export.js?v=20260928a";
+import { ambilLogoBase64 } from "../assets/excel-export.js?v=20261004b";
 import { ambilSemua, tombolSibuk, muatExcelJS } from "../assets/aman.js?v=20261004a";
 
 try {

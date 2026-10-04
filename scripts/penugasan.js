@@ -1,8 +1,8 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261001a";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261004a";
 import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
+import { muatRujukan } from "../assets/simpanan.js?v=20261004a";
 import { semesterTanggal, semesterBaris } from "../assets/semester.js?v=20260921ad";
 import { susunKelompok, buatTeks, gambarTabel, tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 import { MAPEL_WALI_KELAS } from "../assets/rekap-hitung.js?v=20260921ad";

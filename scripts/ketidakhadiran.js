@@ -1,9 +1,9 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261001a";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261004a";
 import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
+import { muatRujukan } from "../assets/simpanan.js?v=20261004a";
 import { semesterTanggal, semesterBaris } from "../assets/semester.js?v=20260921ad";
 import { esc, tombolSibuk } from "../assets/aman.js?v=20261004a";
 

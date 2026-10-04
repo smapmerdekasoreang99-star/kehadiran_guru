@@ -81,6 +81,19 @@ export function rekapWali({ jadwal, ketidakhadiran, awal, akhir, liburSet }) {
             awal, akhir, liburSet,
         });
     }
+    return gabungWali(gabungan, perKode);
+}
+
+// Rekap wali kelas dari jumlah dasar server (kg_rekap): gabungan, Upacara, Bimbingan.
+export function rekapWaliDariJumlah(srv, jumlahHariKerja) {
+    return gabungWali(rekapDariJumlah(srv.wali, jumlahHariKerja), {
+        UPACARA: rekapDariJumlah(srv.upacara, jumlahHariKerja),
+        BIMBINGAN: rekapDariJumlah(srv.bimbingan, jumlahHariKerja),
+    });
+}
+
+// Rincian per komponen (Upacara, Bimbingan) ditempelkan ke rekap gabungan.
+function gabungWali(gabungan, perKode) {
     const ambil = (r, gid, medan) =>
         (r.baris.find((b) => b.guru_id === gid) || {})[medan] || 0;
     return {
@@ -157,10 +170,21 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
             if ((absenTanggal.get(`${gid}|${h.tanggal}`) || 0) < jam) b.hariDatang += 1;
         }
     }
+    return selesaikanRekap([...per.values()], hari.length);
+}
+
+/* Rumus akhir rekap dari JUMLAH DASAR per guru — { guru_id, kontrak,
+   terjadwal, ST, IT, TK, HTTM, hariTerjadwal, hariDatang } — menjadi jam
+   hadir tatap muka, jam hadir berbobot, persentase, dan total. Dipisah dari
+   penghitungan jumlahnya (4 Oktober 2026) supaya satu rumus yang sama
+   dipakai baik ketika jumlahnya dihitung peramban dari catatan mentah
+   (rekapKehadiran) maupun ketika dihitung server (kg_rekap,
+   rekapDariJumlah). Isinya tidak berubah dari sebelumnya. */
+export function selesaikanRekap(daftar, jumlahHariKerja) {
     const hitungBobot = (b) =>
         b.hadirTM + STATUS_ABSEN.reduce((a, st) => a + b[st] * (BOBOT_HADIR[st] ?? 0), 0);
     const hasil = [];
-    for (const b of per.values()) {
+    for (const b of daftar) {
         const tidakHadir = b.ST + b.IT + b.TK;
         const hadirTM = Math.max(0, b.terjadwal - tidakHadir - b.HTTM);
         const row = { ...b, tidakHadir, hadirTM };
@@ -174,7 +198,19 @@ export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet }
     }, { kontrak: 0, terjadwal: 0, ST: 0, IT: 0, TK: 0, HTTM: 0, tidakHadir: 0, hadirTM: 0, hariTerjadwal: 0, hariDatang: 0 });
     total.hadir = Math.round(hitungBobot(total) * 100) / 100;
     total.persen = total.terjadwal ? Math.round((total.hadir / total.terjadwal) * 10000) / 100 : null;
-    return { baris: hasil, total, jumlahHariKerja: hari.length };
+    return { baris: hasil, total, jumlahHariKerja };
+}
+
+/* Rekap dari jumlah dasar yang dihitung server (kg_rekap): baris server
+   { guru_id, kontrak, terjadwal, st, it, tk, httm, hari_terjadwal,
+   hari_datang } diubah ke bentuk yang sama dengan rekapKehadiran, lalu
+   lewat selesaikanRekap — rumus yang sama persis. */
+export function rekapDariJumlah(baris, jumlahHariKerja) {
+    return selesaikanRekap((baris || []).map((r) => ({
+        guru_id: r.guru_id, kontrak: r.kontrak, terjadwal: r.terjadwal,
+        ST: r.st, IT: r.it, TK: r.tk, HTTM: r.httm,
+        hariTerjadwal: r.hari_terjadwal, hariDatang: r.hari_datang,
+    })), jumlahHariKerja);
 }
 
 // ---------- Rekap guru pengganti ----------

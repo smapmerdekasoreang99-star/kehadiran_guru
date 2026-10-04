@@ -21,9 +21,14 @@
 //   1. Halaman meminta rujukan yang dibutuhkannya. Bila semuanya sudah ada di
 //      simpanan browser, halaman langsung menggambar dari situ — tanpa
 //      menunggu jaringan sama sekali.
-//   2. Di belakang layar versi terbarunya tetap diminta ke Supabase. Bila ada
-//      yang berbeda, halaman diberi tahu lewat saatBerubah() dan menggambar
-//      ulang; bila sama, tidak terjadi apa-apa.
+//   2. Di belakang layar versi terbarunya diminta ke Supabase — tetapi hanya
+//      untuk simpanan yang sudah berumur lebih dari UMUR_SEGAR (15 menit;
+//      4 Oktober 2026). Dulu SETIAP perpindahan halaman mengunduh ulang
+//      semuanya — di Rekap 12 permintaan dan 150–250 KB — padahal isinya
+//      hampir tidak pernah berubah dalam sehari. Akibatnya: perubahan di Data
+//      Induk (jadwal, nama guru) baru terlihat di sini paling lambat 15 menit
+//      kemudian. Bila ada yang berbeda, halaman diberi tahu lewat
+//      saatBerubah() dan menggambar ulang; bila sama, tidak terjadi apa-apa.
 //   3. Bila ada rujukan yang belum pernah tersimpan (kunjungan pertama), yang
 //      itu ditunggu seperti biasa, lalu disimpan untuk kunjungan berikutnya.
 //
@@ -111,11 +116,23 @@ async function ambilJadwalSepekan(sb) {
 }
 
 // ---------- Simpanan browser ----------
+const UMUR_SEGAR = 15 * 60 * 1000;
+
 function baca(nama) {
     try {
         const isi = JSON.parse(localStorage.getItem(AWALAN + nama) || "null");
         return Array.isArray(isi?.data) ? isi.data : null;
     } catch { return null; }
+}
+
+// Masih segar = disimpan kurang dari UMUR_SEGAR yang lalu (jam peramban yang
+// mundur dianggap tidak segar).
+function masihSegar(nama) {
+    try {
+        const waktu = Number(JSON.parse(localStorage.getItem(AWALAN + nama) || "null")?.waktu) || 0;
+        const umur = Date.now() - waktu;
+        return umur >= 0 && umur < UMUR_SEGAR;
+    } catch { return false; }
 }
 
 function tulis(nama, data) {
@@ -160,8 +177,9 @@ export async function muatRujukan(sb, daftar, saatBerubah) {
         Object.assign(hasil, await ambilBanyak(sb, belumAda));
     }
 
-    // Yang tadi dibaca dari simpanan diperbarui di latar.
-    const dariSimpanan = daftar.filter((n) => !belumAda.includes(n));
+    // Yang tadi dibaca dari simpanan diperbarui di latar — hanya yang sudah
+    // berumur lebih dari UMUR_SEGAR.
+    const dariSimpanan = daftar.filter((n) => !belumAda.includes(n) && !masihSegar(n));
     if (dariSimpanan.length) {
         ambilBanyak(sb, dariSimpanan).then((baru) => {
             const berubah = dariSimpanan.filter((n) => !sama(baru[n], hasil[n]));

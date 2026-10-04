@@ -28,10 +28,10 @@
 // ia bukan pemegang tugas Staf.
 // Rupiahnya dihitung Induk Pembiayaan lewat f_ip_kehadiran_staf.
 
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261001a";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261004a";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
+import { muatRujukan } from "../assets/simpanan.js?v=20261004a";
 import { ambilSemua, tombolSibuk, muatXLSX } from "../assets/aman.js?v=20261004a";
 
 try { initLockUI(() => render()); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }

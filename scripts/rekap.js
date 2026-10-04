@@ -1,10 +1,10 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261001a";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261004a";
 import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas } from "../assets/kelas-order.js?v=20260921v";
-import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
-import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260929a";
+import { muatRujukan } from "../assets/simpanan.js?v=20261004a";
+import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas, rekapDariJumlah, rekapWaliDariJumlah } from "../assets/rekap-hitung.js?v=20261004a";
 import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20261004b";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 import { esc, ambilSemua, tombolSibuk, muatExcelJS } from "../assets/aman.js?v=20261004a";
@@ -177,10 +177,68 @@ async function hitungLagi() {
     } finally { sedangHitung = false; }
 }
 
+/* Jumlah dasar dihitung server (kg_rekap, 4 Oktober 2026): jam kontrak,
+   terjadwal, ST/IT/TK/HTTM, hari terjadwal dan hari datang per guru, serta
+   jumlah jaga piket — bukan ribuan catatan mentah diunduh lalu dijumlahkan
+   di sini. Rumus akhirnya (bobot, persentase, total) tetap rekap-hitung.js
+   yang sama. Ketidakhadiran yang diunduh tinggal yang punya penugasan
+   pengganti, untuk tab Pengganti dan rinciannya.
+
+   REKAP_SERVER baru dinyalakan setelah hasilnya dibandingkan dengan hitungan
+   peramban pada data sungguhan dan sama persis. Bila kg_rekap gagal (mis.
+   belum ada di database), halaman kembali ke hitungan peramban. */
+const REKAP_SERVER = true;   // dinyalakan 4 Oktober 2026: 9 rentang dibandingkan pada data sungguhan, sama persis
+
+async function hitungDiServer() {
+    const [srv, rK] = await Promise.all([
+        supabaseClient.rpc("kg_rekap", { p_awal: state.awal, p_akhir: state.akhir }),
+        ambilSemua(() => supabaseClient.from("kg_ketidakhadiran_guru")
+            .select("id, jadwal_id, tanggal, guru_id, status, kg_penugasan_pengganti!inner(guru_pengganti_id, status_pengganti)")
+            .gte("tanggal", state.awal).lte("tanggal", state.akhir).order("id")),
+    ]);
+    if (srv.error || !srv.data) { console.warn("kg_rekap gagal, kembali ke hitungan peramban:", srv.error); return false; }
+    if (rK.error) { laporError("Gagal memuat catatan penugasan pengganti", rK.error); return true; }
+    state.ketidakhadiran = rK.data.map(({ kg_penugasan_pengganti, ...k }) => k);
+    state.penugasan = rK.data.map((k) => ({ ketidakhadiran_id: k.id, ...k.kg_penugasan_pengganti }));
+    state.piketJaga = srv.data.piket || [];
+    state.piketCatatan = Number(srv.data.piket_catatan) || 0;
+
+    const liburSet = new Set(state.libur.map((l) => l.tanggal));
+    const hari = hariKerja(state.awal, state.akhir, liburSet);
+    state.hasilKehadiran = rekapDariJumlah(srv.data.mengajar, hari.length);
+    state.hasilWali = rekapWaliDariJumlah(srv.data, hari.length);
+    hitungPengganti();
+    state.hasilPiket = rekapPiket(hari);
+    renderKehadiran(); renderPengganti(); renderPiket();
+    return true;
+}
+
+// Pengganti: hanya jam mengajar; jam tugas wali kelas dihitung terpisah.
+function hitungPengganti() {
+    const { mengajar, ketMengajar } = pisahWaliKelas(state.jadwal, state.ketidakhadiran);
+    const semuaPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: state.ketidakhadiran, jadwal: state.jadwal, awal: state.awal, akhir: state.akhir });
+    state.hasilPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: ketMengajar, jadwal: mengajar, awal: state.awal, akhir: state.akhir });
+    state.jamWaliDikecualikan = semuaPengganti.rincian.length - state.hasilPengganti.rincian.length;
+}
+
+// Jumlah jaga Hadir per guru per jenis dari catatan mentah — bentuk yang sama dengan kg_rekap.piket.
+function jagaDariCatatan(catatan) {
+    const per = new Map();
+    for (const c of catatan) {
+        if (c.status !== "Hadir") continue;
+        const kunci = c.guru_id + "|" + c.jenis;
+        if (!per.has(kunci)) per.set(kunci, { guru_id: c.guru_id, jenis: c.jenis, jaga: 0 });
+        per.get(kunci).jaga += 1;
+    }
+    return [...per.values()];
+}
+
 async function hitung() {
     state.awal = document.getElementById("tglAwal").value;
     state.akhir = document.getElementById("tglAkhir").value;
     if (!state.awal || !state.akhir || state.awal > state.akhir) { laporError("Rentang tanggal tidak valid", { message: "Tanggal awal harus sebelum atau sama dengan tanggal akhir." }); return; }
+
+    if (isSupabaseConfigured && REKAP_SERVER && await hitungDiServer()) return;
 
     if (isSupabaseConfigured) {
         // Catatan ketidakhadiran beserta penugasan penggantinya (satu permintaan,
@@ -208,15 +266,14 @@ async function hitung() {
         state.penugasan = demoPenugasan;
         state.piket = [];
     }
+    state.piketJaga = jagaDariCatatan(state.piket);
+    state.piketCatatan = state.piket.length;
 
     const liburSet = new Set(state.libur.map((l) => l.tanggal));
     const { mengajar, wali, ketMengajar, ketWali } = pisahWaliKelas(state.jadwal, state.ketidakhadiran);
     state.hasilKehadiran = rekapKehadiran({ jadwal: mengajar, ketidakhadiran: ketMengajar, awal: state.awal, akhir: state.akhir, liburSet });
     state.hasilWali = rekapWali({ jadwal: wali, ketidakhadiran: ketWali, awal: state.awal, akhir: state.akhir, liburSet });
-    // pengganti & honor: hanya jam mengajar; jam tugas wali kelas dihitung terpisah (belum ada tarifnya)
-    const semuaPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: state.ketidakhadiran, jadwal: state.jadwal, awal: state.awal, akhir: state.akhir });
-    state.hasilPengganti = rekapPengganti({ penugasan: state.penugasan, ketidakhadiran: ketMengajar, jadwal: mengajar, awal: state.awal, akhir: state.akhir });
-    state.jamWaliDikecualikan = semuaPengganti.rincian.length - state.hasilPengganti.rincian.length;
+    hitungPengganti();
     state.hasilPiket = rekapPiket(hariKerja(state.awal, state.akhir, liburSet));
     renderKehadiran(); renderPengganti(); renderPiket();
 }
@@ -287,7 +344,7 @@ function rekapPiket(hari) {
         }
     }
 
-    for (const c of state.piket) {
+    for (const c of state.piketJaga || []) {
         const k = KUNCI_JENIS[c.jenis];
         if (!k) continue;
         /* Satu baris catatan = satu giliran: satu jam untuk meja dan unit,
@@ -295,7 +352,7 @@ function rekapPiket(hari) {
            yang berjaga selalu petugas yang terjadwal. "Tidak Hadir" tidak
            menambah apa pun — gilirannya tetap terhitung terjadwal tetapi
            tidak dijaga, dan selisih itulah keterangannya. */
-        if (c.status === "Hadir") baris(c.guru_id)[k].jaga += 1;
+        baris(c.guru_id)[k].jaga += c.jaga;
     }
     const rows = [...per.values()]
         .map((r) => ({ ...r, nama: namaGuru(r.guru_id) }))
@@ -323,7 +380,7 @@ function renderPiket() {
         ${selPiket(t.meja)}${selPiket(t.unit)}${selPiket(t.parkiran)}
       </tr>` : "";
     document.getElementById("ringkasPiket").textContent =
-        `${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)} · ${state.piket.length} catatan pelaksanaan`;
+        `${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)} · ${state.piketCatatan || 0} catatan pelaksanaan`;
     document.getElementById("footPiketTeks").textContent =
         `Satuannya mengikuti jadwalnya: Meja Sekolah dan Unit dihitung per JAM pelajaran, `
         + `Parkiran per HARI jaga — parkiran memang bukan jam pelajaran, melainkan sekali jaga `

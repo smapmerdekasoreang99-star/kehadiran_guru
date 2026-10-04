@@ -32,6 +32,7 @@ import { urutkanKelas, indeksKelas, jenisKelas } from "../assets/kelas-order.js?
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
 import { semesterSekarang, semesterBaris, LABEL_SEMESTER } from "../assets/semester.js?v=20260921ad";
 import { bukuJadwal, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260928a";
+import { muatExcelJS } from "../assets/aman.js?v=20261004a";
 
 // ---------- Pelaporan error ke layar ----------
 function laporError(konteks, error) {
@@ -667,7 +668,7 @@ async function unduh(daftar, sudut = render.terakhir.sudut) {
     const tombol = document.querySelectorAll("#bUnduh, #bUnduhSemua");
     tombol.forEach((b) => (b.disabled = true));
     try {
-        if (!window.ExcelJS) throw new Error("Pustaka ExcelJS belum termuat (periksa koneksi internet), coba muat ulang halaman.");
+        await muatExcelJS();   // dimuat saat pertama kali mengunduh, bukan saat halaman dibuka
         const lembar = daftar.filter(Boolean).map((d) => {
             if (sudut === "guru") {
                 const k = kegiatanGuru(d.id, t.jadwalSmt);

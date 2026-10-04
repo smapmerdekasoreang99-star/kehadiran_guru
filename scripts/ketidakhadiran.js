@@ -5,6 +5,7 @@ import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
 import { semesterTanggal, semesterBaris } from "../assets/semester.js?v=20260921ad";
+import { esc, tombolSibuk } from "../assets/aman.js?v=20261004a";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -26,7 +27,7 @@ function laporError(konteks, error) {
         main.insertBefore(box, main.firstChild);
     }
     const detail = error?.message || error?.details || String(error);
-    box.innerHTML = `<strong>${konteks}</strong><br>${detail}<button type="button" class="error-close" aria-label="Tutup">×</button>`;
+    box.innerHTML = `<strong>${esc(konteks)}</strong><br>${esc(detail)}<button type="button" class="error-close" aria-label="Tutup">×</button>`;
     box.querySelector(".error-close").addEventListener("click", () => box.remove());
     box.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -102,7 +103,7 @@ function isiKelasFilter() {
     const sebelumnya = sel.value || "ALL";
     sel.innerHTML =
         `<option value="ALL">Semua kelas</option>` +
-        state.kelas.map((k) => `<option value="${k.id}">${k.nama_kelas}</option>`).join("");
+        state.kelas.map((k) => `<option value="${esc(k.id)}">${esc(k.nama_kelas)}</option>`).join("");
     sel.value = state.kelas.some((k) => k.id === sebelumnya) ? sebelumnya : "ALL";
     state.filter.kelasId = sel.value;
 }
@@ -121,7 +122,12 @@ function hariFromTanggal(tanggalStr) {
     return HARI_FROM_JS_DAY[d.getDay()];
 }
 
+// Nomor muat: bila tanggal diganti lagi sebelum jawaban sebelumnya tiba,
+// jawaban yang basi dibuang — bukan menimpa tabel tanggal yang baru.
+let muatKe = 0;
+
 async function loadForDate() {
+    const no = ++muatKe;
     state.hari = hariFromTanggal(state.tanggal);
     document.getElementById("hariLabel").textContent = state.hari;
 
@@ -137,18 +143,26 @@ async function loadForDate() {
     card.hidden = false;
 
     if (isSupabaseConfigured) {
-        state.jadwal = jadwalHariIni();
+        const jadwal = jadwalHariIni();
+        // Catatan dan penugasan penggantinya dalam satu permintaan (relasi
+        // satu-satu lewat ketidakhadiran_id) — dulu dua perjalanan berurutan.
         const { data: ketidakhadiran, error: eK } = await supabaseClient
             .from("kg_ketidakhadiran_guru")
-            .select("*")
+            .select("id, jadwal_id, tanggal, guru_id, status, keterangan_tugas, kg_penugasan_pengganti(guru_pengganti_id, status_pengganti)")
             .eq("tanggal", state.tanggal);
-        if (eK) { laporError("Gagal memuat catatan ketidakhadiran", eK); return; }
-        state.ketidakhadiran = ketidakhadiran || [];
-        const ids = state.ketidakhadiran.map((k) => k.id);
-        const { data: pen } = ids.length
-            ? await supabaseClient.from("kg_penugasan_pengganti").select("ketidakhadiran_id, guru_pengganti_id, status_pengganti").in("ketidakhadiran_id", ids)
-            : { data: [] };
-        state.penugasan = pen || [];
+        if (no !== muatKe) return;
+        if (eK) {
+            // Tabel tanggal sebelumnya tidak dibiarkan tampil di bawah label hari yang baru.
+            state.jadwal = []; state.ketidakhadiran = []; state.penugasan = [];
+            renderTable();
+            laporError("Gagal memuat catatan ketidakhadiran", eK);
+            return;
+        }
+        state.jadwal = jadwal;
+        state.ketidakhadiran = (ketidakhadiran || []).map(({ kg_penugasan_pengganti, ...k }) => k);
+        state.penugasan = (ketidakhadiran || [])
+            .filter((k) => k.kg_penugasan_pengganti)
+            .map((k) => ({ ketidakhadiran_id: k.id, ...k.kg_penugasan_pengganti }));
     } else {
         state.jadwal = demoData.jadwal.filter((r) => r.hari === state.hari);
         state.ketidakhadiran = demoKetidakhadiran.filter((r) => r.tanggal === state.tanggal);
@@ -226,29 +240,29 @@ function renderTable() {
             const catatan = catatanUntuk(r.id);
 
             const statusCell = catatan
-                ? `<span class="badge-status badge-${catatan.status.toLowerCase()}">${catatan.status}</span>
+                ? `<span class="badge-status badge-${esc(catatan.status.toLowerCase())}">${esc(catatan.status)}</span>
                    <span class="tugas-note">${STATUS_LABEL[catatan.status] || ""}</span>${(() => {
                        const p = penugasanUntuk(catatan);
-                       return p ? `<span class="tugas-note pengganti-note">Pengganti: ${p.status_pengganti === "TP" ? "tidak perlu (TP)" : `${namaGuru(p.guru_pengganti_id)} (${p.status_pengganti})`}</span>` : "";
+                       return p ? `<span class="tugas-note pengganti-note">Pengganti: ${p.status_pengganti === "TP" ? "tidak perlu (TP)" : `${esc(namaGuru(p.guru_pengganti_id))} (${esc(p.status_pengganti)})`}</span>` : "";
                    })()}`
                 : `<span class="badge-status badge-hadir">Hadir</span>`;
 
             const actionCell = catatan
                 ? `<div class="row-actions">
-                     <button class="btn-danger-text" ${disabledAttr} data-action="edit" data-jid="${r.id}">Ubah</button>
-                     <button class="btn-danger-text" ${disabledAttr} data-action="clear" data-jid="${r.id}">Batalkan</button>
+                     <button class="btn-danger-text" ${disabledAttr} data-action="edit" data-jid="${esc(r.id)}">Ubah</button>
+                     <button class="btn-danger-text" ${disabledAttr} data-action="clear" data-jid="${esc(r.id)}">Batalkan</button>
                    </div>`
-                : `<button class="btn-mark" ${disabledAttr} data-action="mark" data-jid="${r.id}">Tandai Tidak Hadir</button>`;
+                : `<button class="btn-mark" ${disabledAttr} data-action="mark" data-jid="${esc(r.id)}">Tandai Tidak Hadir</button>`;
 
             return `
         <tr>
           <td class="jam-cell">
-            <span class="jam-ke">Jam ke-${r.jam_ke}</span>
-            <span class="jam-waktu">${waktu}</span>
+            <span class="jam-ke">Jam ke-${esc(r.jam_ke)}</span>
+            <span class="jam-waktu">${esc(waktu)}</span>
           </td>
-          <td><span class="badge-kelas">${namaKelas(r.kelas_id)}</span></td>
-          <td>${namaMapel(r.mapel_id)}</td>
-          <td>${namaGuru(r.guru_id)}</td>
+          <td><span class="badge-kelas">${esc(namaKelas(r.kelas_id))}</span></td>
+          <td>${esc(namaMapel(r.mapel_id))}</td>
+          <td>${esc(namaGuru(r.guru_id))}</td>
           <td>${statusCell}</td>
           <td>${actionCell}</td>
         </tr>`;
@@ -308,6 +322,12 @@ function toggleKeteranganField() {
 
 async function saveCatatan(e) {
     e.preventDefault();
+    // Tombol simpan nonaktif sampai selesai: ketukan kedua di jaringan lambat tidak menyimpan dua kali.
+    const tombol = e.submitter || e.target.querySelector('[type="submit"]');
+    await tombolSibuk(tombol, () => simpanCatatan());
+}
+
+async function simpanCatatan() {
     const status = document.getElementById("fStatus").value;
     const keterangan = document.getElementById("fKeteranganTugas").value || null;
 
@@ -364,12 +384,10 @@ function clearCatatan(jadwalId) {
 function tutupKonfirmasi() { konfirmasiJadwalId = null; document.getElementById("konfirmasiModal").hidden = true; }
 
 async function hapusCatatan(jadwalId) {
-    const catatan = catatanUntuk(jadwalId);
     if (isSupabaseConfigured) {
-        if (catatan && penugasanUntuk(catatan)) {
-            const { error } = await supabaseClient.from("kg_penugasan_pengganti").delete().eq("ketidakhadiran_id", catatan.id);
-            if (error) { laporError("Gagal menghapus penugasan pengganti", error); return; }
-        }
+        // Penugasan penggantinya ikut terhapus oleh database (FK ON DELETE
+        // CASCADE) dalam perintah yang sama — tidak perlu permintaan terpisah,
+        // dan tidak ada keadaan setengah terhapus bila sambungan putus.
         {
             const { error } = await supabaseClient
             .from("kg_ketidakhadiran_guru")
@@ -411,10 +429,10 @@ function renderSaran() {
     if (!q || state.filter.guruId) { box.hidden = true; return; }
     const hits = guruHariIni().filter((g) => g.nama.toLowerCase().includes(q)).slice(0, 8);
     if (!hits.length) {
-        box.innerHTML = `<div class="suggest-empty">Tidak ada guru bernama "${state.filter.q}" yang mengajar hari ${state.hari}</div>`;
+        box.innerHTML = `<div class="suggest-empty">Tidak ada guru bernama "${esc(state.filter.q)}" yang mengajar hari ${esc(state.hari)}</div>`;
     } else {
         box.innerHTML = hits.map((g) => `
-            <button type="button" class="suggest-item" data-guru="${g.id}">
+            <button type="button" class="suggest-item" data-guru="${esc(g.id)}">
               <span class="suggest-nama">${sorot(g.nama, q)}</span>
               <span class="suggest-meta">${g.jam} jam${g.absen ? ` · <em>${g.absen} tidak hadir</em>` : ""}</span>
             </button>`).join("");
@@ -426,9 +444,10 @@ function renderSaran() {
 }
 
 function sorot(nama, q) {
+    // Ketiga potongan di-escape dulu; hanya <mark> yang HTML.
     const i = nama.toLowerCase().indexOf(q);
-    if (i < 0) return nama;
-    return `${nama.slice(0, i)}<mark>${nama.slice(i, i + q.length)}</mark>${nama.slice(i + q.length)}`;
+    if (i < 0) return esc(nama);
+    return `${esc(nama.slice(0, i))}<mark>${esc(nama.slice(i, i + q.length))}</mark>${esc(nama.slice(i + q.length))}`;
 }
 
 function pilihGuru(id) {

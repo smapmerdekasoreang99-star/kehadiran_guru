@@ -32,6 +32,7 @@ import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
+import { ambilSemua, tombolSibuk, muatXLSX } from "../assets/aman.js?v=20261004a";
 
 try { initLockUI(() => render()); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
@@ -43,7 +44,7 @@ function laporError(konteks, error) {
         const main = document.querySelector("main"); main.insertBefore(box, main.firstChild);
     }
     const detail = error?.message || error?.details || String(error);
-    box.innerHTML = `<strong>${konteks}</strong><br>${detail}<button type="button" class="error-close" aria-label="Tutup">×</button>`;
+    box.innerHTML = `<strong>${esc(konteks)}</strong><br>${esc(detail)}<button type="button" class="error-close" aria-label="Tutup">×</button>`;
     box.querySelector(".error-close").addEventListener("click", () => box.remove());
 }
 
@@ -179,8 +180,9 @@ async function boot() {
         for (const t of ["matriks", "rekap"]) document.getElementById("tab-" + t).hidden = b.dataset.tab !== t;
         render();
     }));
-    document.getElementById("simpanSemua").addEventListener("click", simpanBelumTercatat);
-    document.getElementById("batalSemua").addEventListener("click", batalkanSemua);
+    // Nonaktif sampai selesai (ketukan kedua di jaringan lambat tidak menyimpan/menghapus dua kali), lalu digambar ulang.
+    document.getElementById("simpanSemua").addEventListener("click", (e) => tombolSibuk(e.currentTarget, simpanBelumTercatat).finally(render));
+    document.getElementById("batalSemua").addEventListener("click", (e) => tombolSibuk(e.currentTarget, batalkanSemua).finally(render));
 
     pasangPekanPintas();
     pasangModal();
@@ -221,7 +223,21 @@ function hariRentang(awal, akhir) {
     return out;
 }
 
+/* Nomor muat: jawaban rentang lama dibuang bila rentang diganti lagi sebelum
+   jawabannya tiba. catatanKunci menandai rentang milik state.catatan —
+   simpan/batalkan sekaligus menunggu sampai catatan rentang di layar termuat,
+   supaya tidak menghapus catatan rentang lama dengan konfirmasi rentang baru. */
+let muatKe = 0;
+const kunciRentang = () => state.awal + "|" + state.akhir;
+function catatanSiap() {
+    if (state.catatanKunci === kunciRentang()) return true;
+    kabar("Catatan rentang ini masih dimuat — tunggu sebentar lalu coba lagi.");
+    return false;
+}
+
 async function muatRentang() {
+    const no = ++muatKe;
+    state.catatanKunci = null;
     const card = document.getElementById("mainCard");
     const pesan = document.getElementById("pesanRentang");
     const liburBox = document.getElementById("liburNotice");
@@ -240,14 +256,16 @@ async function muatRentang() {
         const [jk, catatan, libur, koreksi] = await Promise.all([
             supabaseClient.from("v_jam_kerja_guru")
                 .select("guru_id, nama, hari, urutan, sumber, bekerja, masuk, pulang, jabatan, pola_honor, sumber_hadir, kelompok_tarif"),
-            supabaseClient.from(TABEL).select("id, tanggal, guru_id, status, masuk, pulang, sumber, catatan")
-                .gte("tanggal", state.awal).lte("tanggal", state.akhir),
+            // Berhalaman: sekitar dua puluh orang × dua bulan melewati batas 1.000 baris PostgREST.
+            ambilSemua(() => supabaseClient.from(TABEL).select("id, tanggal, guru_id, status, masuk, pulang, sumber, catatan")
+                .gte("tanggal", state.awal).lte("tanggal", state.akhir).order("id")),
             supabaseClient.from("kg_hari_libur").select("tanggal, keterangan")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir),
             // Koreksi jam di tab Rekap berlaku untuk rentang yang persis sama.
             supabaseClient.from(TABEL_KOREKSI).select("guru_id, jam_terjadwal_menit, jam_hadir_menit, hari_hadir")
                 .eq("awal", state.awal).eq("akhir", state.akhir),
         ]);
+        if (no !== muatKe) return;
         if (jk.error) { laporError("Gagal memuat ketentuan jam kerja staf", jk.error); return; }
         if (catatan.error) { laporError("Gagal memuat catatan kehadiran staf", catatan.error); return; }
         if (koreksi.error) laporError("Gagal memuat koreksi jam rekap staf (angka rekap dipakai apa adanya)", koreksi.error);
@@ -258,6 +276,7 @@ async function muatRentang() {
     } else {
         state.jamKerja = []; state.catatan = []; state.libur = new Map(); state.koreksi = new Map();
     }
+    state.catatanKunci = kunciRentang();
 
     const liburDalamRentang = state.hari.filter((d) => state.libur.has(d.iso));
     liburBox.hidden = !liburDalamRentang.length;
@@ -636,9 +655,11 @@ function bukaRincian(guruId, sudahPin) {
 }
 function tutupRincian() { document.getElementById("rincianModal").hidden = true; rincianAktif = null; }
 
-function unduhRincian() {
+async function unduhRincian() {
     if (!rincianAktif) return;
-    if (!window.XLSX) { kabar("Pembuat Excel (SheetJS) belum termuat — periksa sambungan internet, lalu muat ulang halaman."); return; }
+    try { await muatXLSX(); }   // dimuat saat pertama kali dipakai
+    catch (err) { kabar(err.message); return; }
+    if (!rincianAktif) return;
     const { s, h, j } = rincianAktif;
     const X = window.XLSX;
     const baris = [
@@ -810,7 +831,7 @@ function draf(tampil) {
 }
 
 async function simpanBelumTercatat() {
-    if (!isUnlocked()) return;
+    if (!isUnlocked() || !catatanSiap()) return;
     const baru = draf(daftarStaf().tampil);
     if (!baru.length) return;
     if (state.hari.length > 1 || baru.length > 1) {
@@ -833,7 +854,7 @@ async function simpanBelumTercatat() {
 }
 
 async function batalkanSemua() {
-    if (!isUnlocked() || !state.catatan.length) return;
+    if (!isUnlocked() || !catatanSiap() || !state.catatan.length) return;
     const n = state.catatan.length;
     if (!confirm(`Batalkan ${n} catatan kehadiran staf pada ${tglIndo(state.awal)} – ${tglIndo(state.akhir)}?\n\n`
         + "Termasuk yang berasal dari rekaman fingerprint. Yang dibatalkan tidak bisa dikembalikan — harus dicatat ulang.")) return;
@@ -930,9 +951,9 @@ function uraiEksporMesin(m) {
     return { orang: [...orang.values()].sort((a, b) => (Number(a.noId) || 0) - (Number(b.noId) || 0) || a.noId.localeCompare(b.noId)), nBaris, awal, akhir };
 }
 
-function bacaBerkasMesin(file) {
+async function bacaBerkasMesin(file) {
+    await muatXLSX();   // dimuat saat pertama kali mengunggah, bukan saat halaman dibuka
     return new Promise((selesai, gagal) => {
-        if (!window.XLSX) return gagal(new Error("Pembaca Excel (SheetJS) belum termuat — periksa sambungan internet, lalu muat ulang halaman."));
         const fr = new FileReader();
         fr.onerror = () => gagal(new Error("Berkas tidak bisa dibaca."));
         fr.onload = (e) => {
@@ -990,8 +1011,9 @@ function unduhBerkas(blob, nama) {
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 
-function unduhTemplateFinger() {
-    if (!window.XLSX) { pesanFinger("Pembuat Excel (SheetJS) belum termuat — periksa sambungan internet, lalu muat ulang halaman."); return; }
+async function unduhTemplateFinger() {
+    try { await muatXLSX(); }   // dimuat saat pertama kali dipakai
+    catch (err) { pesanFinger(err.message); return; }
     const X = window.XLSX;
     const wb = X.utils.book_new();
     const rekaman = X.utils.aoa_to_sheet([
@@ -1150,7 +1172,8 @@ async function simpanUnggahan() {
     const [libur, jk, lama] = await Promise.all([
         supabaseClient.from("kg_hari_libur").select("tanggal").gte("tanggal", berkas.awal).lte("tanggal", berkas.akhir),
         supabaseClient.from("v_jam_kerja_guru").select("guru_id, hari, bekerja").in("guru_id", guruIds),
-        supabaseClient.from(TABEL).select("id, tanggal, guru_id, sumber").gte("tanggal", berkas.awal).lte("tanggal", berkas.akhir).in("guru_id", guruIds),
+        // Berhalaman: bila terpotong di 1.000 baris, catatan manual yang tidak terbaca bisa tertimpa rekaman fingerprint.
+        ambilSemua(() => supabaseClient.from(TABEL).select("id, tanggal, guru_id, sumber").gte("tanggal", berkas.awal).lte("tanggal", berkas.akhir).in("guru_id", guruIds).order("id")),
     ]);
     if (libur.error) return gagal("Gagal memuat hari libur", libur.error);
     if (jk.error) return gagal("Gagal memuat jam kerja staf", jk.error);

@@ -7,6 +7,7 @@ import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
 import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas } from "../assets/rekap-hitung.js?v=20260929a";
 import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20260929a";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
+import { esc, ambilSemua, tombolSibuk, muatExcelJS } from "../assets/aman.js?v=20261004a";
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
 // mengajar, honor pengganti, dan transport — pindah ke aplikasi Induk
@@ -22,7 +23,7 @@ function laporError(konteks, error) {
         const main = document.querySelector("main"); main.insertBefore(box, main.firstChild);
     }
     const detail = error?.message || error?.details || String(error);
-    box.innerHTML = `<strong>${konteks}</strong><br>${detail}<button type="button" class="error-close" aria-label="Tutup">×</button>`;
+    box.innerHTML = `<strong>${esc(konteks)}</strong><br>${esc(detail)}<button type="button" class="error-close" aria-label="Tutup">×</button>`;
     box.querySelector(".error-close").addEventListener("click", () => box.remove());
 }
 
@@ -182,18 +183,26 @@ async function hitung() {
     if (!state.awal || !state.akhir || state.awal > state.akhir) { laporError("Rentang tanggal tidak valid", { message: "Tanggal awal harus sebelum atau sama dengan tanggal akhir." }); return; }
 
     if (isSupabaseConfigured) {
-        const { data: k, error: eK } = await supabaseClient.from("kg_ketidakhadiran_guru").select("id, jadwal_id, tanggal, guru_id, status").gte("tanggal", state.awal).lte("tanggal", state.akhir);
-        if (eK) { laporError("Gagal memuat catatan ketidakhadiran", eK); return; }
-        state.ketidakhadiran = k || [];
-        const ids = state.ketidakhadiran.map((x) => x.id);
-        let pen = [];
-        for (let i = 0; i < ids.length; i += 200) { // batasi panjang query
-            const { data, error } = await supabaseClient.from("kg_penugasan_pengganti").select("ketidakhadiran_id, guru_pengganti_id, status_pengganti").in("ketidakhadiran_id", ids.slice(i, i + 200));
-            if (error) { laporError("Gagal memuat penugasan", error); return; }
-            pen = pen.concat(data || []);
-        }
-        state.penugasan = pen;
-        await muatPiket();
+        // Catatan ketidakhadiran beserta penugasan penggantinya (satu permintaan,
+        // relasi satu-satu) dan catatan piket, serentak dan berhalaman: rentang
+        // panjang dulu terpotong diam-diam di 1.000 baris, dan penugasan
+        // diminta per 200 id secara berurutan sesudahnya.
+        const [rK, rP] = await Promise.all([
+            ambilSemua(() => supabaseClient.from("kg_ketidakhadiran_guru")
+                .select("id, jadwal_id, tanggal, guru_id, status, kg_penugasan_pengganti(guru_pengganti_id, status_pengganti)")
+                .gte("tanggal", state.awal).lte("tanggal", state.akhir).order("id")),
+            ambilSemua(() => supabaseClient.from("kg_pelaksanaan_piket")
+                .select("tanggal, jenis, guru_id, tugas_id, status")
+                .gte("tanggal", state.awal).lte("tanggal", state.akhir).order("id")),
+        ]);
+        if (rK.error) { laporError("Gagal memuat catatan ketidakhadiran", rK.error); return; }
+        state.ketidakhadiran = rK.data.map(({ kg_penugasan_pengganti, ...k }) => k);
+        state.penugasan = rK.data.filter((k) => k.kg_penugasan_pengganti)
+            .map((k) => ({ ketidakhadiran_id: k.id, ...k.kg_penugasan_pengganti }));
+        if (rP.error) {
+            laporError("Gagal memuat catatan pelaksanaan piket (tab Piket sementara kosong)", rP.error);
+            state.piket = [];
+        } else state.piket = rP.data;
     } else {
         state.ketidakhadiran = demoKetidakhadiran.filter((x) => x.tanggal >= state.awal && x.tanggal <= state.akhir);
         state.penugasan = demoPenugasan;
@@ -210,17 +219,6 @@ async function hitung() {
     state.jamWaliDikecualikan = semuaPengganti.rincian.length - state.hasilPengganti.rincian.length;
     state.hasilPiket = rekapPiket(hariKerja(state.awal, state.akhir, liburSet));
     renderKehadiran(); renderPengganti(); renderPiket();
-}
-
-async function muatPiket() {
-    const { data, error } = await supabaseClient.from("kg_pelaksanaan_piket")
-        .select("tanggal, jenis, guru_id, tugas_id, status")
-        .gte("tanggal", state.awal).lte("tanggal", state.akhir);
-    if (error) {
-        laporError("Gagal memuat catatan pelaksanaan piket (tab Piket sementara kosong)", error);
-        state.piket = []; return;
-    }
-    state.piket = data || [];
 }
 
 /* ---------- Rekap pelaksanaan piket ----------
@@ -316,7 +314,7 @@ function renderPiket() {
     document.getElementById("kosongPiket").hidden = rows.length > 0;
     document.getElementById("bodyPiket").innerHTML = rows.map((r, i) => `
       <tr>
-        <td class="num">${i + 1}</td><td class="nama">${r.nama}</td>
+        <td class="num">${i + 1}</td><td class="nama">${esc(r.nama)}</td>
         ${selPiket(r.meja)}${selPiket(r.unit)}${selPiket(r.parkiran)}
       </tr>`).join("");
     const t = h.total;
@@ -354,7 +352,7 @@ function renderKehadiran() {
     const rows = barisKehadiranTersaring();
     document.getElementById("bodyKehadiran").innerHTML = rows.map((r) => `
       <tr>
-        <td class="nama">${r.nama}</td>${selKontrak(r)}${num(r.hariTerjadwal)}${num(r.hariDatang)}${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.IT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}
+        <td class="nama">${esc(r.nama)}</td>${selKontrak(r)}${num(r.hariTerjadwal)}${num(r.hariDatang)}${num(r.terjadwal)}${num(r.hadirTM)}${num(r.HTTM)}${num(r.ST)}${num(r.IT)}${num(r.TK)}${num(fmt(r.hadir))}${persenCell(r.persen)}
       </tr>`).join("") || `<tr><td colspan="12" class="empty-state">Tidak ada data pada rentang ini.</td></tr>`;
     const t = h.total;
     document.getElementById("footKehadiran").innerHTML = `
@@ -383,7 +381,7 @@ function renderWali() {
     const w = state.hasilWali; if (!w) return;
     const rows = barisWaliTersaring();
     document.getElementById("bodyWali").innerHTML = rows.map((r) => `
-      <tr><td class="nama">${r.nama}</td>${selWali(r)}</tr>`).join("")
+      <tr><td class="nama">${esc(r.nama)}</td>${selWali(r)}</tr>`).join("")
       || `<tr><td colspan="6" class="empty-state">Tidak ada jam tugas wali kelas pada rentang ini.</td></tr>`;
     const t = w.total;
     document.getElementById("ringkasWali").textContent =
@@ -408,14 +406,14 @@ function renderPengganti() {
     document.getElementById("tabelRingkas").hidden = state.viewPengganti !== "ringkas";
     document.getElementById("tabelRinci").hidden = state.viewPengganti !== "rinci";
     document.getElementById("bodyRingkas").innerHTML = h.baris.map((r) => `
-      <tr><td class="nama">${namaGuru(r.guru_id)}</td>${num(r.GT)}${num(r.PT)}${num(r.Inf)}<td class="num"><strong>${r.total}</strong></td></tr>`).join("")
+      <tr><td class="nama">${esc(namaGuru(r.guru_id))}</td>${num(r.GT)}${num(r.PT)}${num(r.Inf)}<td class="num"><strong>${r.total}</strong></td></tr>`).join("")
       || `<tr><td colspan="5" class="empty-state">Belum ada penugasan pada rentang ini.</td></tr>`;
     document.getElementById("footRingkas").innerHTML = `<tr class="total"><td>Total (${h.baris.length} guru pengganti)</td>${num(h.total.GT)}${num(h.total.PT)}${num(h.total.Inf)}<td class="num"><strong>${h.total.total}</strong></td></tr>`;
     document.getElementById("bodyRinci").innerHTML = h.rincian.map((r) => `
       <tr>
-        <td>${r.tanggal}</td><td>Jam ke-${r.jam_ke}</td><td><span class="badge-kelas">${namaKelas(r.kelas_id)}</span></td><td class="nama">${namaMapel(r.mapel_id)}</td>
-        <td class="nama">${namaGuru(r.guru_id)}</td><td><span class="badge-status badge-${r.status.toLowerCase()}">${r.status}</span></td>
-        <td class="nama">${r.pengganti_id ? namaGuru(r.pengganti_id) : "—"}</td><td><span class="badge-tugas badge-${r.kode.toLowerCase()}">${r.kode}</span></td>
+        <td>${esc(r.tanggal)}</td><td>Jam ke-${esc(r.jam_ke)}</td><td><span class="badge-kelas">${esc(namaKelas(r.kelas_id))}</span></td><td class="nama">${esc(namaMapel(r.mapel_id))}</td>
+        <td class="nama">${esc(namaGuru(r.guru_id))}</td><td><span class="badge-status badge-${esc(r.status.toLowerCase())}">${esc(r.status)}</span></td>
+        <td class="nama">${r.pengganti_id ? esc(namaGuru(r.pengganti_id)) : "—"}</td><td><span class="badge-tugas badge-${esc(r.kode.toLowerCase())}">${esc(r.kode)}</span></td>
       </tr>`).join("") || `<tr><td colspan="8" class="empty-state">Belum ada penugasan pada rentang ini.</td></tr>`;
     document.getElementById("ringkasPengganti").textContent = `${h.total.total} jam digantikan · ${h.tanpaPengganti} jam tanpa pengganti (TP)` + (state.jamWaliDikecualikan ? ` · ${state.jamWaliDikecualikan} jam tugas wali kelas tidak termasuk` : "");
     document.getElementById("footPengganti").textContent = `GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler · TP = Tidak Perlu Pengganti (tidak masuk hitungan per guru).`;
@@ -426,8 +424,8 @@ function renderLibur() {
     const unlocked = isUnlocked();
     document.getElementById("liburTambah").disabled = !unlocked;
     document.getElementById("bodyLibur").innerHTML = [...state.libur].sort((a, b) => a.tanggal.localeCompare(b.tanggal)).map((l) => `
-      <tr><td>${l.tanggal}</td><td>${HARI_FROM_JS_DAY[new Date(l.tanggal + "T00:00:00").getDay()]}</td><td>${l.keterangan || ""}</td>
-      <td><button class="btn-danger-text" ${unlocked ? "" : "disabled"} data-hapus="${l.tanggal}">Hapus</button></td></tr>`).join("")
+      <tr><td>${esc(l.tanggal)}</td><td>${HARI_FROM_JS_DAY[new Date(l.tanggal + "T00:00:00").getDay()]}</td><td>${esc(l.keterangan || "")}</td>
+      <td><button class="btn-danger-text" ${unlocked ? "" : "disabled"} data-hapus="${esc(l.tanggal)}">Hapus</button></td></tr>`).join("")
       || `<tr><td colspan="4" class="empty-state">Belum ada hari libur tercatat.</td></tr>`;
     document.querySelectorAll("[data-hapus]").forEach((b) => b.addEventListener("click", () => hapusLibur(b.dataset.hapus)));
 }
@@ -462,24 +460,24 @@ async function hapusLibur(tanggal) {
 // ---------- Honor ----------
 let logoCache = null;
 async function logo() { if (logoCache === null) logoCache = (await ambilLogoBase64("assets/logo-kecil.png")) || false; return logoCache || null; }
-const ExcelJSLib = () => { if (!window.ExcelJS) throw new Error("Pustaka ExcelJS belum termuat (periksa koneksi internet), coba muat ulang halaman."); return window.ExcelJS; };
+const ExcelJSLib = () => muatExcelJS();   // dimuat saat pertama kali mengunduh, bukan saat halaman dibuka
 const bungkus = (fn) => async () => { try { await fn(); } catch (err) { laporError("Gagal membuat file Excel", err); } };
 
 const xlsKehadiran = bungkus(async () => {
     const h = state.hasilKehadiran; if (!h) return;
     // Jam tambahan ikut ke berkas sebagai teks "20 (+1)" pada kolom kontrak.
     const baris = barisKehadiranTersaring().map((r) => ({ ...r, tambahan: jamTambahan(r.guru_id) }));
-    const wb = await bukuKehadiran({ ExcelJS: ExcelJSLib(), baris, total: { ...h.total, tambahan: baris.reduce((a, r) => a + r.tambahan, 0) }, wali: null, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
+    const wb = await bukuKehadiran({ ExcelJS: await ExcelJSLib(), baris, total: { ...h.total, tambahan: baris.reduce((a, r) => a + r.tambahan, 0) }, wali: null, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, jumlahHariKerja: h.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Kehadiran Guru ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsWali = bungkus(async () => {
     const w = state.hasilWali; if (!w) return;
-    const wb = await bukuWali({ ExcelJS: ExcelJSLib(), baris: barisWaliTersaring(), total: w.total, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, jumlahHariKerja: w.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
+    const wb = await bukuWali({ ExcelJS: await ExcelJSLib(), baris: barisWaliTersaring(), total: w.total, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, jumlahHariKerja: w.jumlahHariKerja, bobot: BOBOT_HADIR, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Tugas Wali Kelas ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsPengganti = bungkus(async () => {
     const h = state.hasilPengganti; if (!h) return;
-    const wb = await bukuPengganti({ ExcelJS: ExcelJSLib(),
+    const wb = await bukuPengganti({ ExcelJS: await ExcelJSLib(),
         ringkas: h.baris.map((r) => ({ nama: namaGuru(r.guru_id), GT: r.GT, PT: r.PT, Inf: r.Inf, total: r.total })),
         rincian: h.rincian.map((r) => ({ tanggal: r.tanggal, jam_ke: r.jam_ke, kelas: namaKelas(r.kelas_id), mapel: namaMapel(r.mapel_id), guru: namaGuru(r.guru_id), status: r.status, pengganti: r.pengganti_id ? namaGuru(r.pengganti_id) : "", kode: r.kode })),
         tanpaPengganti: h.tanpaPengganti, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
@@ -487,7 +485,7 @@ const xlsPengganti = bungkus(async () => {
 });
 const xlsPiket = bungkus(async () => {
     const h = state.hasilPiket; if (!h) return;
-    const wb = await bukuPiket({ ExcelJS: ExcelJSLib(), baris: h.baris, total: h.total,
+    const wb = await bukuPiket({ ExcelJS: await ExcelJSLib(), baris: h.baris, total: h.total,
         pengaturan: state.profil, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Pelaksanaan Piket ${state.awal} sd ${state.akhir}.xlsx`);
 });
@@ -522,7 +520,7 @@ try {
     document.getElementById("xlsPengganti").addEventListener("click", xlsPengganti);
     document.getElementById("xlsWali").addEventListener("click", xlsWali);
     document.getElementById("xlsPiket").addEventListener("click", xlsPiket);
-    document.getElementById("liburTambah").addEventListener("click", tambahLibur);
+    document.getElementById("liburTambah").addEventListener("click", (e) => tombolSibuk(e.currentTarget, tambahLibur));
 } catch (err) {
     console.error("Ada elemen halaman yang tidak ditemukan — kemungkinan HTML dan JS beda versi. Lakukan hard refresh (Ctrl+Shift+R).", err);
 }

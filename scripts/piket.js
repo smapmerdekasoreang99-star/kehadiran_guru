@@ -34,6 +34,7 @@ import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { muatRujukan } from "../assets/simpanan.js?v=20260921ad";
 import { ambilLogoBase64 } from "../assets/excel-export.js?v=20260928a";
+import { ambilSemua, tombolSibuk, muatExcelJS } from "../assets/aman.js?v=20261004a";
 
 try {
     initLockUI(() => render());
@@ -52,7 +53,7 @@ function laporError(konteks, error) {
         main.insertBefore(box, main.firstChild);
     }
     const detail = error?.message || error?.details || String(error);
-    box.innerHTML = `<strong>${konteks}</strong><br>${detail}<button type="button" class="error-close" aria-label="Tutup">×</button>`;
+    box.innerHTML = `<strong>${esc(konteks)}</strong><br>${esc(detail)}<button type="button" class="error-close" aria-label="Tutup">×</button>`;
     box.querySelector(".error-close").addEventListener("click", () => box.remove());
 }
 
@@ -139,10 +140,24 @@ const namaGuru = (id) => state.guru.find((g) => g.id === id)?.nama || id;
    Parkiran — satuannya sekali jaga sesudah bel pulang, bukan jam pelajaran
    — dan untuk penanggung jawab unit yang jam jaganya belum dijadwalkan di
    Data Induk. */
+/* Dicari lewat indeks Map, bukan memindai seluruh state.catatan untuk tiap
+   sel: sebulan piket meja bisa dua ribu sel × dua ribu catatan — jutaan
+   perbandingan per gambar ulang, terasa di HP. Indeksnya disusun ulang bila
+   larik catatannya diganti atau bertambah/berkurang; kolom kuncinya tidak
+   pernah diubah di tempat (yang diubah hanya status dan catatan). */
+const kunciCatatan = (tanggal, jenis, guruId, tugasId, jamKe) =>
+    `${tanggal}|${jenis}|${guruId}|${tugasId ?? ""}|${jamKe ?? ""}`;
+let indeksCatatan = { larik: null, panjang: -1, peta: new Map() };
 function cariCatatan(tanggal, jenis, guruId, tugasId = null, jamKe = null) {
-    return state.catatan.find((c) => c.tanggal === tanggal && c.jenis === jenis
-        && c.guru_id === guruId && (c.tugas_id ?? null) === (tugasId ?? null)
-        && (c.jam_ke ?? null) === (jamKe ?? null));
+    if (indeksCatatan.larik !== state.catatan || indeksCatatan.panjang !== state.catatan.length) {
+        const peta = new Map();
+        for (const c of state.catatan) {
+            const k = kunciCatatan(c.tanggal, c.jenis, c.guru_id, c.tugas_id, c.jam_ke);
+            if (!peta.has(k)) peta.set(k, c);   // sama dengan find(): yang pertama menang
+        }
+        indeksCatatan = { larik: state.catatan, panjang: state.catatan.length, peta };
+    }
+    return indeksCatatan.peta.get(kunciCatatan(tanggal, jenis, guruId, tugasId, jamKe));
 }
 
 // Giliran piket satu petugas pada satu hari: satu per jam jaganya, atau
@@ -198,8 +213,9 @@ async function boot() {
     }));
 
     for (const tab of ["meja", "unit", "parkiran"]) {
-        document.getElementById(idSimpan(tab)).addEventListener("click", () => simpanBelumTercatat(tab));
-        document.getElementById(idBatal(tab)).addEventListener("click", () => batalkanSemua(tab));
+        // Nonaktif sampai selesai: ketukan kedua di jaringan lambat tidak menyimpan/menghapus dua kali.
+        document.getElementById(idSimpan(tab)).addEventListener("click", (e) => tombolSibuk(e.currentTarget, () => simpanBelumTercatat(tab)).finally(render));
+        document.getElementById(idBatal(tab)).addEventListener("click", (e) => tombolSibuk(e.currentTarget, () => batalkanSemua(tab)).finally(render));
         document.getElementById("unduh" + besar(tab)).addEventListener("click", () => unduhFormulir(tab));
     }
 
@@ -254,7 +270,13 @@ function hariKerja(awal, akhir) {
     return out;
 }
 
+// Nomor muat dan kunci rentang: lihat muatRentang.
+let muatKe = 0;
+const kunciRentang = () => state.awal + "|" + state.akhir;
+
 async function muatRentang() {
+    const no = ++muatKe;
+    state.catatanKunci = null;   // simpan/batalkan sekaligus menunggu sampai catatan rentang ini termuat
     const card = document.getElementById("mainCard");
     const pesan = document.getElementById("pesanRentang");
     const liburBox = document.getElementById("liburNotice");
@@ -294,15 +316,23 @@ async function muatRentang() {
     card.hidden = false;
 
     if (isSupabaseConfigured) {
+        /* Berhalaman: sebulan piket meja lebih dari dua ribu baris, dan
+           PostgREST memotong di seribu tanpa error — giliran yang sudah
+           dicatat lalu tampil "belum dicatat", dan "Batalkan semua" hanya
+           menghapus sebagian. Nomor muat membuang jawaban rentang lama bila
+           tombol pekan diketuk lagi sebelum jawabannya tiba. */
+        const kunci = kunciRentang();
         const [catatan, libur] = await Promise.all([
-            supabaseClient.from("kg_pelaksanaan_piket")
+            ambilSemua(() => supabaseClient.from("kg_pelaksanaan_piket")
                 .select("id, tanggal, jenis, guru_id, tugas_id, jam_ke, status, catatan")
-                .gte("tanggal", state.awal).lte("tanggal", state.akhir),
+                .gte("tanggal", state.awal).lte("tanggal", state.akhir).order("id")),
             supabaseClient.from("kg_hari_libur").select("tanggal, keterangan")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir),
         ]);
+        if (no !== muatKe) return;
         if (catatan.error) { laporError("Gagal memuat catatan pelaksanaan", catatan.error); return; }
         state.catatan = catatan.data || [];
+        state.catatanKunci = kunci;
         state.libur = new Map((libur.data || []).map((l) => [l.tanggal, l.keterangan || ""]));
     } else {
         state.jadwalMeja = demoData.piket || [];
@@ -316,6 +346,7 @@ async function muatRentang() {
         // Catatan mode pratinjau tidak ikut terbawa antar rentang, supaya
         // tidak tertinggal sebagai baris tanpa tanggal yang cocok.
         state.catatan = state.catatan.filter((c) => c.tanggal >= state.awal && c.tanggal <= state.akhir);
+        state.catatanKunci = kunciRentang();
     }
 
     const liburDalamRentang = state.hari.filter((d) => state.libur.has(d.iso));
@@ -890,25 +921,39 @@ async function simpanStatus(status) {
         ? jamGiliran(petugasSehari(jenis, tanggal, guruId, tugasId))
         : [jamKe];
 
-    for (const jk of sasaran) {
-        const lama = cariCatatan(tanggal, jenis, guruId, tugasId, jk);
-        const isi = { tanggal, jenis, guru_id: guruId, tugas_id: tugasId, jam_ke: jk, status, catatan };
-
-        if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured) {
+        for (const jk of sasaran) {
+            const lama = cariCatatan(tanggal, jenis, guruId, tugasId, jk);
+            const isi = { tanggal, jenis, guru_id: guruId, tugas_id: tugasId, jam_ke: jk, status, catatan };
             if (lama) Object.assign(lama, isi);
             else state.catatan.push({ id: "D" + Date.now() + jk, ...isi });
-            continue;
         }
-        if (lama) {
-            const { error } = await supabaseClient.from("kg_pelaksanaan_piket").update(isi).eq("id", lama.id);
-            if (error) { laporError("Gagal menyimpan catatan piket", error); break; }
-            Object.assign(lama, isi);
-        } else {
-            const { data, error } = await supabaseClient.from("kg_pelaksanaan_piket").insert(isi).select().single();
-            if (error) { laporError("Gagal menyimpan catatan piket", error); break; }
-            state.catatan.push(data);
-        }
+        render();
+        return;
     }
+
+    /* Semua jam sekaligus dalam paling banyak dua permintaan serentak — satu
+       update untuk jam yang sudah tercatat (hanya status dan catatan yang
+       berubah; kunci barisnya tetap), satu insert untuk yang belum — bukan
+       satu permintaan per jam secara berurutan. */
+    const lamaSemua = [], baruSemua = [];
+    for (const jk of sasaran) {
+        const lama = cariCatatan(tanggal, jenis, guruId, tugasId, jk);
+        if (lama) lamaSemua.push(lama);
+        else baruSemua.push({ tanggal, jenis, guru_id: guruId, tugas_id: tugasId, jam_ke: jk, status, catatan });
+    }
+    const [ubah, tambah] = await Promise.all([
+        lamaSemua.length
+            ? supabaseClient.from("kg_pelaksanaan_piket").update({ status, catatan }).in("id", lamaSemua.map((c) => c.id))
+            : { error: null },
+        baruSemua.length
+            ? supabaseClient.from("kg_pelaksanaan_piket").insert(baruSemua).select()
+            : { data: [], error: null },
+    ]);
+    if (ubah.error) laporError("Gagal menyimpan catatan piket", ubah.error);
+    else lamaSemua.forEach((c) => Object.assign(c, { status, catatan }));
+    if (tambah.error) laporError("Gagal menyimpan catatan piket", tambah.error);
+    else state.catatan.push(...(tambah.data || []));
     render();
 }
 
@@ -926,8 +971,19 @@ async function hapusCatatan(baris) {
    bisa menyangkut berpuluh hari — dan setiap barisnya berujung di
    perhitungan honor — jadi rentang lebih dari sehari selalu dikonfirmasi
    dahulu, dengan jumlah dan tanggalnya disebut lengkap. */
+/* Simpan dan batalkan sekaligus hanya bila catatan yang terbaca memang milik
+   rentang di layar. Selagi rentang baru masih dimuat, state.catatan masih
+   berisi rentang lama — membatalkan saat itu akan menghapus catatan rentang
+   lama, padahal konfirmasinya menyebut rentang baru. */
+function catatanSiap() {
+    if (state.catatanKunci === kunciRentang()) return true;
+    kabar("Catatan rentang ini masih dimuat — tunggu sebentar lalu coba lagi.");
+    return false;
+}
+
 async function simpanBelumTercatat(tab) {
     if (!isUnlocked()) return;
+    if (!catatanSiap()) return;
     const isiPer = isiTab(tab);
     const baru = draf(tab, isiPer);
     if (!baru.length) return;
@@ -972,6 +1028,7 @@ async function simpanBelumTercatat(tab) {
    oleh peramban, di luar jangkauan lapisan halaman. */
 async function batalkanSemua(tab) {
     if (!isUnlocked()) return;
+    if (!catatanSiap()) return;
     const baris = catatanJenis(tab);
     if (!baris.length) return;
 
@@ -1021,9 +1078,8 @@ async function logoUnduhan() {
     return logoBerkas ? { base64: logoBerkas } : null;
 }
 
-function perkakasUnduhan() {
-    if (!window.ExcelJS) throw new Error("Pustaka pembuat Excel belum termuat. Periksa sambungan internet, "
-        + "lalu muat ulang halaman.");
+async function perkakasUnduhan() {
+    await muatExcelJS();   // dimuat saat pertama kali mengunduh, bukan saat halaman dibuka
     if (!window.KopDokumen) throw new Error("Berkas assets/kop-dokumen.js belum termuat, sehingga kop dokumen "
         + "tidak bisa dibuat. Muat ulang halaman.");
     if (!window.FormulirPiket) throw new Error("Berkas assets/formulir-piket.js belum termuat, sehingga formulir "
@@ -1094,7 +1150,7 @@ async function unduhFormulir(tab) {
     const tombol = document.getElementById("unduh" + besar(tab));
     const teksLama = tombol.textContent;
     try {
-        const { ExcelJS, Kop, F } = perkakasUnduhan();
+        const { ExcelJS, Kop, F } = await perkakasUnduhan();
         tombol.disabled = true;
         tombol.textContent = "Menyiapkan…";
 

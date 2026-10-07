@@ -1742,6 +1742,7 @@ tr.total td {
     background: var(--surface); color: var(--ink); font-size: var(--h-xs); font-weight: 600;
     cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.kelas-chips-lebar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .kelas-chip:hover { border-color: var(--gold); }
 .kelas-chip.aktif { background: var(--gold); border-color: var(--gold); color: var(--utama-teks); }
 
@@ -1848,7 +1849,7 @@ tr.total td {
     display: inline-flex; align-items: center; padding: 2px var(--j2);
     border-radius: var(--r-bulat); font-size: 11.5px; font-weight: 600; white-space: nowrap;
 }
-.tag-cakupan { background: var(--sakit-muda); color: var(--sakit-tua); }
+.tag-cakupan { background: var(--sakit-muda); color: var(--sakit-tua); white-space: normal; }   /* daftar kelas Tahsin bisa panjang */
 .tag-jam { background: var(--netral-muda); color: var(--tinta-2); }
 
 .libur-hapus {

@@ -593,7 +593,9 @@ function renderPilihTingkat() {
 
 function grupKelas() {
     const grup = TINGKAT.map((t) => ({ judul: `Tingkat ${t}`, kelas: state.kelas.filter((k) => Number(k.tingkat) === t && jenisKelas(k) !== "tahsin") }));
-    grup.push({ judul: "Tahsin", kelas: state.kelas.filter((k) => jenisKelas(k) === "tahsin") });
+    // Tahsin: nama panjang ("Tahsin · Pratahsin 1") — 3 kolom, awalan dibuang
+    // (judul grupnya sudah "Tahsin"). Tiap jenjang berjumlah kelipatan 3.
+    grup.push({ judul: "Tahsin", lebar: true, kelas: state.kelas.filter((k) => jenisKelas(k) === "tahsin") });
     const sudah = new Set(grup.flatMap((g) => g.kelas.map((k) => k.id)));
     grup.push({ judul: "Lainnya", kelas: state.kelas.filter((k) => !sudah.has(k.id)) });
     return grup.filter((g) => g.kelas.length);
@@ -609,9 +611,10 @@ function renderPilihKelas() {
         return `<div class="kelas-grup">
             <div class="kelas-grup-kepala"><span>${esc(g.judul)}</span>
               <button type="button" class="kelas-semua" data-grup="${i}">${semua ? "Lepas semua" : "Pilih semua"}</button></div>
-            <div class="kelas-chips">${g.kelas.map((k) => {
+            <div class="kelas-chips${g.lebar ? " kelas-chips-lebar" : ""}">${g.kelas.map((k) => {
                 const on = formLibur.kelas.has(k.id);
-                return `<button type="button" class="kelas-chip${on ? " aktif" : ""}" aria-pressed="${on}" data-kelas="${esc(k.id)}">${esc(k.nama_kelas)}</button>`;
+                const label = String(k.nama_kelas).replace(/^Tahsin\s*·\s*/i, "");
+                return `<button type="button" class="kelas-chip${on ? " aktif" : ""}" aria-pressed="${on}" data-kelas="${esc(k.id)}" title="${esc(k.nama_kelas)}">${esc(label)}</button>`;
             }).join("")}</div>
           </div>`;
     }).join("") || `<p class="libur-hint">Daftar kelas belum termuat.</p>`;

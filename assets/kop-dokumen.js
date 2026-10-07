@@ -43,7 +43,13 @@
 (function () {
 "use strict";
 
-const PX_KOLOM  = w => w * 7 + 5;   // satuan lebar kolom Excel → piksel
+/* Satuan lebar kolom Excel → piksel. ExcelJS menulis angka lebar APA
+   ADANYA ke berkas, dan Excel menampilkannya ±7 px per satuan (Calibri
+   11). Tambahan +5 px hanya berlaku bila lebarnya diketik di Excel —
+   memakainya di sini membuat kolom "No." (lebar 5) dikira 40 px padahal
+   35 px, sehingga tulisan kop jatuh tepat di bawah tepi logo (7 Oktober
+   2026). */
+const PX_KOLOM  = w => Math.round(w * 7);
 const PX_INDENT = 10;               // satu tingkat indentasi → piksel
 const PT_PX     = 0.75;             // poin (tinggi baris Excel) → piksel
 
@@ -60,6 +66,10 @@ const LANGKAH_GESER = PX_INDENT;
 
 // Sela terkecil antara logo dan tulisan kop, supaya tidak berdempetan.
 const JARAK_LOGO = 4;
+
+/* Lebar satu spasi dalam piksel untuk huruf `pt` poin (Calibri: 0,226 em).
+   Huruf lain (Arial dsb.) spasinya lebih lebar, jadi taksiran ini aman. */
+const pxSpasi = pt => pt * 96 / 72 * 0.226;
 
 const TATA_LETAK_BAWAAN = {
     logo:  { tampil: true, x: 4, y: 3, ukuran: 52 },
@@ -215,7 +225,7 @@ function kopExcel(ws, opsi) {
     const lebarKolomPx = [];
     for (let i = 1; i <= KOL; i++) lebarKolomPx.push(PX_KOLOM((ws.getColumn(i).width) || 10));
 
-    const { baris, identitas, indeks, teksX } = susunanKop(t, profil, judul, sub);
+    const { baris, identitas, indeks, teksX, teksMinX } = susunanKop(t, profil, judul, sub);
     const { nama: rNama, identitas: rIdentitas, judul: rJudul, sub: rSub, garis: rGaris } = indeks;
 
     baris.forEach((b, i) => { ws.getRow(i + 1).height = px2pt(b.px); });
@@ -225,9 +235,20 @@ function kopExcel(ws, opsi) {
         try {
             const id = wb.addImage(logo.buffer ? { buffer: logo.buffer, extension: 'png' }
                                                : { base64: logo.base64, extension: 'png' });
-            // Letaknya dinyatakan sebagai pecahan kolom dan baris pertama.
+            /* Letaknya dalam piksel (EMU: 9525 per piksel) dari kolom dan
+               baris tempat sudutnya jatuh. Dulu dinyatakan sebagai pecahan
+               kolom pertama, padahal ExcelJS menerjemahkan pecahan itu
+               dengan skala lain, dan logo yang x-nya melewati kolom pertama
+               jadi salah tempat. */
+            const sudut = (ukuranPx, p) => {
+                let i = 0;
+                while (i < ukuranPx.length - 1 && p >= ukuranPx[i]) { p -= ukuranPx[i]; i++; }
+                return { i, sisa: Math.round(Math.max(0, p) * 9525) };
+            };
+            const kol = sudut(lebarKolomPx, t.logo.x);
+            const brs = sudut(baris.map(b => b.px), t.logo.y);
             ws.addImage(id, {
-                tl:  { col: t.logo.x / lebarKolomPx[0], row: t.logo.y / baris[0].px },
+                tl:  { nativeCol: kol.i, nativeColOff: kol.sisa, nativeRow: brs.i, nativeRowOff: brs.sisa },
                 ext: { width: t.logo.ukuran, height: t.logo.ukuran }
             });
         } catch (e) { /* tanpa logo pun berkasnya tetap terbentuk */ }
@@ -237,23 +258,38 @@ function kopExcel(ws, opsi) {
     // teksX, bukan t.teks.x: bila logonya menghalangi, tulisannya digeser
     // ke kanan logo supaya tidak tertimpa. Lihat susunanKop di atas.
     const tempat = tempatkan(lebarKolomPx, teksX);
-    const tulis = (r, teks, ukuran, tebal, perataan) => {
+
+    /* Bila logo menjorok ke kolom tempat tulisan dimulai, jaraknya dibuat
+       dengan SPASI di depan tulisan, bukan indentasi. Indentasi ditampilkan
+       berbeda-beda: Excel ±9–10 px per tingkat, LibreOffice dan WPS lain
+       lagi, Google Sheets mengabaikannya sama sekali — sedangkan logo
+       selalu tepat di pikselnya. Spasi ikut ukuran huruf di aplikasi mana
+       pun, jadi tulisan pasti berada di kanan logo. Satu spasi cadangan
+       untuk tepi sel dan pembulatan. */
+    let kiriKolom = 0;
+    for (let i = 0; i < tempat.kolom - 1; i++) kiriKolom += lebarKolomPx[i];
+    const terhalangLogo = teksMinX > 0 && kiriKolom < teksMinX;
+    const depan = ukuran => terhalangLogo
+        ? ' '.repeat(Math.ceil((teksX - kiriKolom) / pxSpasi(ukuran)) + 1) : '';
+
+    const tulis = (r, teks, ukuran, tebal, perataan, diKop) => {
         if (!r) return;
         const tengah = perataan === 'tengah', kanan = perataan === 'kanan';
         const kolomMulai = (tengah || kanan) ? 1 : tempat.kolom;
+        const kiri = !tengah && !kanan && diKop;
         if (kolomMulai < KOL) ws.mergeCells(r, kolomMulai, r, KOL);
         const c = ws.getCell(r, kolomMulai);
-        c.value = teks;
+        c.value = kiri && teks ? depan(ukuran) + teks : teks;
         c.font = { name: font, size: ukuran, bold: !!tebal };
         c.alignment = {
             horizontal: tengah ? 'center' : (kanan ? 'right' : 'left'),
             vertical: 'middle',
-            indent: (tengah || kanan) ? 0 : tempat.indent
+            indent: (tengah || kanan || (kiri && terhalangLogo)) ? 0 : tempat.indent
         };
     };
 
-    tulis(rNama, profil.nama_sekolah || '', t.teks.ukuranNama, true, t.teks.rata);
-    rIdentitas.forEach((r, i) => tulis(r, identitas[i], t.teks.ukuranAlamat, false, t.teks.rata));
+    tulis(rNama, profil.nama_sekolah || '', t.teks.ukuranNama, true, t.teks.rata, true);
+    rIdentitas.forEach((r, i) => tulis(r, identitas[i], t.teks.ukuranAlamat, false, t.teks.rata, true));
     tulis(rJudul,  judul,                     t.judul.ukuran,      true,  t.judul.rata);
     tulis(rSub,    sub,                       10,                  false, t.judul.rata);
 

@@ -2,9 +2,11 @@ import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.
 import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
-import { urutkanKelas } from "../assets/kelas-order.js?v=20260921v";
+import { urutkanKelas, jenisKelas } from "../assets/kelas-order.js?v=20260921v";
+import { semesterTanggal, semesterBaris } from "../assets/semester.js?v=20260921ad";
+import { mencakup, petaTingkat, namaHari, tanggalLengkap, bulanTahun, bulanPendek, uraianCakupan, uraianJam, waktuJam } from "../assets/libur.js?v=20261007a";
 import { muatRujukan } from "../assets/simpanan.js?v=20261004a";
-import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas, rekapDariJumlah, rekapWaliDariJumlah } from "../assets/rekap-hitung.js?v=20261004a";
+import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas, rekapDariJumlah, rekapWaliDariJumlah } from "../assets/rekap-hitung.js?v=20261007a";
 import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20261004b";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 import { esc, ambilSemua, tombolSibuk, muatExcelJS } from "../assets/aman.js?v=20261004a";
@@ -28,13 +30,15 @@ function laporError(konteks, error) {
 }
 
 const STATUS_LABEL = { ST: "Sakit dengan Tugas", IT: "Ijin dengan Tugas", TK: "Tanpa Keterangan", HTTM: "Hadir tanpa Tatap Muka" };
-const HARI_FROM_JS_DAY = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
 // Penyimpanan hari libur di mode pratinjau
 const demoLibur = [];
+const demoLiburSebagian = [];
 let state = {
     awal: "", akhir: "",
-    guru: [], kelas: [], mapel: [], jadwal: [], libur: [],
+    guru: [], kelas: [], mapel: [], jadwal: [], jam: [],
+    libur: [],            // kg_hari_libur: seluruh sekolah, sehari penuh
+    liburSebagian: [],    // libur_sebagian: tingkat/kelas tertentu dan/atau sebagian jam
     ketidakhadiran: [], penugasan: [],
     hasilKehadiran: null, hasilWali: null, hasilPengganti: null, jamWaliDikecualikan: 0,
     saring: "", saringWali: "", viewPengganti: "ringkas",
@@ -92,7 +96,7 @@ async function boot() {
         try {
             [rujukan] = await Promise.all([
                 muatRujukan(supabaseClient,
-                    ["guru", "kelas", "mapel", "jadwal", "piketMeja", "piketUnit", "guruUnit", "parkiran", "profil", "tahunAjaran"],
+                    ["guru", "kelas", "mapel", "jadwal", "jam", "piketMeja", "piketUnit", "guruUnit", "parkiran", "profil", "tahunAjaran"],
                     (r) => { terapkanRujukan(r); hitungLagi(); }),
                 muatLibur(),
                 muatJamTambahan(),
@@ -101,7 +105,8 @@ async function boot() {
         terapkanRujukan(rujukan);
     } else {
         state.guru = demoData.guru; state.kelas = urutkanKelas(demoData.kelas); state.mapel = demoData.mapel; state.jadwal = demoData.jadwal;
-        state.libur = demoLibur; state.profil = { ...demoProfil };
+        state.jam = demoData.jam || [];
+        state.libur = demoLibur; state.liburSebagian = demoLiburSebagian; state.profil = { ...demoProfil };
     }
     renderLibur();
     await hitungLagi();
@@ -112,6 +117,7 @@ function terapkanRujukan(r) {
     state.kelas = urutkanKelas(r.kelas);
     state.mapel = r.mapel;
     state.jadwal = r.jadwal;
+    state.jam = r.jam || [];
     // Satu baris per JAM jaga untuk meja dan unit: itulah satuan pencatatan.
     // Masa berlaku penugasan unit (unit) dipakai menyaring jadwal jamnya.
     state.jadwalPiket = { meja: r.piketMeja, unitJam: r.piketUnit, unit: r.guruUnit, parkiran: r.parkiran };
@@ -133,13 +139,19 @@ const selKontrak = (r) => `<td class="num">${r.kontrak}${jamTambahan(r.guru_id)
     ? ` <small class="satuan-kolom">(+${jamTambahan(r.guru_id)})</small>` : ""}</td>`;
 
 async function muatLibur() {
-    const { data, error } = await supabaseClient.from("kg_hari_libur").select("tanggal, keterangan").order("tanggal");
-    if (error) {
+    const [penuh, sebagian] = await Promise.all([
+        supabaseClient.from("kg_hari_libur").select("tanggal, keterangan").order("tanggal"),
+        supabaseClient.from("libur_sebagian").select("id, tanggal, tingkat, kelas_id, jam_dari, jam_sampai, keterangan").order("tanggal"),
+    ]);
+    if (penuh.error) {
         // tabel belum dibuat -> beri tahu, tapi rekap tetap jalan tanpa libur
-        laporError("Tabel kg_hari_libur belum ada — jalankan migrasi_hari_libur.sql di Supabase (rekap tetap dihitung tanpa hari libur)", error);
-        state.libur = []; return;
-    }
-    state.libur = data || [];
+        laporError("Gagal memuat hari libur (rekap dihitung tanpa hari libur)", penuh.error);
+        state.libur = [];
+    } else state.libur = penuh.data || [];
+    if (sebagian.error) {
+        laporError("Gagal memuat libur sebagian — tabel libur_sebagian belum ada di database?", sebagian.error);
+        state.liburSebagian = [];
+    } else state.liburSebagian = sebagian.data || [];
 }
 
 /* Identitas kop berkas Excel dibaca dari Data Induk, tidak lagi disalin ke
@@ -271,8 +283,9 @@ async function hitung() {
 
     const liburSet = new Set(state.libur.map((l) => l.tanggal));
     const { mengajar, wali, ketMengajar, ketWali } = pisahWaliKelas(state.jadwal, state.ketidakhadiran);
-    state.hasilKehadiran = rekapKehadiran({ jadwal: mengajar, ketidakhadiran: ketMengajar, awal: state.awal, akhir: state.akhir, liburSet });
-    state.hasilWali = rekapWali({ jadwal: wali, ketidakhadiran: ketWali, awal: state.awal, akhir: state.akhir, liburSet });
+    const libur = { liburSet, liburSebagian: state.liburSebagian, kelas: state.kelas };
+    state.hasilKehadiran = rekapKehadiran({ jadwal: mengajar, ketidakhadiran: ketMengajar, awal: state.awal, akhir: state.akhir, ...libur });
+    state.hasilWali = rekapWali({ jadwal: wali, ketidakhadiran: ketWali, awal: state.awal, akhir: state.akhir, ...libur });
     hitungPengganti();
     state.hasilPiket = rekapPiket(hariKerja(state.awal, state.akhir, liburSet));
     renderKehadiran(); renderPengganti(); renderPiket();
@@ -477,41 +490,391 @@ function renderPengganti() {
 }
 
 // ---------- Hari libur ----------
+/* Dua macam libur dicatat dari satu formulir:
+     seluruh sekolah + sehari penuh  -> kg_hari_libur (libur penuh)
+     selain itu                      -> libur_sebagian, satu baris per tanggal
+   Rentang tanggal disimpan per hari sekolah (Sabtu–Minggu dilewati), lalu
+   di daftar dikelompokkan lagi menjadi satu entri bila berurutan dan
+   isinya sama. */
+const el = (id) => document.getElementById(id);
+const TINGKAT = [10, 11, 12];
+const BATAS_HARI = 62;   // rentang lebih panjang dari ini hampir pasti salah ketik
+const formLibur = { cakupan: "sekolah", tingkat: new Set(), kelas: new Set(), waktu: "penuh", jamDari: null, jamSampai: null, jangkar: null };
+let saringLibur = "semua";
+let liburBaru = new Set();   // kunci entri yang baru disimpan, disorot sebentar
+
+const hariSekolah = (iso) => { const g = new Date(iso + "T00:00:00").getDay(); return g >= 1 && g <= 5; };
+function hariSekolahBerikut(iso) {
+    const d = new Date(iso + "T00:00:00");
+    do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
+    return isoTanggal(d);
+}
+const daftarJam = () => (state.jam && state.jam.length ? state.jam.map((j) => Number(j.jam_ke))
+    : Array.from({ length: 12 }, (_, i) => i + 1));
+const jamMulai = (n) => String((state.jam || []).find((j) => Number(j.jam_ke) === n)?.mulai || "").slice(0, 5).replace(":", ".");
+
+// Tanggal-tanggal hari sekolah dari isian Dari/Sampai.
+function tanggalFormLibur() {
+    const dari = el("liburDari").value;
+    const sampaiIsi = el("liburSampai").value;
+    if (!dari) return { dari: "", sampai: "", daftar: [], terlalu: false };
+    const sampai = sampaiIsi && sampaiIsi > dari ? sampaiIsi : dari;
+    const daftar = [];
+    const d = new Date(dari + "T00:00:00"), akhir = new Date(sampai + "T00:00:00");
+    let n = 0;
+    while (d <= akhir && n++ < 400) { const iso = isoTanggal(d); if (hariSekolah(iso)) daftar.push(iso); d.setDate(d.getDate() + 1); }
+    return { dari, sampai, daftar, terlalu: daftar.length > BATAS_HARI };
+}
+
+// Calon catatan dari isian formulir (belum tentu sah).
+function calonLibur() {
+    const f = formLibur;
+    return {
+        tingkat: f.cakupan === "tingkat" ? [...f.tingkat].sort((a, b) => a - b) : null,
+        kelas_id: f.cakupan === "kelas" ? state.kelas.filter((k) => f.kelas.has(k.id)).map((k) => k.id) : null,
+        jam_dari: f.waktu === "sebagian" ? f.jamDari : null,
+        jam_sampai: f.waktu === "sebagian" ? f.jamSampai : null,
+        keterangan: el("liburKeterangan").value.trim() || null,
+    };
+}
+
+function periksaFormLibur() {
+    const t = tanggalFormLibur(), f = formLibur, c = calonLibur();
+    const penuh = f.cakupan === "sekolah" && f.waktu === "penuh";
+    const sudahPenuh = new Set(state.libur.map((l) => l.tanggal));
+    const tanggal = penuh ? t.daftar : t.daftar.filter((d) => !sudahPenuh.has(d));
+    let pesan = "";
+    if (!t.dari) pesan = "Pilih tanggal libur.";
+    else if (!t.daftar.length) pesan = "Tidak ada hari sekolah (Senin–Jumat) pada tanggal itu.";
+    else if (t.terlalu) pesan = `Rentang ${t.daftar.length} hari sekolah terlalu panjang — paling banyak ${BATAS_HARI}.`;
+    else if (f.cakupan === "tingkat" && !f.tingkat.size) pesan = "Pilih minimal satu tingkat.";
+    else if (f.cakupan === "kelas" && !f.kelas.size) pesan = "Pilih minimal satu kelas.";
+    else if (f.waktu === "sebagian" && f.jamDari == null) pesan = "Pilih jam yang ditiadakan pada deretan jam.";
+    else if (!tanggal.length) pesan = "Semua tanggal itu sudah tercatat libur penuh.";
+    return { ok: !pesan, pesan, penuh, tanggal, lewati: t.daftar.length - tanggal.length, t, c };
+}
+
+// Jam pelajaran (jadwal) yang akan ditiadakan, untuk ringkasan dampak.
+function dampakLibur(cek) {
+    const tingkat = petaTingkat(state.kelas);
+    let jam = 0; const guru = new Set();
+    for (const d of cek.tanggal) {
+        const hari = namaHari(d), smt = semesterTanggal(d);
+        for (const j of state.jadwal) {
+            if (j.hari !== hari || semesterBaris(j) !== smt) continue;
+            if (!cek.penuh && !mencakup(cek.c, j, tingkat)) continue;
+            jam++; guru.add(j.guru_id);
+        }
+    }
+    return { jam, guru: guru.size };
+}
+
+function renderPilihTingkat() {
+    const box = el("liburPilihTingkat");
+    box.hidden = formLibur.cakupan !== "tingkat";
+    if (box.hidden) return;
+    box.innerHTML = TINGKAT.map((t) => {
+        const kls = state.kelas.filter((k) => Number(k.tingkat) === t);
+        const rombel = kls.filter((k) => jenisKelas(k) === "reguler").length;
+        const md = kls.length - rombel;
+        const on = formLibur.tingkat.has(t);
+        return `<button type="button" class="tingkat-kartu${on ? " aktif" : ""}" aria-pressed="${on}" data-tingkat="${t}">
+            <span class="tingkat-angka">${t}</span>
+            <span class="tingkat-label">Tingkat ${t}</span>
+            <span class="tingkat-isi">${rombel} rombel${md ? ` · ${md} MD` : ""}</span>
+          </button>`;
+    }).join("");
+    box.querySelectorAll("[data-tingkat]").forEach((b) => b.addEventListener("click", () => {
+        const t = Number(b.dataset.tingkat);
+        formLibur.tingkat.has(t) ? formLibur.tingkat.delete(t) : formLibur.tingkat.add(t);
+        renderFormLibur();
+    }));
+}
+
+function grupKelas() {
+    const grup = TINGKAT.map((t) => ({ judul: `Tingkat ${t}`, kelas: state.kelas.filter((k) => Number(k.tingkat) === t && jenisKelas(k) !== "tahsin") }));
+    grup.push({ judul: "Tahsin", kelas: state.kelas.filter((k) => jenisKelas(k) === "tahsin") });
+    const sudah = new Set(grup.flatMap((g) => g.kelas.map((k) => k.id)));
+    grup.push({ judul: "Lainnya", kelas: state.kelas.filter((k) => !sudah.has(k.id)) });
+    return grup.filter((g) => g.kelas.length);
+}
+
+function renderPilihKelas() {
+    const box = el("liburPilihKelas");
+    box.hidden = formLibur.cakupan !== "kelas";
+    if (box.hidden) return;
+    const grup = grupKelas();
+    box.innerHTML = grup.map((g, i) => {
+        const semua = g.kelas.every((k) => formLibur.kelas.has(k.id));
+        return `<div class="kelas-grup">
+            <div class="kelas-grup-kepala"><span>${esc(g.judul)}</span>
+              <button type="button" class="kelas-semua" data-grup="${i}">${semua ? "Lepas semua" : "Pilih semua"}</button></div>
+            <div class="kelas-chips">${g.kelas.map((k) => {
+                const on = formLibur.kelas.has(k.id);
+                return `<button type="button" class="kelas-chip${on ? " aktif" : ""}" aria-pressed="${on}" data-kelas="${esc(k.id)}">${esc(k.nama_kelas)}</button>`;
+            }).join("")}</div>
+          </div>`;
+    }).join("") || `<p class="libur-hint">Daftar kelas belum termuat.</p>`;
+    box.querySelectorAll("[data-kelas]").forEach((b) => b.addEventListener("click", () => {
+        const id = b.dataset.kelas;
+        formLibur.kelas.has(id) ? formLibur.kelas.delete(id) : formLibur.kelas.add(id);
+        renderFormLibur();
+    }));
+    box.querySelectorAll("[data-grup]").forEach((b) => b.addEventListener("click", () => {
+        const g = grup[Number(b.dataset.grup)];
+        const semua = g.kelas.every((k) => formLibur.kelas.has(k.id));
+        for (const k of g.kelas) semua ? formLibur.kelas.delete(k.id) : formLibur.kelas.add(k.id);
+        renderFormLibur();
+    }));
+}
+
+function renderJamStrip() {
+    const f = formLibur;
+    el("liburPilihJam").hidden = f.waktu !== "sebagian";
+    if (f.waktu !== "sebagian") return;
+    el("liburJamStrip").innerHTML = daftarJam().map((n) => {
+        const dalam = f.jamDari != null && n >= f.jamDari && n <= f.jamSampai;
+        const ujung = dalam && (n === f.jamDari || n === f.jamSampai);
+        return `<button type="button" class="jam-sel${dalam ? " dalam" : ""}${ujung ? " ujung" : ""}${f.jangkar === n ? " jangkar" : ""}"
+            aria-pressed="${dalam}" data-jam="${n}" title="Jam ke-${n}${jamMulai(n) ? " · mulai " + jamMulai(n) : ""}">
+            <span class="jam-no">${n}</span><span class="jam-mulai">${esc(jamMulai(n))}</span></button>`;
+    }).join("");
+    el("liburJamStrip").querySelectorAll("[data-jam]").forEach((b) => b.addEventListener("click", () => {
+        const n = Number(b.dataset.jam);
+        if (f.jangkar == null) { f.jamDari = f.jamSampai = n; f.jangkar = n; }
+        else { f.jamDari = Math.min(f.jangkar, n); f.jamSampai = Math.max(f.jangkar, n); f.jangkar = null; }
+        renderFormLibur();
+    }));
+    const waktu = f.jamDari != null ? waktuJam(f.jamDari, f.jamSampai, state.jam) : "";
+    el("liburJamInfo").innerHTML = f.jamDari == null
+        ? "Klik jam pertama yang ditiadakan, lalu jam terakhirnya."
+        : f.jangkar != null
+            ? `<b>Jam ke-${f.jamDari}</b> dipilih. Klik jam terakhir untuk membuat rentang — atau biarkan untuk satu jam saja.`
+            : `<b>${esc(uraianJam({ jam_dari: f.jamDari, jam_sampai: f.jamSampai }))}</b>${waktu ? ` · ${esc(waktu)}` : ""} ditiadakan. Klik jam lain untuk memilih ulang.`;
+}
+
+function renderInfoTanggal() {
+    const t = tanggalFormLibur();
+    const info = el("liburTanggalInfo");
+    info.classList.remove("peringatan");
+    if (!t.dari) { info.textContent = 'Kosongkan "Sampai" untuk satu hari saja. Sabtu–Minggu dilewati.'; return; }
+    if (t.dari === t.sampai) {
+        info.textContent = tanggalLengkap(t.dari) + (hariSekolah(t.dari) ? "" : " — bukan hari sekolah");
+        info.classList.toggle("peringatan", !hariSekolah(t.dari));
+        return;
+    }
+    info.textContent = `${t.daftar.length} hari sekolah · ${tanggalLengkap(t.dari)} s.d. ${tanggalLengkap(t.sampai)}`;
+    info.classList.toggle("peringatan", !t.daftar.length || t.terlalu);
+}
+
+function renderRingkasLibur() {
+    const cek = periksaFormLibur();
+    const box = el("liburRingkas");
+    el("liburTambah").disabled = !cek.ok || !isUnlocked();
+    if (!cek.t.dari) {
+        box.className = "libur-ringkas kosong";
+        box.innerHTML = `<span class="ringkas-label">Ringkasan</span><p class="ringkas-kalimat">Isi tanggal untuk melihat ringkasan dan dampaknya pada jadwal.</p>`;
+        return;
+    }
+    const subjek = cek.penuh ? "Seluruh sekolah" : uraianCakupan(cek.c, namaKelas, 6);
+    const rentangJam = cek.c.jam_dari != null ? waktuJam(cek.c.jam_dari, cek.c.jam_sampai, state.jam) : "";
+    const waktu = formLibur.waktu === "penuh" ? "sehari penuh"
+        : cek.c.jam_dari == null ? "pada jam yang belum dipilih"
+        : uraianJam(cek.c).replace("Jam", "jam") + (rentangJam ? ` (${rentangJam})` : "");
+    const kapan = cek.t.dari === cek.t.sampai ? tanggalLengkap(cek.t.dari)
+        : `${tanggalLengkap(cek.t.dari)} s.d. ${tanggalLengkap(cek.t.sampai)}`;
+    const d = cek.tanggal.length ? dampakLibur(cek) : { jam: 0, guru: 0 };
+    box.className = "libur-ringkas " + (cek.penuh ? "jenis-penuh" : "jenis-sebagian");
+    box.innerHTML = `
+      <span class="ringkas-label">${cek.penuh ? "Libur penuh" : "Libur sebagian"}</span>
+      <p class="ringkas-kalimat"><b>${esc(subjek)}</b> libur <b>${esc(waktu)}</b>, ${esc(kapan)}.</p>
+      <div class="ringkas-angka">
+        <div><strong>${cek.tanggal.length}</strong><span>hari sekolah</span></div>
+        <div><strong>${d.jam}</strong><span>jam pelajaran ditiadakan</span></div>
+        <div><strong>${d.guru}</strong><span>guru terdampak</span></div>
+      </div>
+      <p class="ringkas-catatan">${cek.penuh
+        ? "Tanggal ini keluar dari hari kerja — juga bagi staf dan piket."
+        : "Hari tetap dihitung hari kerja; staf dan piket berjalan seperti biasa."}${cek.lewati ? ` ${cek.lewati} tanggal sudah libur penuh dan dilewati.` : ""}</p>
+      ${cek.ok ? "" : `<p class="ringkas-kurang">${esc(cek.pesan)}</p>`}`;
+}
+
+function renderFormLibur() {
+    const f = formLibur;
+    for (const b of el("liburCakupan").querySelectorAll("button")) {
+        const on = b.dataset.cakupan === f.cakupan;
+        b.classList.toggle("aktif", on); b.setAttribute("aria-checked", on);
+    }
+    for (const b of el("liburWaktu").querySelectorAll("button")) {
+        const on = b.dataset.waktu === f.waktu;
+        b.classList.toggle("aktif", on); b.setAttribute("aria-checked", on);
+    }
+    renderPilihTingkat(); renderPilihKelas(); renderJamStrip(); renderInfoTanggal();
+    el("liburCakupanInfo").textContent =
+        f.cakupan === "sekolah" ? "Semua rombel dan kelompok belajar."
+        : f.cakupan === "tingkat" ? (f.tingkat.size ? `${f.tingkat.size} tingkat dipilih — termasuk kelompok Matematika Dasar tingkat itu.` : "Pilih satu tingkat atau lebih.")
+        : (f.kelas.size ? `${f.kelas.size} kelas dipilih.` : "Pilih satu kelas atau lebih.");
+    renderRingkasLibur();
+}
+
+function kosongkanFormLibur() {
+    Object.assign(formLibur, { cakupan: "sekolah", tingkat: new Set(), kelas: new Set(), waktu: "penuh", jamDari: null, jamSampai: null, jangkar: null });
+    el("liburDari").value = ""; el("liburSampai").value = ""; el("liburKeterangan").value = "";
+    el("liburSampai").min = "";
+    renderFormLibur();
+}
+
+/* Entri daftar: libur penuh dan libur sebagian, tanggal berurutan (hari
+   sekolah berikutnya) dengan isi yang sama digabung menjadi satu entri. */
+function entriLibur() {
+    const satu = [
+        ...state.libur.map((l) => ({ jenis: "penuh", tanggal: l.tanggal, keterangan: l.keterangan || "", l: {}, kunci: "p|" + l.tanggal })),
+        ...state.liburSebagian.map((l) => ({ jenis: "sebagian", tanggal: l.tanggal, keterangan: l.keterangan || "", l, kunci: "s|" + l.id })),
+    ];
+    const sidik = (x) => [x.jenis, x.keterangan, JSON.stringify([...(x.l.tingkat || [])].sort()),
+        JSON.stringify([...(x.l.kelas_id || [])].sort()), x.l.jam_dari ?? "", x.l.jam_sampai ?? ""].join("§");
+    satu.sort((a, b) => sidik(a).localeCompare(sidik(b)) || a.tanggal.localeCompare(b.tanggal));
+    const grup = [];
+    for (const x of satu) {
+        const g = grup[grup.length - 1];
+        if (g && g.sidik === sidik(x) && hariSekolahBerikut(g.akhir) === x.tanggal) { g.akhir = x.tanggal; g.anggota.push(x); continue; }
+        grup.push({ sidik: sidik(x), jenis: x.jenis, awal: x.tanggal, akhir: x.tanggal, keterangan: x.keterangan, l: x.l, anggota: [x] });
+    }
+    return grup.sort((a, b) => a.awal.localeCompare(b.awal) || (a.jenis === "penuh" ? -1 : 1));
+}
+
+function kotakTanggal(g) {
+    const a = new Date(g.awal + "T00:00:00"), z = new Date(g.akhir + "T00:00:00");
+    const satuHari = g.awal === g.akhir;
+    const bulan = a.getMonth() === z.getMonth() ? bulanPendek(g.awal) : `${bulanPendek(g.awal)}–${bulanPendek(g.akhir)}`;
+    return `<div class="libur-tgl" aria-hidden="true">
+        <span class="tgl-hari">${satuHari ? namaHari(g.awal).slice(0, 3) : g.anggota.length + " hari"}</span>
+        <span class="tgl-angka">${a.getDate()}${satuHari ? "" : `<small>–${z.getDate()}</small>`}</span>
+        <span class="tgl-bulan">${bulan}</span>
+      </div>`;
+}
+
+let entriTampil = [];
 function renderLibur() {
     const unlocked = isUnlocked();
-    document.getElementById("liburTambah").disabled = !unlocked;
-    document.getElementById("bodyLibur").innerHTML = [...state.libur].sort((a, b) => a.tanggal.localeCompare(b.tanggal)).map((l) => `
-      <tr><td>${esc(l.tanggal)}</td><td>${HARI_FROM_JS_DAY[new Date(l.tanggal + "T00:00:00").getDay()]}</td><td>${esc(l.keterangan || "")}</td>
-      <td><button class="btn-danger-text" ${unlocked ? "" : "disabled"} data-hapus="${esc(l.tanggal)}">Hapus</button></td></tr>`).join("")
-      || `<tr><td colspan="4" class="empty-state">Belum ada hari libur tercatat.</td></tr>`;
-    document.querySelectorAll("[data-hapus]").forEach((b) => b.addEventListener("click", () => hapusLibur(b.dataset.hapus)));
+    el("liburFieldset").disabled = !unlocked;
+    el("liburTerkunci").hidden = unlocked;
+
+    entriTampil = entriLibur().filter((g) => saringLibur === "semua" || g.jenis === saringLibur);
+    const hariIni = isoTanggal(new Date());
+    el("liburJumlah").textContent = `${state.libur.length} hari libur penuh · ${state.liburSebagian.length} hari libur sebagian`;
+    for (const b of el("liburSaring").querySelectorAll("button")) {
+        const on = b.dataset.saring === saringLibur;
+        b.classList.toggle("aktif", on); b.setAttribute("aria-checked", on);
+    }
+
+    let bulanSebelum = "", html = "";
+    entriTampil.forEach((g, i) => {
+        const bulan = bulanTahun(g.awal);
+        if (bulan !== bulanSebelum) { html += `<h4 class="libur-bulan">${esc(bulan)}</h4>`; bulanSebelum = bulan; }
+        const lewat = g.akhir < hariIni;
+        const baru = g.anggota.some((x) => liburBaru.has(x.kunci));
+        const tanggalTeks = g.awal === g.akhir ? tanggalLengkap(g.awal)
+            : `${tanggalLengkap(g.awal)} s.d. ${tanggalLengkap(g.akhir)}`;
+        const rentangJam = g.l.jam_dari != null ? waktuJam(g.l.jam_dari, g.l.jam_sampai, state.jam) : "";
+        html += `
+        <article class="libur-item libur-${g.jenis}${lewat ? " lewat" : ""}${baru ? " baru" : ""}">
+          ${kotakTanggal(g)}
+          <div class="libur-isi">
+            <div class="libur-judul">${esc(g.keterangan || (g.jenis === "penuh" ? "Libur sekolah" : "Libur sebagian"))}</div>
+            <div class="libur-kapan">${esc(tanggalTeks)}</div>
+            <div class="libur-tag">
+              <span class="tag tag-cakupan">${esc(g.jenis === "penuh" ? "Seluruh sekolah" : uraianCakupan(g.l, namaKelas))}</span>
+              <span class="tag tag-jam">${esc(g.jenis === "penuh" ? "Sehari penuh" : uraianJam(g.l))}${rentangJam ? ` · ${esc(rentangJam)}` : ""}</span>
+            </div>
+          </div>
+          <button type="button" class="libur-hapus" ${unlocked ? "" : "disabled"} data-hapus="${i}" aria-label="Hapus libur ${esc(tanggalTeks)}">Hapus</button>
+        </article>`;
+    });
+    el("daftarLibur").innerHTML = html || `<div class="libur-kosong">
+        <strong>${saringLibur === "semua" ? "Belum ada libur tercatat" : "Tidak ada libur jenis ini"}</strong>
+        <span>Libur yang dicatat lewat formulir akan tampil di sini, dikelompokkan per bulan.</span></div>`;
+    el("daftarLibur").querySelectorAll("[data-hapus]").forEach((b) => b.addEventListener("click", () => konfirmasiHapus(b)));
+    renderFormLibur();
 }
 
-async function tambahLibur() {
-    const tanggal = document.getElementById("liburTanggal").value;
-    const keterangan = document.getElementById("liburKeterangan").value || null;
-    if (!tanggal) return;
-    if (isSupabaseConfigured) {
-        const { error } = await supabaseClient.from("kg_hari_libur").upsert({ tanggal, keterangan }, { onConflict: "tanggal" });
-        if (error) { laporError("Gagal menyimpan hari libur", error); return; }
-        await muatLibur();
-    } else {
-        const i = demoLibur.findIndex((l) => l.tanggal === tanggal);
-        if (i > -1) demoLibur[i].keterangan = keterangan; else demoLibur.push({ tanggal, keterangan });
+// Hapus dua langkah: klik pertama meminta kepastian, klik kedua menghapus.
+function konfirmasiHapus(b) {
+    if (!b.classList.contains("yakin")) {
+        b.classList.add("yakin"); b.textContent = "Yakin hapus?";
+        setTimeout(() => { if (b.isConnected) { b.classList.remove("yakin"); b.textContent = "Hapus"; } }, 4000);
+        return;
     }
-    document.getElementById("liburKeterangan").value = "";
+    tombolSibuk(b, () => hapusLibur(entriTampil[Number(b.dataset.hapus)]));
+}
+
+async function simpanLibur() {
+    const cek = periksaFormLibur();
+    if (!cek.ok || !isUnlocked()) { renderRingkasLibur(); return; }
+    let baru;
+    if (cek.penuh) {
+        const baris = cek.tanggal.map((tanggal) => ({ tanggal, keterangan: cek.c.keterangan }));
+        if (isSupabaseConfigured) {
+            const { error } = await supabaseClient.from("kg_hari_libur").upsert(baris, { onConflict: "tanggal" });
+            if (error) { laporError("Gagal menyimpan hari libur", error); return; }
+        } else {
+            for (const r of baris) {
+                const i = demoLibur.findIndex((l) => l.tanggal === r.tanggal);
+                if (i > -1) demoLibur[i].keterangan = r.keterangan; else demoLibur.push(r);
+            }
+        }
+        baru = baris.map((r) => "p|" + r.tanggal);
+    } else {
+        const baris = cek.tanggal.map((tanggal) => ({ tanggal, ...cek.c }));
+        if (isSupabaseConfigured) {
+            const { data, error } = await supabaseClient.from("libur_sebagian").insert(baris).select("id");
+            if (error) { laporError("Gagal menyimpan libur sebagian", error); return; }
+            baru = (data || []).map((r) => "s|" + r.id);
+        } else {
+            const ditambah = baris.map((r) => ({ id: "demo-" + Math.random().toString(36).slice(2), ...r }));
+            demoLiburSebagian.push(...ditambah);
+            baru = ditambah.map((r) => "s|" + r.id);
+        }
+    }
+    if (isSupabaseConfigured) await muatLibur();
+    liburBaru = new Set(baru);
+    setTimeout(() => { liburBaru = new Set(); }, 2500);
+    kosongkanFormLibur();
     renderLibur(); await hitungLagi();
 }
 
-async function hapusLibur(tanggal) {
+async function hapusLibur(g) {
+    if (!g) return;
+    const tanggal = g.anggota.map((x) => x.tanggal);
+    const ids = g.anggota.map((x) => x.l.id).filter(Boolean);
     if (isSupabaseConfigured) {
-        const { error } = await supabaseClient.from("kg_hari_libur").delete().eq("tanggal", tanggal);
-        if (error) { laporError("Gagal menghapus hari libur", error); return; }
+        const { error } = g.jenis === "penuh"
+            ? await supabaseClient.from("kg_hari_libur").delete().in("tanggal", tanggal)
+            : await supabaseClient.from("libur_sebagian").delete().in("id", ids);
+        if (error) { laporError("Gagal menghapus libur", error); return; }
         await muatLibur();
+    } else if (g.jenis === "penuh") {
+        for (let i = demoLibur.length - 1; i >= 0; i--) if (tanggal.includes(demoLibur[i].tanggal)) demoLibur.splice(i, 1);
     } else {
-        const i = demoLibur.findIndex((l) => l.tanggal === tanggal); if (i > -1) demoLibur.splice(i, 1);
+        for (let i = demoLiburSebagian.length - 1; i >= 0; i--) if (ids.includes(demoLiburSebagian[i].id)) demoLiburSebagian.splice(i, 1);
     }
     renderLibur(); await hitungLagi();
+}
+
+function pasangFormLibur() {
+    el("liburForm").addEventListener("submit", (e) => { e.preventDefault(); tombolSibuk(el("liburTambah"), simpanLibur); });
+    el("liburBersihkan").addEventListener("click", kosongkanFormLibur);
+    for (const id of ["liburDari", "liburSampai"]) el(id).addEventListener("input", renderFormLibur);
+    el("liburDari").addEventListener("change", () => {
+        // "Sampai" yang lebih awal dari "Dari" tidak masuk akal: dikosongkan.
+        if (el("liburSampai").value && el("liburSampai").value < el("liburDari").value) el("liburSampai").value = "";
+        el("liburSampai").min = el("liburDari").value;
+        renderFormLibur();
+    });
+    el("liburKeterangan").addEventListener("input", renderRingkasLibur);
+    el("liburCakupan").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { formLibur.cakupan = b.dataset.cakupan; renderFormLibur(); }));
+    el("liburWaktu").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { formLibur.waktu = b.dataset.waktu; renderFormLibur(); }));
+    el("liburSaring").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { saringLibur = b.dataset.saring; renderLibur(); }));
 }
 
 // ---------- Honor ----------
@@ -577,7 +940,7 @@ try {
     document.getElementById("xlsPengganti").addEventListener("click", xlsPengganti);
     document.getElementById("xlsWali").addEventListener("click", xlsWali);
     document.getElementById("xlsPiket").addEventListener("click", xlsPiket);
-    document.getElementById("liburTambah").addEventListener("click", (e) => tombolSibuk(e.currentTarget, tambahLibur));
+    pasangFormLibur();
 } catch (err) {
     console.error("Ada elemen halaman yang tidak ditemukan — kemungkinan HTML dan JS beda versi. Lakukan hard refresh (Ctrl+Shift+R).", err);
 }

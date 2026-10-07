@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/dasar.css?v=3">
-<link rel="stylesheet" href="assets/style.css?v=20260924e" />
+<link rel="stylesheet" href="assets/style.css?v=20261007a" />
 <!-- supabase-js dipaku versinya dengan Subresource Integrity (4 Oktober 2026): "@2" menyajikan rilis 2.x terbaru apa pun isinya. Ganti versi = ganti hash. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous" defer></script>
 </head>
@@ -233,22 +233,104 @@
     <!-- TAB: Pengaturan -->
 
     <!-- TAB: Hari libur -->
-    <section id="tab-libur" class="card" hidden>
-      <div class="toolbar">
-        <div class="date-field">
-          <label for="liburTanggal">Tanggal</label>
-          <input type="date" id="liburTanggal" />
-          <input type="text" id="liburKeterangan" class="kelas-filter" placeholder="Keterangan (mis. Maulid Nabi)" style="min-width:220px" />
-          <button type="button" id="liburTambah" class="btn btn-primary">Tambah libur</button>
+    <section id="tab-libur" hidden>
+      <div class="libur-grid">
+
+        <!-- Kiri: formulir -->
+        <form id="liburForm" class="card libur-panel" novalidate>
+          <header class="libur-kepala">
+            <div>
+              <h2>Catat Libur</h2>
+              <p>Tanggal, kelas yang libur, dan jam yang ditiadakan.</p>
+            </div>
+          </header>
+
+          <p id="liburTerkunci" class="libur-terkunci">Buka kunci edit (tombol di kanan atas) untuk mencatat atau menghapus libur.</p>
+
+          <fieldset id="liburFieldset" class="libur-fieldset">
+            <div class="libur-langkah">
+              <span class="langkah-no">1</span>
+              <div class="langkah-isi">
+                <h3>Tanggal</h3>
+                <div class="libur-tanggal">
+                  <label><span>Dari</span><input type="date" id="liburDari" required /></label>
+                  <label><span>Sampai <em>(opsional)</em></span><input type="date" id="liburSampai" /></label>
+                </div>
+                <p id="liburTanggalInfo" class="libur-hint">Kosongkan "Sampai" untuk satu hari saja. Sabtu–Minggu dilewati.</p>
+              </div>
+            </div>
+
+            <div class="libur-langkah">
+              <span class="langkah-no">2</span>
+              <div class="langkah-isi">
+                <h3>Berlaku untuk</h3>
+                <div class="segmen segmen-3" role="radiogroup" aria-label="Cakupan libur" id="liburCakupan">
+                  <button type="button" role="radio" data-cakupan="sekolah" aria-checked="true" class="aktif">Seluruh sekolah</button>
+                  <button type="button" role="radio" data-cakupan="tingkat" aria-checked="false">Tingkat tertentu</button>
+                  <button type="button" role="radio" data-cakupan="kelas" aria-checked="false">Kelas tertentu</button>
+                </div>
+                <div id="liburPilihTingkat" class="pilih-tingkat" hidden></div>
+                <div id="liburPilihKelas" class="pilih-kelas" hidden></div>
+                <p id="liburCakupanInfo" class="libur-hint"></p>
+              </div>
+            </div>
+
+            <div class="libur-langkah">
+              <span class="langkah-no">3</span>
+              <div class="langkah-isi">
+                <h3>Waktu</h3>
+                <div class="segmen segmen-2" role="radiogroup" aria-label="Waktu libur" id="liburWaktu">
+                  <button type="button" role="radio" data-waktu="penuh" aria-checked="true" class="aktif">Sehari penuh</button>
+                  <button type="button" role="radio" data-waktu="sebagian" aria-checked="false">Sebagian jam</button>
+                </div>
+                <div id="liburPilihJam" hidden>
+                  <div id="liburJamStrip" class="jam-strip" aria-label="Pilih rentang jam pelajaran"></div>
+                  <p id="liburJamInfo" class="libur-hint"></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="libur-langkah">
+              <span class="langkah-no">4</span>
+              <div class="langkah-isi">
+                <h3><label for="liburKeterangan">Keterangan</label></h3>
+                <input type="text" id="liburKeterangan" class="libur-input" maxlength="120" placeholder="mis. Maulid Nabi, PAS kelas 10–11, Rapat guru" />
+              </div>
+            </div>
+
+            <div class="libur-ringkas" id="liburRingkas" aria-live="polite"></div>
+
+            <div class="libur-aksi">
+              <button type="button" id="liburBersihkan" class="btn btn-ghost">Kosongkan</button>
+              <button type="submit" id="liburTambah" class="btn btn-primary">Simpan libur</button>
+            </div>
+          </fieldset>
+        </form>
+
+        <!-- Kanan: daftar -->
+        <div class="card libur-panel">
+          <header class="libur-kepala">
+            <div>
+              <h2>Daftar Libur</h2>
+              <p id="liburJumlah">—</p>
+            </div>
+            <div class="segmen segmen-3 segmen-kecil" role="radiogroup" aria-label="Saring daftar" id="liburSaring">
+              <button type="button" role="radio" data-saring="semua" aria-checked="true" class="aktif">Semua</button>
+              <button type="button" role="radio" data-saring="penuh" aria-checked="false">Penuh</button>
+              <button type="button" role="radio" data-saring="sebagian" aria-checked="false">Sebagian</button>
+            </div>
+          </header>
+          <div class="libur-legenda">
+            <span><i class="titik titik-penuh"></i>Libur penuh — seluruh sekolah, sehari</span>
+            <span><i class="titik titik-sebagian"></i>Libur sebagian — kelas atau jam tertentu</span>
+          </div>
+          <div class="libur-daftar">
+            <div id="daftarLibur" class="libur-gulung"></div>
+          </div>
         </div>
       </div>
-      <div class="table-scroll">
-        <table class="tabel-rekap">
-          <thead><tr><th>Tanggal</th><th>Hari</th><th>Keterangan</th><th></th></tr></thead>
-          <tbody id="bodyLibur"></tbody>
-        </table>
-      </div>
-      <div class="table-foot">Tanggal di sini dikecualikan dari perhitungan kehadiran (dianggap tidak ada KBM). Sabtu–Minggu tidak perlu dimasukkan.</div>
+
+      <div class="table-foot libur-foot"><strong>Libur penuh</strong> mengeluarkan tanggalnya dari hari kerja: tidak dihitung bagi guru, staf, maupun piket. <strong>Libur sebagian</strong> hanya meniadakan jam pelajaran yang tercakup — jam itu keluar dari Jam Terjadwal, catatan ketidakhadiran pada jam itu diabaikan, dan hari yang seluruh jam seorang guru diliburkan tidak dihitung sebagai Hari Terjadwal. Staf dan piket tetap berjalan seperti biasa. "Tingkat" mencakup rombel dan kelompok Matematika Dasar tingkat itu; kelompok Tahsin (lintas tingkat) dipilih lewat Kelas tertentu.</div>
     </section>
   </main>
 </div>
@@ -257,7 +339,7 @@
 <div id="pinModal" class="modal-backdrop" hidden>
   <div class="modal" style="max-width:360px;">
     <h2>Buka Kunci Edit</h2>
-    <p style="margin:-8px 0 16px;color:#6E6455;font-size:13.5px;">Masukkan PIN untuk mengubah hari libur.</p>
+    <p style="margin:-8px 0 16px;color:#6E6455;font-size:13.5px;">Masukkan PIN untuk mencatat atau menghapus libur.</p>
     <form id="pinForm">
       <div class="field">
         <label for="pinInput">PIN</label>
@@ -273,6 +355,6 @@
 </div>
 
 <script src="assets/kop-dokumen.js?v=6"></script>
-<script type="module" src="scripts/rekap.js?v=20261004d"></script>
+<script type="module" src="scripts/rekap.js?v=20261007a"></script>
 </body>
 </html>

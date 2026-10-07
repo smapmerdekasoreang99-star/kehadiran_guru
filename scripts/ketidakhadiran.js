@@ -6,6 +6,7 @@ import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260921v"
 import { muatRujukan } from "../assets/simpanan.js?v=20261004a";
 import { semesterTanggal, semesterBaris } from "../assets/semester.js?v=20260921ad";
 import { esc, tombolSibuk } from "../assets/aman.js?v=20261004a";
+import { mencakup, petaTingkat, uraianCakupan, uraianJam } from "../assets/libur.js?v=20261007a";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -52,6 +53,10 @@ let state = {
     kelas: [],
     mapel: [],
     jam: [],
+    // Libur tanggal terpilih: libur penuh (kg_hari_libur) dan libur sebagian.
+    liburPenuh: null,         // { keterangan } bila seluruh sekolah libur sehari penuh
+    liburSebagian: [],
+    liburJam: new Set(),      // id jadwal yang diliburkan pada tanggal ini
     filter: { q: "", guruId: null, kelasId: "ALL", hanyaAbsen: false },
 };
 
@@ -136,6 +141,8 @@ async function loadForDate() {
 
     if (!HARI_LIST.includes(state.hari)) {
         weekendNotice.hidden = false;
+        document.getElementById("liburPenuhNotice").hidden = true;
+        document.getElementById("liburSebagianNotice").hidden = true;
         card.hidden = true;
         return;
     }
@@ -146,11 +153,21 @@ async function loadForDate() {
         const jadwal = jadwalHariIni();
         // Catatan dan penugasan penggantinya dalam satu permintaan (relasi
         // satu-satu lewat ketidakhadiran_id) — dulu dua perjalanan berurutan.
-        const { data: ketidakhadiran, error: eK } = await supabaseClient
-            .from("kg_ketidakhadiran_guru")
-            .select("id, jadwal_id, tanggal, guru_id, status, keterangan_tugas, kg_penugasan_pengganti(guru_pengganti_id, status_pengganti)")
-            .eq("tanggal", state.tanggal);
+        // Libur tanggal itu diminta serentak.
+        const [{ data: ketidakhadiran, error: eK }, penuh, sebagian] = await Promise.all([
+            supabaseClient
+                .from("kg_ketidakhadiran_guru")
+                .select("id, jadwal_id, tanggal, guru_id, status, keterangan_tugas, kg_penugasan_pengganti(guru_pengganti_id, status_pengganti)")
+                .eq("tanggal", state.tanggal),
+            supabaseClient.from("kg_hari_libur").select("tanggal, keterangan").eq("tanggal", state.tanggal),
+            supabaseClient.from("libur_sebagian").select("id, tanggal, tingkat, kelas_id, jam_dari, jam_sampai, keterangan").eq("tanggal", state.tanggal),
+        ]);
         if (no !== muatKe) return;
+        // Libur yang gagal dimuat tidak menghalangi pencatatan: halaman tampil seperti biasa.
+        if (penuh.error) console.warn("Gagal memuat hari libur:", penuh.error);
+        if (sebagian.error) console.warn("Gagal memuat libur sebagian:", sebagian.error);
+        state.liburPenuh = (penuh.data || [])[0] || null;
+        state.liburSebagian = sebagian.data || [];
         if (eK) {
             // Tabel tanggal sebelumnya tidak dibiarkan tampil di bawah label hari yang baru.
             state.jadwal = []; state.ketidakhadiran = []; state.penugasan = [];
@@ -168,10 +185,41 @@ async function loadForDate() {
         state.ketidakhadiran = demoKetidakhadiran.filter((r) => r.tanggal === state.tanggal);
         const ids = state.ketidakhadiran.map((k) => k.id);
         state.penugasan = demoPenugasan.filter((p) => ids.includes(p.ketidakhadiran_id));
+        state.liburPenuh = null; state.liburSebagian = [];
     }
 
+    terapkanLibur();
     renderTable();
 }
+
+/* Libur penuh: tidak ada KBM — tabel disembunyikan seperti Sabtu/Minggu.
+   Libur sebagian: jam yang tercakup tetap tampil, ditandai Libur, dan tidak
+   bisa ditandai tidak hadir (rekap pun mengabaikannya). */
+function terapkanLibur() {
+    const tingkat = petaTingkat(state.kelas);
+    state.liburJam = new Set(state.jadwal
+        .filter((j) => state.liburSebagian.some((l) => mencakup(l, j, tingkat)))
+        .map((j) => j.id));
+
+    const penuh = document.getElementById("liburPenuhNotice");
+    penuh.hidden = !state.liburPenuh;
+    document.getElementById("mainCard").hidden = !!state.liburPenuh;
+    if (state.liburPenuh) {
+        penuh.innerHTML = `<strong>Hari libur${state.liburPenuh.keterangan ? ` — ${esc(state.liburPenuh.keterangan)}` : ""}</strong>
+          Seluruh sekolah libur sehari penuh, jadi tidak ada jam pelajaran untuk dicatat. Libur diatur di Rekapitulasi Kehadiran → tab Hari Libur.`;
+    }
+
+    const sebagian = document.getElementById("liburSebagianNotice");
+    sebagian.hidden = !!state.liburPenuh || !state.liburSebagian.length;
+    if (!sebagian.hidden) {
+        sebagian.innerHTML = `<b>Libur sebagian hari ini</b> — ${state.liburJam.size} jam pelajaran ditandai Libur dan tidak dihitung di rekap:
+          <ul>${state.liburSebagian.map((l) => `<li>${esc(uraianCakupan(l, namaKelas))} · ${esc(uraianJam(l))}${l.keterangan ? ` — ${esc(l.keterangan)}` : ""}</li>`).join("")}</ul>`;
+    }
+}
+
+const diliburkan = (jadwalId) => state.liburJam.has(jadwalId);
+// Jam pelajaran yang benar-benar berlangsung (tanpa jam yang diliburkan).
+const jamBerlangsung = () => baseRows().filter((r) => !diliburkan(r.id));
 
 const namaGuru = (id) => state.guru.find((g) => g.id === id)?.nama || id;
 const urutKelas = (id) => indeksKelas(state.kelas)(id);
@@ -209,11 +257,13 @@ function renderBanner() {
     const banner = document.getElementById("guruBanner");
     const gid = state.filter.guruId;
     if (!gid) { banner.hidden = true; return; }
-    const jamGuru = baseRows().filter((r) => r.guru_id === gid);
+    const jamGuru = jamBerlangsung().filter((r) => r.guru_id === gid);
+    const jamLibur = baseRows().filter((r) => r.guru_id === gid && diliburkan(r.id)).length;
     const dicatat = jamGuru.filter((r) => catatanUntuk(r.id)).length;
     document.getElementById("bannerNama").textContent = namaGuru(gid);
     document.getElementById("bannerInfo").textContent =
         `${jamGuru.length} jam pelajaran hari ${state.hari}` +
+        (jamLibur ? ` · ${jamLibur} jam libur` : "") +
         (dicatat ? ` · ${dicatat} sudah dicatat tidak hadir` : "");
     const btn = document.getElementById("bannerTandaiSemua");
     const sisa = jamGuru.length - dicatat;
@@ -231,15 +281,19 @@ function renderTable() {
     renderBanner();
     document.getElementById("emptyState").hidden = rows.length > 0;
     document.getElementById("ringkasan").textContent =
-        `Menampilkan ${rows.length} dari ${state.jadwal.length} jam pelajaran`;
+        `Menampilkan ${rows.length} dari ${state.jadwal.length} jam pelajaran`
+        + (state.liburJam.size ? ` · ${state.liburJam.size} jam diliburkan` : "");
 
     tbody.innerHTML = rows
         .map((r) => {
             const jam = jamInfo(r.jam_ke);
             const waktu = jam ? `${jam.mulai}–${jam.selesai}` : "";
             const catatan = catatanUntuk(r.id);
+            const libur = diliburkan(r.id);
 
-            const statusCell = catatan
+            const statusCell = libur && !catatan
+                ? `<span class="badge-status badge-libur">Libur</span><span class="tugas-note">Jam ini diliburkan</span>`
+                : catatan
                 ? `<span class="badge-status badge-${esc(catatan.status.toLowerCase())}">${esc(catatan.status)}</span>
                    <span class="tugas-note">${STATUS_LABEL[catatan.status] || ""}</span>${(() => {
                        const p = penugasanUntuk(catatan);
@@ -252,10 +306,11 @@ function renderTable() {
                      <button class="btn-danger-text" ${disabledAttr} data-action="edit" data-jid="${esc(r.id)}">Ubah</button>
                      <button class="btn-danger-text" ${disabledAttr} data-action="clear" data-jid="${esc(r.id)}">Batalkan</button>
                    </div>`
+                : libur ? ""
                 : `<button class="btn-mark" ${disabledAttr} data-action="mark" data-jid="${esc(r.id)}">Tandai Tidak Hadir</button>`;
 
             return `
-        <tr>
+        <tr${libur ? ' class="baris-libur"' : ""}>
           <td class="jam-cell">
             <span class="jam-ke">Jam ke-${esc(r.jam_ke)}</span>
             <span class="jam-waktu">${esc(waktu)}</span>
@@ -292,7 +347,7 @@ function openModal(jadwalId) {
         ? `${namaGuru(first.guru_id)} — ${namaMapel(first.mapel_id)} — ${namaKelas(first.kelas_id)}, Jam ke-${first.jam_ke}`
         : `${namaGuru(first.guru_id)} — ${activeJadwalIds.length} jam pelajaran hari ${state.hari} (semua akan diberi status yang sama)`;
 
-    const jamGuruHariIni = baseRows().filter((r) => r.guru_id === first.guru_id);
+    const jamGuruHariIni = jamBerlangsung().filter((r) => r.guru_id === first.guru_id);
     const catatanPertama = activeJadwalIds.length === 1 && !catatan &&
         jamGuruHariIni.every((r) => !catatanUntuk(r.id)) && jamGuruHariIni.length > 1;
     const fieldSemua = document.getElementById("terapkanSemuaField");
@@ -336,7 +391,7 @@ async function simpanCatatan() {
     const fieldSemua = document.getElementById("terapkanSemuaField");
     if (!fieldSemua.hidden && document.getElementById("fTerapkanSemua").checked && activeJadwalIds.length === 1) {
         const gid = state.jadwal.find((r) => r.id === activeJadwalIds[0]).guru_id;
-        targetIds = baseRows().filter((r) => r.guru_id === gid).map((r) => r.id);
+        targetIds = jamBerlangsung().filter((r) => r.guru_id === gid).map((r) => r.id);
     }
 
     const payloads = targetIds.map((jid) => ({
@@ -500,7 +555,7 @@ function pasangPencarian() {
     });
     document.getElementById("bannerTandaiSemua").addEventListener("click", () => {
         const gid = state.filter.guruId;
-        const ids = baseRows().filter((r) => r.guru_id === gid && !catatanUntuk(r.id)).map((r) => r.id);
+        const ids = jamBerlangsung().filter((r) => r.guru_id === gid && !catatanUntuk(r.id)).map((r) => r.id);
         if (ids.length) openModal(ids);
     });
 }

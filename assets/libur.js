@@ -20,24 +20,42 @@ const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
 const ada = (a) => Array.isArray(a) && a.length > 0;
 
-// Apakah satu baris jadwal (j: { kelas_id, jam_ke }) tercakup satu catatan libur sebagian.
-// Tingkat dicocokkan dengan kelas.tingkat — kelompok Matematika Dasar ikut
-// tingkatnya, kelompok Tahsin (tingkat 0) hanya bila dipilih sebagai kelas.
-export function mencakup(l, j, tingkatKelas) {
-    if (l.jam_dari != null && (j.jam_ke < l.jam_dari || j.jam_ke > l.jam_sampai)) return false;
-    if (ada(l.kelas_id)) return l.kelas_id.includes(j.kelas_id);
-    if (ada(l.tingkat)) return l.tingkat.includes(tingkatKelas.get(j.kelas_id));
+/* Konteks pencocokan: tingkat tiap kelas, dan rombel asal anggota tiap
+   kelompok (kg_kelompok_rombel: [{ kelompok_id, rombel_kelas_id }]). */
+export function konteksLibur(kelas, kelompokRombel) {
+    const tingkat = new Map((kelas || []).map((k) => [k.id, Number(k.tingkat)]));
+    const anggota = new Map();
+    for (const r of kelompokRombel || []) {
+        if (!anggota.has(r.kelompok_id)) anggota.set(r.kelompok_id, []);
+        anggota.get(r.kelompok_id).push(r.rombel_kelas_id);
+    }
+    return { tingkat, anggota };
+}
+
+// Kelas tercakup karena dirinya sendiri: dipilih langsung, tingkatnya dipilih, atau tanpa batas kelas.
+function cocokLangsung(l, kelasId, ktx) {
+    if (ada(l.kelas_id)) return l.kelas_id.includes(kelasId);
+    if (ada(l.tingkat)) return l.tingkat.includes(ktx.tingkat.get(kelasId));
     return true;
 }
 
-export const petaTingkat = (kelas) => new Map((kelas || []).map((k) => [k.id, Number(k.tingkat)]));
+/* Apakah satu baris jadwal (j: { kelas_id, jam_ke }) tercakup satu catatan
+   libur sebagian. Kelompok (Tahsin, Matematika Dasar) juga tercakup bila
+   SELURUH rombel asal anggotanya tercakup — kelompok campuran kelas 11 dan
+   12 tetap berjalan bila hanya kelas 12 yang libur. */
+export function mencakup(l, j, ktx) {
+    if (l.jam_dari != null && (j.jam_ke < l.jam_dari || j.jam_ke > l.jam_sampai)) return false;
+    if (cocokLangsung(l, j.kelas_id, ktx)) return true;
+    const rombel = ktx.anggota.get(j.kelas_id);
+    return !!rombel && rombel.length > 0 && rombel.every((id) => cocokLangsung(l, id, ktx));
+}
 
 /* Jam pelajaran yang diliburkan: Set "tanggal|jadwal_id", hanya pada hari
    kerja (hari: [{ tanggal, hari, semester }]) dan jadwal semester tanggal itu. */
-export function jamDiliburkan({ jadwal, hari, libur, kelas }) {
+export function jamDiliburkan({ jadwal, hari, libur, kelas, kelompokRombel }) {
     const out = new Set();
     if (!ada(libur)) return out;
-    const tingkat = petaTingkat(kelas);
+    const ktx = konteksLibur(kelas, kelompokRombel);
     const perTanggal = new Map();
     for (const l of libur) {
         if (!perTanggal.has(l.tanggal)) perTanggal.set(l.tanggal, []);
@@ -48,7 +66,7 @@ export function jamDiliburkan({ jadwal, hari, libur, kelas }) {
         if (!ls) continue;
         for (const j of jadwal) {
             if (j.hari !== h.hari || semesterBaris(j) !== h.semester) continue;
-            if (ls.some((l) => mencakup(l, j, tingkat))) out.add(h.tanggal + "|" + j.id);
+            if (ls.some((l) => mencakup(l, j, ktx))) out.add(h.tanggal + "|" + j.id);
         }
     }
     return out;

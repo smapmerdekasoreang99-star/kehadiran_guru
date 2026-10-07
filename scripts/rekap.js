@@ -4,9 +4,9 @@ import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { peringkatGuru } from "../assets/guru-order.js?v=20260921v";
 import { urutkanKelas, jenisKelas } from "../assets/kelas-order.js?v=20260921v";
 import { semesterTanggal, semesterBaris } from "../assets/semester.js?v=20260921ad";
-import { mencakup, petaTingkat, namaHari, tanggalLengkap, bulanTahun, bulanPendek, uraianCakupan, uraianJam, waktuJam } from "../assets/libur.js?v=20261007a";
+import { mencakup, konteksLibur, namaHari, tanggalLengkap, bulanTahun, bulanPendek, uraianCakupan, uraianJam, waktuJam } from "../assets/libur.js?v=20261007c";
 import { muatRujukan } from "../assets/simpanan.js?v=20261004a";
-import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas, rekapDariJumlah, rekapWaliDariJumlah } from "../assets/rekap-hitung.js?v=20261007a";
+import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas, rekapDariJumlah, rekapWaliDariJumlah } from "../assets/rekap-hitung.js?v=20261007c";
 import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20261004b";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 import { esc, ambilSemua, tombolSibuk, muatExcelJS } from "../assets/aman.js?v=20261004a";
@@ -39,6 +39,7 @@ let state = {
     guru: [], kelas: [], mapel: [], jadwal: [], jam: [],
     libur: [],            // kg_hari_libur: seluruh sekolah, sehari penuh
     liburSebagian: [],    // libur_sebagian: tingkat/kelas tertentu dan/atau sebagian jam
+    kelompokRombel: [],   // kg_kelompok_rombel: kelompok ikut libur bila seluruh rombel anggotanya libur
     ketidakhadiran: [], penugasan: [],
     hasilKehadiran: null, hasilWali: null, hasilPengganti: null, jamWaliDikecualikan: 0,
     saring: "", saringWali: "", viewPengganti: "ringkas",
@@ -139,10 +140,13 @@ const selKontrak = (r) => `<td class="num">${r.kontrak}${jamTambahan(r.guru_id)
     ? ` <small class="satuan-kolom">(+${jamTambahan(r.guru_id)})</small>` : ""}</td>`;
 
 async function muatLibur() {
-    const [penuh, sebagian] = await Promise.all([
+    const [penuh, sebagian, kelompok] = await Promise.all([
         supabaseClient.from("kg_hari_libur").select("tanggal, keterangan").order("tanggal"),
         supabaseClient.from("libur_sebagian").select("id, tanggal, tingkat, kelas_id, jam_dari, jam_sampai, keterangan").order("tanggal"),
+        supabaseClient.rpc("kg_kelompok_rombel"),
     ]);
+    if (kelompok.error) console.warn("Gagal memuat anggota kelompok (pratinjau dampak libur tanpa kelompok):", kelompok.error);
+    else state.kelompokRombel = kelompok.data || [];
     if (penuh.error) {
         // tabel belum dibuat -> beri tahu, tapi rekap tetap jalan tanpa libur
         laporError("Gagal memuat hari libur (rekap dihitung tanpa hari libur)", penuh.error);
@@ -283,7 +287,7 @@ async function hitung() {
 
     const liburSet = new Set(state.libur.map((l) => l.tanggal));
     const { mengajar, wali, ketMengajar, ketWali } = pisahWaliKelas(state.jadwal, state.ketidakhadiran);
-    const libur = { liburSet, liburSebagian: state.liburSebagian, kelas: state.kelas };
+    const libur = { liburSet, liburSebagian: state.liburSebagian, kelas: state.kelas, kelompokRombel: state.kelompokRombel };
     state.hasilKehadiran = rekapKehadiran({ jadwal: mengajar, ketidakhadiran: ketMengajar, awal: state.awal, akhir: state.akhir, ...libur });
     state.hasilWali = rekapWali({ jadwal: wali, ketidakhadiran: ketWali, awal: state.awal, akhir: state.akhir, ...libur });
     hitungPengganti();
@@ -556,13 +560,13 @@ function periksaFormLibur() {
 
 // Jam pelajaran (jadwal) yang akan ditiadakan, untuk ringkasan dampak.
 function dampakLibur(cek) {
-    const tingkat = petaTingkat(state.kelas);
+    const ktx = konteksLibur(state.kelas, state.kelompokRombel);
     let jam = 0; const guru = new Set();
     for (const d of cek.tanggal) {
         const hari = namaHari(d), smt = semesterTanggal(d);
         for (const j of state.jadwal) {
             if (j.hari !== hari || semesterBaris(j) !== smt) continue;
-            if (!cek.penuh && !mencakup(cek.c, j, tingkat)) continue;
+            if (!cek.penuh && !mencakup(cek.c, j, ktx)) continue;
             jam++; guru.add(j.guru_id);
         }
     }
@@ -715,8 +719,8 @@ function renderFormLibur() {
     renderPilihTingkat(); renderPilihKelas(); renderJamStrip(); renderInfoTanggal();
     el("liburCakupanInfo").textContent =
         f.cakupan === "sekolah" ? "Semua rombel dan kelompok belajar."
-        : f.cakupan === "tingkat" ? (f.tingkat.size ? `${f.tingkat.size} tingkat dipilih — termasuk kelompok Matematika Dasar tingkat itu.` : "Pilih satu tingkat atau lebih.")
-        : (f.kelas.size ? `${f.kelas.size} kelas dipilih.` : "Pilih satu kelas atau lebih.");
+        : f.cakupan === "tingkat" ? (f.tingkat.size ? `${f.tingkat.size} tingkat dipilih — termasuk kelompok (Matematika Dasar, Tahsin) yang seluruh anggotanya dari tingkat itu.` : "Pilih satu tingkat atau lebih.")
+        : (f.kelas.size ? `${f.kelas.size} kelas dipilih. Kelompok yang seluruh anggotanya dari kelas terpilih ikut libur.` : "Pilih satu kelas atau lebih.");
     renderRingkasLibur();
 }
 

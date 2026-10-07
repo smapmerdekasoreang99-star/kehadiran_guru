@@ -3,7 +3,7 @@
 // =========================================================
 
 import { semesterTanggal, semesterBaris } from "./semester.js?v=20260921ad";
-import { jamDiliburkan } from "./libur.js?v=20261007a";
+import { jamDiliburkan } from "./libur.js?v=20261007c";
 
 const HARI_FROM_JS_DAY = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 export const STATUS_ABSEN = ["ST", "IT", "TK", "HTTM"];
@@ -70,8 +70,8 @@ export function hariKerja(awal, akhir, liburSet) {
    Perhitungannya memanggil rekapKehadiran yang sama seperti jam mengajar —
    sekali untuk gabungan, sekali untuk tiap komponen — supaya bobot status
    dan cara menghitung hari kerja tidak mungkin berbeda antar angka. */
-export function rekapWali({ jadwal, ketidakhadiran, awal, akhir, liburSet, liburSebagian, kelas }) {
-    const gabungan = rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet, liburSebagian, kelas });
+export function rekapWali({ jadwal, ketidakhadiran, awal, akhir, liburSet, liburSebagian, kelas, kelompokRombel }) {
+    const gabungan = rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet, liburSebagian, kelas, kelompokRombel });
     const perKode = {};
     for (const k of KOMPONEN_WALI) {
         const jadwalK = jadwal.filter((j) => j.mapel_id === k.mapel);
@@ -79,7 +79,7 @@ export function rekapWali({ jadwal, ketidakhadiran, awal, akhir, liburSet, libur
         perKode[k.kode] = rekapKehadiran({
             jadwal: jadwalK,
             ketidakhadiran: ketidakhadiran.filter((x) => idK.has(x.jadwal_id)),
-            awal, akhir, liburSet, liburSebagian, kelas,
+            awal, akhir, liburSet, liburSebagian, kelas, kelompokRombel,
         });
     }
     return gabungWali(gabungan, perKode);
@@ -118,13 +118,14 @@ function gabungWali(gabungan, perKode) {
 
 // ---------- Rekap kehadiran per guru ----------
 // jadwal: [{ id, hari, jam_ke, kelas_id, guru_id }]  ketidakhadiran: [{ jadwal_id, tanggal, guru_id, status }]
-// liburSebagian: baris libur_sebagian; kelas: [{ id, tingkat }] untuk mencocokkan tingkat.
-export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet, liburSebagian = [], kelas = [] }) {
+// liburSebagian: baris libur_sebagian; kelas: [{ id, tingkat }] untuk mencocokkan tingkat;
+// kelompokRombel: kg_kelompok_rombel, rombel asal anggota tiap kelompok.
+export function rekapKehadiran({ jadwal, ketidakhadiran, awal, akhir, liburSet, liburSebagian = [], kelas = [], kelompokRombel = [] }) {
     const hari = hariKerja(awal, akhir, liburSet);
     /* Jam yang diliburkan sebagian ("tanggal|jadwal_id") keluar dari
        terjadwal, dan catatan ketidakhadiran pada jam itu diabaikan — sama
        dengan f_ip_kehadiran_dasar / kg_rekap_dasar di server. */
-    const liburJam = jamDiliburkan({ jadwal, hari, libur: liburSebagian, kelas });
+    const liburJam = jamDiliburkan({ jadwal, hari, libur: liburSebagian, kelas, kelompokRombel });
     const diliburkan = (k) => liburJam.has(k.tanggal + "|" + k.jadwal_id);
     // Jumlah hari kerja dihitung PER SEMESTER, karena rentangnya boleh
     // melintasi pergantian semester (Desember–Januari): baris jadwal semester 1

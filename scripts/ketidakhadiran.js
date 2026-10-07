@@ -6,7 +6,7 @@ import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260921v"
 import { muatRujukan } from "../assets/simpanan.js?v=20261004a";
 import { semesterTanggal, semesterBaris } from "../assets/semester.js?v=20260921ad";
 import { esc, tombolSibuk } from "../assets/aman.js?v=20261004a";
-import { mencakup, petaTingkat, uraianCakupan, uraianJam } from "../assets/libur.js?v=20261007a";
+import { mencakup, konteksLibur, uraianCakupan, uraianJam } from "../assets/libur.js?v=20261007c";
 
 // Tombol kunci dipasang paling pertama & terpisah, supaya tetap berfungsi
 // walaupun ada bagian lain halaman yang gagal dimuat.
@@ -57,6 +57,7 @@ let state = {
     liburPenuh: null,         // { keterangan } bila seluruh sekolah libur sehari penuh
     liburSebagian: [],
     liburJam: new Set(),      // id jadwal yang diliburkan pada tanggal ini
+    kelompokRombel: null,     // kg_kelompok_rombel, dimuat sekali
     filter: { q: "", guruId: null, kelasId: "ALL", hanyaAbsen: false },
 };
 
@@ -161,7 +162,12 @@ async function loadForDate() {
                 .eq("tanggal", state.tanggal),
             supabaseClient.from("kg_hari_libur").select("tanggal, keterangan").eq("tanggal", state.tanggal),
             supabaseClient.from("libur_sebagian").select("id, tanggal, tingkat, kelas_id, jam_dari, jam_sampai, keterangan").eq("tanggal", state.tanggal),
-        ]);
+            state.kelompokRombel ? { data: state.kelompokRombel } : supabaseClient.rpc("kg_kelompok_rombel"),
+        ]).then(([k, p, s, kr]) => {
+            if (kr.error) console.warn("Gagal memuat anggota kelompok:", kr.error);
+            else state.kelompokRombel = kr.data || [];
+            return [k, p, s];
+        });
         if (no !== muatKe) return;
         // Libur yang gagal dimuat tidak menghalangi pencatatan: halaman tampil seperti biasa.
         if (penuh.error) console.warn("Gagal memuat hari libur:", penuh.error);
@@ -196,9 +202,9 @@ async function loadForDate() {
    Libur sebagian: jam yang tercakup tetap tampil, ditandai Libur, dan tidak
    bisa ditandai tidak hadir (rekap pun mengabaikannya). */
 function terapkanLibur() {
-    const tingkat = petaTingkat(state.kelas);
+    const ktx = konteksLibur(state.kelas, state.kelompokRombel);
     state.liburJam = new Set(state.jadwal
-        .filter((j) => state.liburSebagian.some((l) => mencakup(l, j, tingkat)))
+        .filter((j) => state.liburSebagian.some((l) => mencakup(l, j, ktx)))
         .map((j) => j.id));
 
     const penuh = document.getElementById("liburPenuhNotice");

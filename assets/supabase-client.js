@@ -67,8 +67,8 @@ export const supabaseClient = isSupabaseConfigured
 // permintaan teringan (tka_ping) ke sana, paling sering sekali per 12 jam.
 // Gagal diabaikan; tidak memengaruhi aplikasi ini.
 (function jagaTryout() {
-    const URL_TRYOUT = "https://jzxcnfetpjkltjjbglxz.supabase.co";
-    const KUNCI_TRYOUT = "sb_publishable_9pl5IOJl-Vx0KEnHtCs3nA_ioZOkacq";
+    const URL_TRYOUT = "https://dcakhvbfuhedebnbjndr.supabase.co";
+    const KUNCI_TRYOUT = "sb_publishable_j_1jJEBNhjfhhKYXja1FLw_RkFs_Fsx";
     try {
         if (Date.now() - (+localStorage.getItem("jaga_tryout") || 0) < 12 * 3600e3) return;
         localStorage.setItem("jaga_tryout", String(Date.now()));

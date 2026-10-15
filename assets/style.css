@@ -1914,6 +1914,12 @@ tr.baris-libur .badge-kelas { opacity: .7; }
 .panduan-menu a:hover { background: var(--kertas-3); }
 .panduan-menu small { display: block; font-weight: 400; color: var(--tinta-2); font-size: var(--h-xs); margin-top: 2px; }
 .panduan-menu p { margin: 4px 12px 6px; font-size: var(--h-xs); color: var(--tinta-2); }
+/* Di layar lebar tombol turun ke dasar bilah samping, tepat di atas garis "Sistem Guru Pengganti" (16 Okt 2026) */
+@media (min-width: 761px) {
+    .sidebar { position: sticky; top: 0; height: 100vh; }   /* bilah samping diam saat halaman digulir */
+    .sidebar > .panduan { margin-top: auto; }
+    .sidebar > .panduan + .sidebar-foot { margin-top: -16px; }
+}
 @media (max-width: 760px) {
     .sidebar .panduan { margin-left: auto; }
     .panduan-menu { position: fixed; left: 16px; right: 16px; top: 76px; bottom: auto; width: auto; }

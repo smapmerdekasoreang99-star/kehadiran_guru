@@ -7,8 +7,8 @@
 // Selama masih diisi placeholder, aplikasi otomatis berjalan
 // dalam MODE PRATINJAU memakai data contoh, tanpa terhubung ke database.
 
-const SUPABASE_URL = "https://xgtoneyvzfvfbidicotq.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_rjHVGT0ULc03TC2ljIytSA_2X54xzR1";
+const SUPABASE_URL = "https://dcakhvbfuhedebnbjndr.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_j_1jJEBNhjfhhKYXja1FLw_RkFs_Fsx";
 
 export const isSupabaseConfigured =
     !SUPABASE_URL.startsWith("ISI_") && !SUPABASE_ANON_KEY.startsWith("ISI_");

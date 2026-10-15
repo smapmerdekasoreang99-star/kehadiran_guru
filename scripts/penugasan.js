@@ -1,4 +1,4 @@
-import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261004a";
+import { supabaseClient, isSupabaseConfigured } from "../assets/supabase-client.js?v=20261015sg";
 import { demoData, demoKetidakhadiran, demoPenugasan } from "../assets/demo-data.js?v=20260921v";
 import { isUnlocked, initLockUI } from "../assets/auth-gate.js?v=20260921v";
 import { urutkanKelas, indeksKelas } from "../assets/kelas-order.js?v=20260921v";

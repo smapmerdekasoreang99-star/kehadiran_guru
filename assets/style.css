@@ -1899,3 +1899,22 @@ tr.baris-libur .badge-kelas { opacity: .7; }
 .notice-libur li { margin: 2px 0; }
 .weekend-notice.libur-penuh-notice { border-color: var(--absen); background: var(--absen-muda); color: var(--absen-tua); }
 .weekend-notice.libur-penuh-notice strong { display: block; font-family: "Fraunces", Georgia, serif; font-size: var(--h-judul-s); margin-bottom: var(--j1); }
+
+/* Tombol Panduan di bilah samping (15 Okt 2026, seperti Matdas): PDF untuk dibuka, Word untuk dicetak/disunting.
+   Di HP (≤760 px) bilah samping menjadi satu baris logo — tombol ini tetap tampil di ujung kanannya. */
+.panduan { position: relative; }
+.panduan > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; border-radius: 6px; border: 1.5px solid rgba(255,255,255,.28);
+    color: var(--tinta-terang); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.panduan > summary::-webkit-details-marker { display: none; }
+.panduan > summary:hover, .panduan[open] > summary { border-color: var(--emas); background: rgba(255,255,255,.08); }
+.panduan-menu { position: absolute; left: calc(100% + 12px); bottom: -8px; width: 290px; background: var(--kertas-2); color: var(--tinta);
+    border: 1px solid var(--garis); border-radius: var(--r3); box-shadow: 0 14px 34px -14px rgba(34,30,23,.45); padding: 6px; z-index: 100; }
+.panduan-menu a { display: block; padding: 10px 12px; border-radius: var(--r2); color: var(--gelap); font-weight: 700; text-decoration: none; }
+.panduan-menu a:hover { background: var(--kertas-3); }
+.panduan-menu small { display: block; font-weight: 400; color: var(--tinta-2); font-size: var(--h-xs); margin-top: 2px; }
+.panduan-menu p { margin: 4px 12px 6px; font-size: var(--h-xs); color: var(--tinta-2); }
+@media (max-width: 760px) {
+    .sidebar .panduan { margin-left: auto; }
+    .panduan-menu { position: fixed; left: 16px; right: 16px; top: 76px; bottom: auto; width: auto; }
+}

@@ -758,7 +758,7 @@ function bukaPilihan(el) {
     document.getElementById("statusSub").textContent = `${s.jabatan} · ${HARI_FROM_JS_DAY[new Date(tanggal + "T00:00:00").getDay()]}, ${tglIndo(tanggal)}`;
     const k = ketentuanPada(s, d.hari);
     document.getElementById("statusKetentuan").textContent = k?.bekerja
-        ? `Ketentuan jam kerja hari ini: ${jam5(k.masuk)}–${jam5(k.pulang)}${k.sumber === "khusus" ? " (jam khusus)" : s.tanpaKetentuan ? " (bawaan sekolah)" : ""}.`
+        ? `Ketentuan jam kerja hari ini: ${jam5(k.masuk)}–${jam5(k.pulang)}${k.sumber === "khusus" ? " (jam khusus)" : s.tanpaKetentuan ? " (bawaan sekolah)" : ""}. Ubah bila jamnya berbeda.`
         : "Menurut ketentuan, hari ini bukan hari kerjanya.";
     const liburBox = document.getElementById("statusLibur");
     const libur = state.libur.has(tanggal);
@@ -767,8 +767,13 @@ function bukaPilihan(el) {
         ? `Tanggal ini hari libur sekolah${state.libur.get(tanggal) ? ` (${state.libur.get(tanggal)})` : ""}. Isi hanya bila memang bertugas.`
         : "Hari libur kerja orang ini. Isi hanya bila memang bertugas, misalnya lembur.";
 
-    document.getElementById("statusMasuk").value = jam5(c?.masuk);
-    document.getElementById("statusPulang").value = jam5(c?.pulang);
+    // Belum ada jam tercatat pada hari kerjanya: isi awal dengan ketentuan,
+    // operator cukup mengubah yang berbeda. Jam dari mesin (walau hanya
+    // salah satu) dibiarkan apa adanya, supaya scan yang hilang tidak
+    // tertutup jam ketentuan.
+    const isiAwal = k?.bekerja && !c?.masuk && !c?.pulang;
+    document.getElementById("statusMasuk").value = jam5(isiAwal ? k.masuk : c?.masuk);
+    document.getElementById("statusPulang").value = jam5(isiAwal ? k.pulang : c?.pulang);
     document.getElementById("statusCatatan").value = c?.catatan || "";
     const terpilih = c ? c.status : "Hadir";
     document.querySelectorAll(".pilih-hadir button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.status === terpilih)));

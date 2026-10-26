@@ -58,6 +58,20 @@ const POLA = { bulanan: "bulanan", bulanan_harian: "bulanan + insentif kedatanga
 /* Batas kolom yang digambar sekaligus — dua bulan cukup, dan rekap
    memakai rentang yang sama. */
 const MAKS_HARI = 62;
+/* Keterangan tidak hadir (keputusan 26 Oktober 2026). "Tidak Hadir" di
+   database = Tanpa Keterangan, supaya catatan lama tetap sah. Ijin dan
+   Sakit bernilai sebagian hadir: jam hadir hari itu = bobot × lama kerja
+   menurut ketentuan. Bobot yang sama dipakai database
+   (kg_jam_tambahan_staf) untuk Induk Pembiayaan. */
+const LABEL_STATUS = { Hadir: "Hadir", "Tidak Hadir": "Tanpa Keterangan", Ijin: "Ijin", Sakit: "Sakit" };
+const PENDEK_STATUS = { "Tidak Hadir": "Tanpa ket.", Ijin: "Ijin", Sakit: "Sakit" };
+const KELAS_STATUS = { Hadir: "hadir", "Tidak Hadir": "absen", Ijin: "ijin", Sakit: "sakit" };
+const BOBOT = { Ijin: 0.10, Sakit: 0.20 };
+const labelStatus = (s) => LABEL_STATUS[s] || s || "";
+/* Satu scan saja dari mesin: jam yang hilang diasumsikan 278 menit dari
+   scan yang ada; kekurangan menit di sisi itu terhadap ketentuan dianggap
+   Ijin (bernilai BOBOT.Ijin). */
+const ASUMSI_MENIT = 278;
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -257,7 +271,7 @@ async function muatRentang() {
             supabaseClient.from("v_jam_kerja_guru")
                 .select("guru_id, nama, hari, urutan, sumber, bekerja, masuk, pulang, jabatan, pola_honor, sumber_hadir, kelompok_tarif"),
             // Berhalaman: sekitar dua puluh orang × dua bulan melewati batas 1.000 baris PostgREST.
-            ambilSemua(() => supabaseClient.from(TABEL).select("id, tanggal, guru_id, status, masuk, pulang, sumber, catatan")
+            ambilSemua(() => supabaseClient.from(TABEL).select("id, tanggal, guru_id, status, masuk, pulang, sumber, catatan, jam_diasumsikan")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir).order("id")),
             supabaseClient.from("kg_hari_libur").select("tanggal, keterangan")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir),
@@ -315,14 +329,18 @@ function render() {
 
 function pitaHtml(d, s) {
     const c = cariCatatan(d.iso, s.guruId);
-    const status = c ? (c.status === "Tidak Hadir" ? "absen" : "hadir") : "draf";
+    const status = c ? (KELAS_STATUS[c.status] || "absen") : "draf";
     const k = ketentuanPada(s, d.hari);
     const ketentuan = k?.bekerja ? `${jam5(k.masuk)}–${jam5(k.pulang)}${s.tanpaKetentuan ? " (bawaan sekolah)" : ""}` : "libur kerja";
-    const teks = !c ? "belum" : c.status === "Tidak Hadir" ? "Tidak hadir"
-        : c.masuk ? `${jam5(c.masuk)}–${c.pulang ? jam5(c.pulang) : "…"}` : "Hadir";
-    const terlambat = c?.status === "Hadir" && c.masuk && k?.masuk && jam5(c.masuk) > jam5(k.masuk);
+    // Jam yang diasumsikan (tidak terekam mesin) ditandai bintang.
+    const bintang = (sisi) => c?.jam_diasumsikan === sisi ? "*" : "";
+    const teks = !c ? "belum" : c.status !== "Hadir" ? (PENDEK_STATUS[c.status] || c.status)
+        : c.masuk ? `${jam5(c.masuk)}${bintang("masuk")}–${c.pulang ? jam5(c.pulang) + bintang("pulang") : "…"}` : "Hadir";
+    // Terlambat dari jam masuk yang diasumsikan bukan terlambat sungguhan, melainkan ijin.
+    const terlambat = c?.status === "Hadir" && c.jam_diasumsikan !== "masuk" && c.masuk && k?.masuk && jam5(c.masuk) > jam5(k.masuk);
     const judul = [s.nama, tglIndo(d.iso), `Ketentuan: ${ketentuan}`,
-        c ? `Status: ${c.status}${c.masuk ? ` (${jam5(c.masuk)}–${jam5(c.pulang) || "?"})` : ""} · ${c.sumber}` : "Belum dicatat",
+        c ? `Status: ${labelStatus(c.status)}${BOBOT[c.status] ? ` (bernilai ${BOBOT[c.status] * 100} % hadir)` : ""}${c.masuk ? ` (${jam5(c.masuk)}–${jam5(c.pulang) || "?"})` : ""} · ${c.sumber}` : "Belum dicatat",
+        c?.jam_diasumsikan ? `* Jam ${c.jam_diasumsikan} tidak terekam mesin: diasumsikan ${ASUMSI_MENIT} menit dari scan ${c.jam_diasumsikan === "pulang" ? "masuk" : "pulang"}; kekurangannya dianggap ijin (10 %)` : "",
         terlambat ? "Masuk lebih lambat dari ketentuan" : "",
         c?.catatan ? `Catatan: ${c.catatan}` : "",
         isUnlocked() ? "Ketuk untuk memilih kehadirannya" : "Buka kunci edit untuk mencatat"].filter(Boolean).join("\n");
@@ -411,14 +429,14 @@ function hitungPenuh(s) {
                        keterangan: state.libur.has(d.iso) ? `libur sekolah${state.libur.get(d.iso) ? ` (${state.libur.get(d.iso)})` : ""}`
                                  : hariKerja ? "dianggap hadir penuh (bawaan Kepala Sekolah)" : "libur kerja" });
     }
-    return { hariKerja: n, hadir: n, tidak: 0, terlambat: 0, belum: 0, menitTerlambat: 0, pulangCepat: 0, menitPulangCepat: 0,
+    return { hariKerja: n, hadir: n, tidak: 0, tk: 0, ijin: 0, sakit: 0, terlambat: 0, belum: 0, menitTerlambat: 0, pulangCepat: 0, menitPulangCepat: 0,
              menitTerjadwal, menitHadir: menitTerjadwal, rincian };
 }
 
 function hitungStaf(s) {
     if (s.kepsek && state.kepsekPenuh) return hitungPenuh(s);
     const kerja = state.hari.filter((d) => bekerjaPada(s, d));
-    let hadir = 0, tidak = 0, terlambat = 0, belum = 0, menitTerlambat = 0, pulangCepat = 0, menitPulangCepat = 0;
+    let hadir = 0, tidak = 0, tk = 0, ijin = 0, sakit = 0, terlambat = 0, belum = 0, menitTerlambat = 0, pulangCepat = 0, menitPulangCepat = 0;
     // Jam terjadwal: menit ketentuan pada tiap hari kerjanya dalam rentang.
     // Jam hadir: menit ketentuan pada hari ia HADIR, dikurangi menit
     // terlambat dan pulang cepat. Hari tidak hadir atau belum dicatat tidak
@@ -436,24 +454,44 @@ function hitungStaf(s) {
         if (hariKerja) menitTerjadwal += durasi;
         const c = cariCatatan(d.iso, s.guruId);
         const r = { iso: d.iso, hari: d.hari, hariKerja, ketentuan: k?.masuk && k?.pulang ? `${jam5(k.masuk)}–${jam5(k.pulang)}` : "",
-                    durasi: hariKerja ? durasi : 0, status: c ? c.status : "", masuk: c?.masuk ? jam5(c.masuk) : "", pulang: c?.pulang ? jam5(c.pulang) : "",
-                    telat: 0, cepat: 0, dihitung: 0, sumber: c?.sumber || "", catatan: c?.catatan || "",
+                    durasi: hariKerja ? durasi : 0, status: c ? c.status : "", masuk: c?.masuk ? jam5(c.masuk) + (c.jam_diasumsikan === "masuk" ? "*" : "") : "",
+                    pulang: c?.pulang ? jam5(c.pulang) + (c.jam_diasumsikan === "pulang" ? "*" : "") : "",
+                    telat: 0, cepat: 0, ijin: 0, dihitung: 0, sumber: c?.sumber || "", catatan: c?.catatan || "",
                     keterangan: state.libur.has(d.iso) ? `libur sekolah${state.libur.get(d.iso) ? ` (${state.libur.get(d.iso)})` : ""}` : !hariKerja && !s.tanpaHariKerja ? "libur kerja" : "" };
         rincian.push(r);
         if (!c) { if (hariKerja) { belum++; r.keterangan = "belum dicatat"; } continue; }
-        if (c.status === "Tidak Hadir") { tidak++; continue; }
+        if (c.status !== "Hadir") {
+            tidak++;
+            if (c.status === "Ijin") ijin++; else if (c.status === "Sakit") sakit++; else tk++;
+            // Ijin/Sakit bernilai sebagian dari ketentuan hari kerja itu.
+            const bobot = BOBOT[c.status] || 0;
+            if (bobot && hariKerja) {
+                r.dihitung = Math.round(durasi * bobot);
+                menitHadir += r.dihitung;
+                r.keterangan = [r.keterangan, `${labelStatus(c.status)} bernilai ${bobot * 100} % × ${jamMenit(durasi)}`].filter(Boolean).join(" · ");
+            }
+            continue;
+        }
         hadir++;
         if (c.masuk && k?.masuk && jam5(c.masuk) > jam5(k.masuk)) {
-            terlambat++; r.telat = menitDari(c.masuk) - menitDari(k.masuk); menitTerlambat += r.telat;
+            r.telat = menitDari(c.masuk) - menitDari(k.masuk);
+            // Jam masuk diasumsikan: kekurangannya ijin, bukan terlambat.
+            if (c.jam_diasumsikan === "masuk") { r.ijin += r.telat; r.telat = 0; }
+            else { terlambat++; menitTerlambat += r.telat; }
         }
         if (c.pulang && k?.pulang && jam5(c.pulang) < jam5(k.pulang)) {
-            pulangCepat++; r.cepat = menitDari(k.pulang) - menitDari(c.pulang); menitPulangCepat += r.cepat;
+            r.cepat = menitDari(k.pulang) - menitDari(c.pulang);
+            if (c.jam_diasumsikan === "pulang") { r.ijin += r.cepat; r.cepat = 0; }
+            else { pulangCepat++; menitPulangCepat += r.cepat; }
         }
-        if (hariKerja) r.dihitung = Math.max(0, durasi - r.telat - r.cepat);
+        if (c.jam_diasumsikan) r.keterangan = [r.keterangan,
+            `jam ${c.jam_diasumsikan} diasumsikan (scan ${c.jam_diasumsikan === "pulang" ? "masuk + " : "pulang − "}${ASUMSI_MENIT} menit)`
+            + (r.ijin && hariKerja ? `; kekurangan ${r.ijin} menit dianggap ijin (10 %)` : "")].filter(Boolean).join(" · ");
+        if (hariKerja) r.dihitung = Math.max(0, durasi - r.telat - r.cepat - r.ijin) + Math.round(r.ijin * BOBOT.Ijin);
         else if (c.masuk && c.pulang) { r.dihitung = Math.max(0, menitDari(c.pulang) - menitDari(c.masuk)); r.keterangan = [r.keterangan, "hadir di luar hari kerja: jam masuk–pulang"].filter(Boolean).join(" · "); }
         menitHadir += r.dihitung;
     }
-    return { hariKerja: kerja.length, hadir, tidak, terlambat, belum, menitTerlambat, pulangCepat, menitPulangCepat, menitTerjadwal, menitHadir, rincian };
+    return { hariKerja: kerja.length, hadir, tidak, tk, ijin, sakit, terlambat, belum, menitTerlambat, pulangCepat, menitPulangCepat, menitTerjadwal, menitHadir, rincian };
 }
 
 /* Hari efektif dalam rentang menurut jam kerja bawaan sekolah, dikelompokkan
@@ -508,14 +546,16 @@ function menitDariTeks(teks) {
 
 function renderRingkas(tampil, bulanan) {
     const t = tampil.reduce((a, s) => { const h = hitungStaf(s); for (const k in h) a[k] += h[k]; return a; },
-        { hariKerja: 0, hadir: 0, tidak: 0, terlambat: 0, belum: 0, menitTerlambat: 0, pulangCepat: 0 });
+        { hariKerja: 0, hadir: 0, tidak: 0, tk: 0, ijin: 0, sakit: 0, terlambat: 0, belum: 0, menitTerlambat: 0, pulangCepat: 0 });
     document.getElementById("ringkasMatriks").textContent = tampil.length
-        ? `${state.hari.length} hari · ${tampil.length} staf · ${t.hariKerja} hari kerja · ${t.hadir} hadir · ${t.tidak} tidak hadir · ${t.belum} belum dicatat`
+        ? `${state.hari.length} hari · ${tampil.length} staf · ${t.hariKerja} hari kerja · ${t.hadir} hadir · ${t.tidak} tidak hadir${t.tidak ? ` (${[t.tk && `${t.tk} tanpa ket.`, t.ijin && `${t.ijin} ijin`, t.sakit && `${t.sakit} sakit`].filter(Boolean).join(", ")})` : ""} · ${t.belum} belum dicatat`
         : "";
     document.getElementById("footMatriks").textContent =
         (bulanan ? `${bulanan} staf berpola honor bulanan murni tidak ditampilkan karena belum punya catatan dalam rentang ini — honornya tidak bergantung hari hadir. ` : "")
         + "Jam masuk dan pulang tidak wajib; bila diisi, yang lebih lambat dari ketentuan ditandai. "
+        + "Tidak hadir dicatat dengan keterangannya: Ijin bernilai 10 % hadir, Sakit 20 % hadir, Tanpa Keterangan tidak bernilai. "
         + "Rekaman mesin fingerprint diunggah lewat tombol di atas dan menimpa tanggal yang sama; catatan manual dipertahankan kecuali diminta ditimpa. "
+        + `Bila mesin hanya merekam satu scan, jam lainnya diasumsikan ${ASUMSI_MENIT} menit dari scan itu (ditandai *) dan kekurangannya dianggap ijin. `
         + "Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan.";
 
     const unlocked = isUnlocked();
@@ -554,7 +594,7 @@ function renderRekap() {
     // "tidak hadir 1" langsung terbaca hari apa dan berapa jam yang hilang.
     const hariTeks = (r) => `${HARI_PENDEK[r.hari]} ${tglPendek(r.iso)}`;
     const selKet = (v, daftar) => `<td class="num${daftar.length ? " ada-ket" : ""}" title="${esc(daftar.join("\n"))}">${v}</td>`;
-    const ketTidak = (h) => h.rincian.filter((r) => r.status === "Tidak Hadir").map((r) => `${hariTeks(r)}${r.durasi ? ` (${jamMenit(r.durasi)})` : ""}${r.catatan ? ` · ${r.catatan}` : ""}`);
+    const ketTidak = (h, status) => h.rincian.filter((r) => r.status === status).map((r) => `${hariTeks(r)}${r.durasi ? ` (${jamMenit(r.durasi)})` : ""}${r.catatan ? ` · ${r.catatan}` : ""}`);
     const ketTelat = (h) => h.rincian.filter((r) => r.telat).map((r) => `${hariTeks(r)}: masuk ${r.masuk}, +${r.telat} menit`);
     const ketCepat = (h) => h.rincian.filter((r) => r.cepat).map((r) => `${hariTeks(r)}: pulang ${r.pulang}, −${r.cepat} menit`);
     const ketKerja = (h) => {
@@ -565,18 +605,18 @@ function renderRekap() {
     document.getElementById("bodyRekap").innerHTML = baris.map(({ s, h, j }, i) => `<tr>
         <td class="num">${i + 1}</td><td class="nama">${esc(s.nama)}</td><td>${esc(s.jabatan)}</td>
         <td>${esc(POLA[s.pola] || s.pola || "—")}${s.sumber === "fingerprint" ? ' <small style="color:var(--tinta-3)">fingerprint</small>' : ""}</td>
-        ${selKet(h.hariKerja, ketKerja(h))}${selJam(s, "harihadir", j.hariHadir, j.hariHadirDikoreksi, h.hadir)}${selKet(h.tidak, ketTidak(h))}${selKet(h.menitTerlambat, ketTelat(h))}${selKet(h.menitPulangCepat, ketCepat(h))}
+        ${selKet(h.hariKerja, ketKerja(h))}${selJam(s, "harihadir", j.hariHadir, j.hariHadirDikoreksi, h.hadir)}${selKet(h.tk, ketTidak(h, "Tidak Hadir"))}${selKet(h.ijin, ketTidak(h, "Ijin"))}${selKet(h.sakit, ketTidak(h, "Sakit"))}${selKet(h.menitTerlambat, ketTelat(h))}${selKet(h.menitPulangCepat, ketCepat(h))}
         ${selJam(s, "terjadwal", j.terjadwal, j.terjadwalDikoreksi, h.menitTerjadwal)}${selJam(s, "hadir", j.hadir, j.hadirDikoreksi, h.menitHadir)}
         <td class="num">${persen(j.hadir, j.terjadwal)}</td>
         <td><button type="button" class="btn btn-ghost btn-kecil" data-rincian="${esc(s.guruId)}" title="Jejak hitung per tanggal ${esc(s.nama)}">Rincian</button></td></tr>`).join("")
-        || `<tr><td colspan="13" class="empty-state">Belum ada staf yang hari hadirnya perlu dicatat.</td></tr>`;
+        || `<tr><td colspan="15" class="empty-state">Belum ada staf yang hari hadirnya perlu dicatat.</td></tr>`;
     document.getElementById("hariEfektif").textContent = ringkasHariEfektif();
     const t = baris.reduce((a, { h, j }) => {
         for (const k in h) a[k] += h[k];
         a.terjadwal += j.terjadwal; a.jamHadir += j.hadir; a.hariHadir += j.hariHadir; return a;
-    }, { hariHadir: 0, hariKerja: 0, hadir: 0, tidak: 0, terlambat: 0, belum: 0, menitTerlambat: 0, pulangCepat: 0, menitPulangCepat: 0, menitTerjadwal: 0, menitHadir: 0, terjadwal: 0, jamHadir: 0 });
+    }, { hariHadir: 0, hariKerja: 0, hadir: 0, tidak: 0, tk: 0, ijin: 0, sakit: 0, terlambat: 0, belum: 0, menitTerlambat: 0, pulangCepat: 0, menitPulangCepat: 0, menitTerjadwal: 0, menitHadir: 0, terjadwal: 0, jamHadir: 0 });
     document.getElementById("footRekap").innerHTML = baris.length ? `<tr class="total"><td></td><td colspan="3">Total (${baris.length} orang)</td>
-        ${num(t.hariKerja)}${num(t.hariHadir)}${num(t.tidak)}${num(t.menitTerlambat)}${num(t.menitPulangCepat)}${num(jamMenit(t.terjadwal))}${num(jamMenit(t.jamHadir))}<td class="num">${persen(t.jamHadir, t.terjadwal)}</td><td></td></tr>` : "";
+        ${num(t.hariKerja)}${num(t.hariHadir)}${num(t.tk)}${num(t.ijin)}${num(t.sakit)}${num(t.menitTerlambat)}${num(t.menitPulangCepat)}${num(jamMenit(t.terjadwal))}${num(jamMenit(t.jamHadir))}<td class="num">${persen(t.jamHadir, t.terjadwal)}</td><td></td></tr>` : "";
     const nKoreksi = baris.filter(({ j }) => j.terjadwalDikoreksi || j.hadirDikoreksi || j.hariHadirDikoreksi).length;
     document.getElementById("ringkasRekap").textContent = `${tglIndo(state.awal)} – ${tglIndo(state.akhir)} · ${state.catatan.length} catatan${nKoreksi ? ` · ${nKoreksi} dikoreksi tangan` : ""}`;
 
@@ -612,13 +652,13 @@ function bukaRincian(guruId, sudahPin) {
     document.getElementById("rincianSub").textContent = `${labelStaf(s)} · ${tglIndo(state.awal)} – ${tglIndo(state.akhir)}`;
     const menit = (v) => v ? String(v) : "";
     document.querySelector("#rincianTabel tbody").innerHTML = h.rincian.map((r) => {
-        const kelas = [r.status === "Tidak Hadir" && "r-tidak", !r.hariKerja && "r-libur", r.hariKerja && !r.status && "r-belum"].filter(Boolean).join(" ");
+        const kelas = [r.status && r.status !== "Hadir" && "r-tidak", !r.hariKerja && "r-libur", r.hariKerja && !r.status && "r-belum"].filter(Boolean).join(" ");
         return `<tr class="${kelas}"><td>${esc(tglPendek(r.iso))}</td><td>${esc(HARI_PENDEK[r.hari])}</td>
             <td>${esc(r.ketentuan)}</td><td class="num">${r.hariKerja ? jamMenit(r.durasi) : ""}</td>
-            <td>${esc(r.status || (r.hariKerja ? "belum dicatat" : ""))}</td>
+            <td>${esc(labelStatus(r.status) || (r.hariKerja ? "belum dicatat" : ""))}</td>
             <td class="num">${esc(r.masuk)}</td><td class="num">${esc(r.pulang)}</td>
             <td class="num">${menit(r.telat)}</td><td class="num">${menit(r.cepat)}</td>
-            <td class="num">${r.status === "Hadir" ? jamMenit(r.dihitung) : ""}</td>
+            <td class="num">${r.status === "Hadir" || r.dihitung ? jamMenit(r.dihitung) : ""}</td>
             <td class="ket">${esc([r.keterangan, r.catatan, r.sumber === "fingerprint" && r.status ? "fingerprint" : ""].filter(Boolean).join(" · "))}</td>
             <td>${unlocked ? `<button type="button" class="btn btn-ghost btn-kecil" data-ubah="${esc(r.iso)}" title="Ubah catatan ${esc(HARI_PENDEK[r.hari])} ${esc(tglPendek(r.iso))}">Ubah</button>` : ""}</td></tr>`;
     }).join("");
@@ -630,7 +670,7 @@ function bukaRincian(guruId, sudahPin) {
         ? "Ketuk Ubah pada baris yang perlu diperbaiki — misalnya tercatat tidak hadir tetapi setelah dikonfirmasi ternyata hadir. Perubahannya tersimpan sebagai catatan manual dan rincian ini langsung dihitung ulang."
         : "Buka kunci edit untuk memperbaiki catatan tiap tanggal dari sini.";
     document.querySelector("#rincianTabel tfoot").innerHTML = `<tr class="total">
-        <td colspan="3">Jumlah · ${h.hariKerja} hari kerja · ${h.hadir} hadir · ${h.tidak} tidak hadir${h.belum ? ` · ${h.belum} belum dicatat` : ""}</td>
+        <td colspan="3">Jumlah · ${h.hariKerja} hari kerja · ${h.hadir} hadir · ${h.tidak} tidak hadir${h.tidak ? ` (${[h.tk && `${h.tk} tanpa ket.`, h.ijin && `${h.ijin} ijin`, h.sakit && `${h.sakit} sakit`].filter(Boolean).join(", ")})` : ""}${h.belum ? ` · ${h.belum} belum dicatat` : ""}</td>
         <td class="num">${jamMenit(h.menitTerjadwal)}</td><td></td><td></td><td></td>
         <td class="num">${h.menitTerlambat}</td><td class="num">${h.menitPulangCepat}</td><td class="num">${jamMenit(h.menitHadir)}</td><td></td><td></td></tr>`;
     const koreksi = [];
@@ -669,14 +709,15 @@ async function unduhRincian() {
         [],
         ["Tanggal", "Hari", "Ketentuan", "Terjadwal (jam:menit)", "Status", "Masuk", "Pulang", "Terlambat (menit)", "Pulang cepat (menit)", "Jam dihitung (jam:menit)", "Keterangan"],
         ...h.rincian.map((r) => [tglPendek(r.iso), HARI_PENDEK[r.hari], r.ketentuan, r.hariKerja ? jamMenit(r.durasi) : "",
-            r.status || (r.hariKerja ? "belum dicatat" : ""), r.masuk, r.pulang, r.telat || "", r.cepat || "", r.status === "Hadir" ? jamMenit(r.dihitung) : "",
+            labelStatus(r.status) || (r.hariKerja ? "belum dicatat" : ""), r.masuk, r.pulang, r.telat || "", r.cepat || "", r.status === "Hadir" || r.dihitung ? jamMenit(r.dihitung) : "",
             [r.keterangan, r.catatan, r.sumber === "fingerprint" && r.status ? "fingerprint" : ""].filter(Boolean).join(" · ")]),
-        ["Jumlah", "", `${h.hariKerja} hari kerja · ${h.hadir} hadir · ${h.tidak} tidak hadir`, jamMenit(h.menitTerjadwal), "", "", "", h.menitTerlambat, h.menitPulangCepat, jamMenit(h.menitHadir), ""],
+        ["Jumlah", "", `${h.hariKerja} hari kerja · ${h.hadir} hadir · ${h.tidak} tidak hadir${h.tidak ? ` (${[h.tk && `${h.tk} tanpa ket.`, h.ijin && `${h.ijin} ijin`, h.sakit && `${h.sakit} sakit`].filter(Boolean).join(", ")})` : ""}`, jamMenit(h.menitTerjadwal), "", "", "", h.menitTerlambat, h.menitPulangCepat, jamMenit(h.menitHadir), ""],
     ];
     if (j.terjadwalDikoreksi) baris.push(["Koreksi tangan", "", "Jam terjadwal", jamMenit(j.terjadwal), "", "", "", "", "", "", `hitungan ${jamMenit(h.menitTerjadwal)}`]);
     if (j.hadirDikoreksi) baris.push(["Koreksi tangan", "", "Jam hadir", "", "", "", "", "", "", jamMenit(j.hadir), `hitungan ${jamMenit(h.menitHadir)}`]);
     if (j.hariHadirDikoreksi) baris.push(["Koreksi tangan", "", "Hadir (hari)", "", String(j.hariHadir), "", "", "", "", "", `hitungan ${h.hadir} hari`]);
-    baris.push([], [ringkasHariEfektif()]);
+    baris.push([], [ringkasHariEfektif()],
+        [`Ijin bernilai ${BOBOT.Ijin * 100} % dan Sakit ${BOBOT.Sakit * 100} % dari jam ketentuan hari itu. * = jam tidak terekam mesin, diasumsikan ${ASUMSI_MENIT} menit dari scan lainnya; kekurangannya dianggap ijin.`]);
     const ws = X.utils.aoa_to_sheet(baris);
     ws["!cols"] = [{ wch: 9 }, { wch: 6 }, { wch: 13 }, { wch: 12 }, { wch: 14 }, { wch: 7 }, { wch: 7 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 40 }];
     const wb = X.utils.book_new();
@@ -752,7 +793,9 @@ function bukaPilihan(el) {
     const d = state.hari.find((x) => x.iso === tanggal);
     if (!s || !d) return;
     const c = cariCatatan(tanggal, guruId);
-    pilihanAktif = { tanggal, guruId };
+    // Jam yang diasumsikan dari unggahan: tandanya dipertahankan selama jam
+    // itu tidak diubah di dialog ini.
+    pilihanAktif = { tanggal, guruId, asumsi: c?.jam_diasumsikan ? { sisi: c.jam_diasumsikan, jam: jam5(c[c.jam_diasumsikan]) } : null };
 
     document.getElementById("statusNama").textContent = s.nama;
     document.getElementById("statusSub").textContent = `${s.jabatan} · ${HARI_FROM_JS_DAY[new Date(tanggal + "T00:00:00").getDay()]}, ${tglIndo(tanggal)}`;
@@ -760,6 +803,8 @@ function bukaPilihan(el) {
     document.getElementById("statusKetentuan").textContent = k?.bekerja
         ? `Ketentuan jam kerja hari ini: ${jam5(k.masuk)}–${jam5(k.pulang)}${k.sumber === "khusus" ? " (jam khusus)" : s.tanpaKetentuan ? " (bawaan sekolah)" : ""}. Ubah bila jamnya berbeda.`
         : "Menurut ketentuan, hari ini bukan hari kerjanya.";
+    if (c?.jam_diasumsikan) document.getElementById("statusKetentuan").textContent +=
+        ` Jam ${c.jam_diasumsikan} tidak terekam mesin, jadi diasumsikan ${ASUMSI_MENIT} menit dari scan ${c.jam_diasumsikan === "pulang" ? "masuk" : "pulang"}; kekurangannya dianggap ijin (10 %). Mengubah jam itu berarti jamnya pasti.`;
     const liburBox = document.getElementById("statusLibur");
     const libur = state.libur.has(tanggal);
     liburBox.hidden = !libur && (!!k?.bekerja || !!s.tanpaHariKerja);
@@ -787,7 +832,7 @@ function tutupPilihan() { document.getElementById("statusModal").hidden = true; 
 // status kosong = catatannya dibatalkan
 async function simpanStatus(status) {
     if (!pilihanAktif || !isUnlocked()) return;
-    const { tanggal, guruId } = pilihanAktif;
+    const { tanggal, guruId, asumsi } = pilihanAktif;
     const masuk = document.getElementById("statusMasuk").value || null;
     const pulang = document.getElementById("statusPulang").value || null;
     const catatan = document.getElementById("statusCatatan").value.trim() || null;
@@ -801,8 +846,11 @@ async function simpanStatus(status) {
     }
     // Yang disunting tangan berarti sumbernya manual, walau semula dari
     // mesin — supaya jejak siapa yang menentukan angkanya tidak hilang.
+    const jamBaru = { masuk, pulang };
+    const tetapDiasumsikan = status === "Hadir" && asumsi && jamBaru[asumsi.sisi] && jam5(jamBaru[asumsi.sisi]) === asumsi.jam;
     const isi = { tanggal, guru_id: guruId, status, masuk: status === "Hadir" ? masuk : null,
-                  pulang: status === "Hadir" ? pulang : null, sumber: "manual", catatan };
+                  pulang: status === "Hadir" ? pulang : null, sumber: "manual", catatan,
+                  jam_diasumsikan: tetapDiasumsikan ? asumsi.sisi : null };
     if (!isSupabaseConfigured) {
         if (lama) Object.assign(lama, isi); else state.catatan.push({ id: "D" + Date.now(), ...isi });
         render(); return;
@@ -884,7 +932,16 @@ async function batalkanSemua() {
                                       tidak tahu kalender sekolah)
      tanpa scan dan tanpa Absent   -> dilewati (mesin tidak menjadwalkannya)
    Scan masuk yang sama persis dengan scan pulang berarti mesin menghitung
-   satu sidik jari dua kali; jam pulangnya dianggap tidak ada. */
+   satu sidik jari dua kali; jam pulangnya dianggap tidak ada.
+   Hanya satu scan (keputusan 26 Oktober 2026) — diterapkan saat menyimpan:
+     hanya scan pulang -> masuk  = pulang − 278 menit
+     hanya scan masuk  -> pulang = masuk  + 278 menit
+   dan jam_diasumsikan mencatat sisi mana yang diasumsikan; kekurangan
+   menit di sisi itu terhadap ketentuan dianggap ijin (10 % hadir). */
+function geserJam(hhmm, menit) {
+    const m = Math.min(23 * 60 + 59, Math.max(0, menitDari(hhmm) + menit));
+    return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
 let unggahan = null;   // hasil pembacaan berkas yang sedang ditinjau di modal
 
 const normalNama = (n) => String(n || "").split(",")[0].replace(/\(.*?\)/g, " ")
@@ -1002,12 +1059,13 @@ Aturan isi:
 2. No. ID = nomor identitas pengguna di mesin (bukan nomor urut baris). Angka saja, dan tetap sama untuk orang yang sama.
 3. Nama = nama sebagaimana tertulis di mesin, tanpa diubah.
 4. Tanggal dalam format dd/mm/yyyy sebagai teks, contoh 03/08/2026.
-5. Scan Masuk dan Scan Pulang dalam jam 24 jam HH:MM, contoh 06:27. Kosongkan bila tidak ada rekaman. Bila hanya ada satu scan pada hari itu, isi ke Scan Masuk saja. Bila ada lebih dari dua scan, ambil yang paling awal untuk Scan Masuk dan yang paling akhir untuk Scan Pulang.
-6. Absent diisi True hanya bila pada hari kerja itu orangnya tidak punya scan sama sekali; selain itu kosongkan. Jangan menulis False.
-7. Sertakan semua orang dan semua tanggal yang ada di berkas sumber, termasuk hari tanpa scan (Absent = True). Jangan menambah tanggal yang tidak ada di sumber dan jangan menebak jam.
-8. Jangan mengubah, menyingkat, atau menerjemahkan nama kolom.
+5. Scan Masuk dan Scan Pulang dalam jam 24 jam HH:MM, contoh 06:27. Kosongkan bila tidak ada rekaman. Bila ada lebih dari dua scan, ambil yang paling awal untuk Scan Masuk dan yang paling akhir untuk Scan Pulang.
+6. Bila hanya ada SATU scan pada hari itu, jangan mengisi keduanya dan jangan menebak jam yang lain. Bila sumber sudah memisahkan jam masuk dan jam pulang (kolom atau keterangan masuk/pulang, Check In/Check Out), ikuti sumber. Bila sumber tidak memisahkannya, isi ke Scan Masuk bila jamnya sebelum 12:00 dan ke Scan Pulang bila 12:00 atau sesudahnya. Aplikasi sendiri yang melengkapi jam yang hilang.
+7. Absent diisi True hanya bila pada hari kerja itu orangnya tidak punya scan sama sekali; selain itu kosongkan. Jangan menulis False.
+8. Sertakan semua orang dan semua tanggal yang ada di berkas sumber, termasuk hari tanpa scan (Absent = True). Jangan menambah tanggal yang tidak ada di sumber dan jangan menebak jam.
+9. Jangan mengubah, menyingkat, atau menerjemahkan nama kolom.
 
-Berikan hasilnya sebagai berkas .xlsx yang bisa diunduh, lalu tulis ringkasan singkat: jumlah orang, rentang tanggal, dan jumlah baris.`;
+Berikan hasilnya sebagai berkas .xlsx yang bisa diunduh, lalu tulis ringkasan singkat: jumlah orang, rentang tanggal, jumlah baris, dan jumlah baris yang hanya punya satu scan (berapa di Scan Masuk, berapa di Scan Pulang).`;
 
 function unduhBerkas(blob, nama) {
     const a = document.createElement("a");
@@ -1026,24 +1084,28 @@ async function unduhTemplateFinger() {
         ["2", "YUYUN WAHYUNI", "30/07/2026", "06:27", "16:36", ""],
         ["2", "YUYUN WAHYUNI", "31/07/2026", "", "", "True"],
         ["11", "Firman", "30/07/2026", "06:17", "", ""],
+        ["11", "Firman", "31/07/2026", "", "15:40", ""],
     ]);
     rekaman["!cols"] = [{ wch: 8 }, { wch: 24 }, { wch: 12 }, { wch: 11 }, { wch: 12 }, { wch: 8 }];
     X.utils.book_append_sheet(wb, rekaman, "Rekaman");
     const petunjuk = X.utils.aoa_to_sheet([
         ["Template unggah rekaman fingerprint — Kehadiran Guru → Kehadiran Staf"],
         [],
-        ["Isi sheet Rekaman: satu baris per orang per tanggal. Tiga baris contoh di sana boleh dihapus."],
+        ["Isi sheet Rekaman: satu baris per orang per tanggal. Empat baris contoh di sana boleh dihapus."],
         ["Kolom", "Isi"],
         ["No. ID", "Nomor pengguna di mesin. Dipetakan ke guru sekali saat unggah pertama, lalu diingat."],
         ["Nama", "Nama sebagaimana terdaftar di mesin (hanya untuk memudahkan pemetaan)."],
         ["Tanggal", "dd/mm/yyyy, contoh 03/08/2026. Tanggal Excel juga terbaca."],
         ["Scan Masuk", "Jam 24 jam HH:MM, contoh 06:27. Kosong bila tidak ada scan masuk."],
-        ["Scan Pulang", "Jam 24 jam HH:MM. Kosong bila tidak ada scan pulang."],
+        ["Scan Pulang", "Jam 24 jam HH:MM. Kosong bila tidak ada scan pulang. Satu scan saja: isi di kolom yang sesuai (datang atau pulang), jangan keduanya."],
         ["Absent", "True bila tidak ada scan sama sekali pada hari kerja itu; selain itu kosong."],
         [],
         ["Yang dilakukan aplikasi:"],
         ["• Ada scan (masuk atau pulang) → Hadir, jamnya ikut tersimpan."],
-        ["• Absent = True tanpa scan → Tidak Hadir, kecuali hari libur sekolah atau hari libur kerja orang itu."],
+        ["• Hanya Scan Pulang → jam masuk diasumsikan = jam pulang − 278 menit. Hanya Scan Masuk → jam pulang diasumsikan = jam masuk + 278 menit."],
+        ["  Kekurangan menitnya terhadap ketentuan jam kerja dianggap ijin (bernilai 10 % hadir). Jam yang diasumsikan ditandai * di aplikasi."],
+        ["• Absent = True tanpa scan → Tanpa Keterangan, kecuali hari libur sekolah atau hari libur kerja orang itu."],
+        ["  Bila ternyata ijin (10 % hadir) atau sakit (20 % hadir), ubah di aplikasi dengan mengetuk selnya."],
         ["• Tanpa scan dan tanpa Absent → baris dilewati."],
         ["• Nama kolom harus persis; urutan kolom bebas; kolom lain diabaikan."],
     ]);
@@ -1190,7 +1252,7 @@ async function simpanUnggahan() {
 
     // 3. Baris rekaman menjadi catatan.
     const isi = [];
-    const n = { hadir: 0, tidak: 0, kosong: 0, libur: 0, manual: 0, dilewati: 0 };
+    const n = { hadir: 0, tidak: 0, kosong: 0, libur: 0, manual: 0, dilewati: 0, asumsi: 0 };
     for (const o of berkas.orang) {
         const p = peta.find((x) => x.no_id === o.noId);
         if (!p.guru_id) { n.dilewati += o.hari.length; continue; }
@@ -1203,9 +1265,13 @@ async function simpanUnggahan() {
             }
             const sebelumnya = ada.get(h.tanggal + "|" + p.guru_id);
             if (sebelumnya && sebelumnya.sumber === "manual" && !timpaManual) { n.manual++; continue; }
-            isi.push({ tanggal: h.tanggal, guru_id: p.guru_id, status: h.status,
-                       masuk: h.status === "Hadir" ? h.masuk : null, pulang: h.status === "Hadir" ? h.pulang : null,
-                       sumber: "fingerprint", catatan: null });
+            // Satu scan saja: jam yang hilang diasumsikan ±278 menit.
+            let masuk = h.status === "Hadir" ? h.masuk : null, pulang = h.status === "Hadir" ? h.pulang : null, asumsi = null;
+            if (masuk && !pulang) { pulang = geserJam(masuk, ASUMSI_MENIT); asumsi = "pulang"; }
+            else if (!masuk && pulang) { masuk = geserJam(pulang, -ASUMSI_MENIT); asumsi = "masuk"; }
+            if (asumsi) n.asumsi++;
+            isi.push({ tanggal: h.tanggal, guru_id: p.guru_id, status: h.status, masuk, pulang,
+                       sumber: "fingerprint", catatan: null, jam_diasumsikan: asumsi });
             if (h.status === "Hadir") n.hadir++; else n.tidak++;
         }
     }
@@ -1223,7 +1289,8 @@ async function simpanUnggahan() {
     }
     await muatRentang();
     const rincian = [
-        `${n.hadir} hadir`, `${n.tidak} tidak hadir`,
+        `${n.hadir} hadir`, `${n.tidak} tanpa keterangan`,
+        n.asumsi ? `${n.asumsi} hanya satu scan, jam lainnya diasumsikan ${ASUMSI_MENIT} menit (ditandai *)` : "",
         n.manual ? `${n.manual} dilewati karena sudah dicatat manual` : "",
         n.libur ? `${n.libur} tanpa scan pada hari libur dilewati` : "",
         n.kosong ? `${n.kosong} baris tanpa rekaman dilewati` : "",

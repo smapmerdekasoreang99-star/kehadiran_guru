@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/dasar.css?v=3">
-<link rel="stylesheet" href="assets/style.css?v=20261016a" />
+<link rel="stylesheet" href="assets/style.css?v=20261026a" />
 <!-- supabase-js dipaku versinya dengan Subresource Integrity (4 Oktober 2026): "@2" menyajikan rilis 2.x terbaru apa pun isinya. Ganti versi = ganti hash. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous" defer></script>
 <!-- Ikon aplikasi (tab browser & layar HP), 13 Okt 2026 -->
@@ -99,7 +99,9 @@
       <section id="tab-matriks" class="card">
         <div class="piket-legenda">
           <span class="pk-legenda hadir">Hadir</span>
-          <span class="pk-legenda absen">Tidak hadir</span>
+          <span class="pk-legenda absen">Tanpa keterangan</span>
+          <span class="pk-legenda ijin">Ijin (10 % hadir)</span>
+          <span class="pk-legenda sakit">Sakit (20 % hadir)</span>
           <span class="pk-legenda draf">Belum dicatat</span>
           <span class="pk-legenda-teks">Sel bergaris merah adalah hari libur kerja orang itu.</span>
         </div>
@@ -126,11 +128,11 @@
             <thead><tr>
               <th>No</th><th>Nama</th><th>Jabatan</th><th>Pola honor</th>
               <th class="num" title="Hari kerja menurut ketentuan jam kerja, di luar hari libur">Hari kerja</th>
-              <th class="num" title="Jumlah hari hadir dalam rentang. Bisa dikoreksi saat kunci edit terbuka.">Hadir</th><th class="num">Tidak hadir</th>
+              <th class="num" title="Jumlah hari hadir dalam rentang. Bisa dikoreksi saat kunci edit terbuka.">Hadir</th><th class="num" title="Tidak hadir tanpa keterangan: tidak bernilai">Tanpa ket.</th><th class="num" title="Tidak hadir karena ijin: bernilai 10 % jam ketentuan hari itu">Ijin</th><th class="num" title="Tidak hadir karena sakit: bernilai 20 % jam ketentuan hari itu">Sakit</th>
               <th class="num" title="Jumlah menit masuk lebih lambat dari ketentuan, dalam rentang">Menit terlambat</th>
               <th class="num" title="Jumlah menit pulang lebih awal dari ketentuan, dalam rentang">Menit pulang cepat</th>
               <th class="num" title="Jumlah jam kerja menurut ketentuan pada hari kerjanya (jam:menit). Bisa dikoreksi saat kunci edit terbuka.">Jam terjadwal</th>
-              <th class="num" title="Jam terjadwal pada hari ia hadir, dikurangi menit terlambat dan pulang cepat (jam:menit). Bisa dikoreksi saat kunci edit terbuka.">Jam hadir</th>
+              <th class="num" title="Jam terjadwal pada hari ia hadir, dikurangi menit terlambat dan pulang cepat, ditambah 10 % hari Ijin dan 20 % hari Sakit (jam:menit). Bisa dikoreksi saat kunci edit terbuka.">Jam hadir</th>
               <th class="num" title="Jam hadir ÷ Jam terjadwal">% Hadir</th>
               <th></th>
             </tr></thead>
@@ -166,10 +168,13 @@
       <p class="field-hint">Isi dulu bila perlu, lalu pilih kehadirannya di bawah &mdash; pilihan langsung tersimpan.</p>
     </div>
 
-    <div class="pilih-hadir">
+    <div class="pilih-hadir empat">
       <button type="button" class="pilih-ya" data-status="Hadir">Hadir</button>
-      <button type="button" class="pilih-tidak" data-status="Tidak Hadir">Tidak Hadir</button>
+      <button type="button" class="pilih-tidak" data-status="Tidak Hadir">Tanpa Keterangan</button>
+      <button type="button" class="pilih-ijin" data-status="Ijin">Ijin <small>10 %</small></button>
+      <button type="button" class="pilih-sakit" data-status="Sakit">Sakit <small>20 %</small></button>
     </div>
+    <p class="field-hint" style="margin:-10px 0 16px;">Bila tidak hadir, pilih keterangannya: Ijin bernilai 10 % hadir, Sakit 20 % hadir, Tanpa Keterangan tidak bernilai.</p>
 
     <div class="modal-actions">
       <button type="button" id="statusHapus" class="btn btn-danger-text" hidden>Batalkan catatan</button>
@@ -233,7 +238,7 @@
           <th>Status</th><th class="num">Masuk</th><th class="num">Pulang</th>
           <th class="num" title="Menit masuk lebih lambat dari ketentuan">Terlambat</th>
           <th class="num" title="Menit pulang lebih awal dari ketentuan">Pulang cepat</th>
-          <th class="num" title="Terjadwal dikurangi terlambat dan pulang cepat; hadir di luar hari kerja dari jam masuk–pulang">Jam dihitung</th>
+          <th class="num" title="Terjadwal dikurangi terlambat dan pulang cepat; Ijin 10 % dan Sakit 20 % dari terjadwal; hadir di luar hari kerja dari jam masuk–pulang">Jam dihitung</th>
           <th>Keterangan</th><th></th>
         </tr></thead>
         <tbody></tbody>
@@ -268,6 +273,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/staf.js?v=20261016a"></script>
+<script type="module" src="scripts/staf.js?v=20261026a"></script>
 </body>
 </html>

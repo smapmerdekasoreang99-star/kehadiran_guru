@@ -1192,6 +1192,7 @@ tr.total td {
 .pk-legenda.absen { --pk-bg: var(--absen-muda); --pk-aksen: var(--absen); }
 .pk-legenda.ijin  { --pk-bg: var(--sakit-muda); --pk-aksen: var(--sakit); }
 .pk-legenda.sakit { --pk-bg: var(--emas-muda);  --pk-aksen: var(--emas); }
+.pk-legenda.httm  { --pk-bg: var(--netral-muda); --pk-aksen: var(--tinta-2); }
 .pk-legenda.draf  { --pk-bg: var(--surface);    --pk-aksen: var(--garis-2); }
 .pk-legenda.draf::before { border-left-style: dashed; }
 .pk-legenda-teks { font-size: 12px; color: var(--ink-muted); font-style: italic; }
@@ -1222,6 +1223,7 @@ tr.total td {
 .pk-pita.absen { --pk-bg: var(--absen-muda); --pk-aksen: var(--absen); }
 .pk-pita.ijin  { --pk-bg: var(--sakit-muda); --pk-aksen: var(--sakit); }
 .pk-pita.sakit { --pk-bg: var(--emas-muda);  --pk-aksen: var(--emas); }
+.pk-pita.httm  { --pk-bg: var(--netral-muda); --pk-aksen: var(--tinta-2); }
 .pk-pita.draf  { --pk-bg: var(--surface);    --pk-aksen: var(--garis-2);
     border: 1px dashed var(--garis-2); border-left: 3px solid var(--garis-2); color: var(--ink-muted); }
 .pk-tanda { margin-left: 4px; color: var(--emas-teks); }
@@ -1282,6 +1284,7 @@ tr.total td {
 .pilih-hadir .pilih-ya { background: var(--hadir-muda); border-color: var(--hadir); color: var(--hadir-tua); }
 .pilih-hadir .pilih-tidak { background: var(--absen-muda); border-color: var(--absen); color: var(--absen-tua); }
 .pilih-hadir .pilih-ijin { background: var(--sakit-muda); border-color: var(--sakit); color: var(--sakit-tua); }
+.pilih-hadir .pilih-httm { background: var(--netral-muda); border-color: var(--tinta-2); color: var(--tinta); grid-column: 1 / -1; }
 .pilih-hadir .pilih-sakit { background: var(--emas-muda); border-color: var(--emas-tua); color: var(--emas-teks); }
 .pilih-hadir button small { font-weight: 400; font-size: 12px; }
 /* Empat pilihan (Kehadiran Staf): dua kolom supaya tetap sebesar sasaran sentuh di HP. */

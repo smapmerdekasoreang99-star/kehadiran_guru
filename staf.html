@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/dasar.css?v=3">
-<link rel="stylesheet" href="assets/style.css?v=20261026a" />
+<link rel="stylesheet" href="assets/style.css?v=20261026b" />
 <!-- supabase-js dipaku versinya dengan Subresource Integrity (4 Oktober 2026): "@2" menyajikan rilis 2.x terbaru apa pun isinya. Ganti versi = ganti hash. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous" defer></script>
 <!-- Ikon aplikasi (tab browser & layar HP), 13 Okt 2026 -->
@@ -102,6 +102,7 @@
           <span class="pk-legenda absen">Tanpa keterangan</span>
           <span class="pk-legenda ijin">Ijin (10 % hadir)</span>
           <span class="pk-legenda sakit">Sakit (20 % hadir)</span>
+          <span class="pk-legenda httm">HTTM penugasan (100 % hadir, tanpa konsumsi/insentif)</span>
           <span class="pk-legenda draf">Belum dicatat</span>
           <span class="pk-legenda-teks">Sel bergaris merah adalah hari libur kerja orang itu.</span>
         </div>
@@ -128,13 +129,13 @@
             <thead><tr>
               <th>No</th><th>Nama</th><th>Jabatan</th><th>Pola honor</th>
               <th class="num" title="Hari kerja menurut ketentuan jam kerja, di luar hari libur">Hari kerja</th>
-              <th class="num" title="Jumlah hari hadir dalam rentang. Bisa dikoreksi saat kunci edit terbuka.">Hadir</th><th class="num" title="Tidak hadir tanpa keterangan: tidak bernilai">Tanpa ket.</th><th class="num" title="Tidak hadir karena ijin: bernilai 10 % jam ketentuan hari itu">Ijin</th><th class="num" title="Tidak hadir karena sakit: bernilai 20 % jam ketentuan hari itu">Sakit</th>
+              <th class="num" title="Jumlah hari hadir dalam rentang. Bisa dikoreksi saat kunci edit terbuka.">Hadir</th><th class="num" title="Tidak hadir tanpa keterangan: tidak bernilai">Tanpa ket.</th><th class="num" title="Tidak hadir karena ijin: bernilai 10 % jam ketentuan hari itu">Ijin</th><th class="num" title="Tidak hadir karena sakit: bernilai 20 % jam ketentuan hari itu">Sakit</th><th class="num" title="Tidak ke sekolah karena penugasan: bernilai 100 % untuk persentase kehadiran, tanpa konsumsi dan insentif">HTTM</th>
               <th class="num" title="Jumlah menit masuk lebih lambat dari ketentuan, dalam rentang">Menit terlambat</th>
               <th class="num" title="Jumlah menit pulang lebih awal dari ketentuan, dalam rentang">Menit pulang cepat</th>
               <th class="num" title="Jumlah jam kerja menurut ketentuan pada hari kerjanya (jam:menit). Bisa dikoreksi saat kunci edit terbuka.">Jam terjadwal</th>
               <th class="num" title="Jam terjadwal pada hari ia hadir, dikurangi menit terlambat dan pulang cepat (jam:menit). Dasar pembiayaan; bobot ijin/sakit tidak termasuk. Bisa dikoreksi saat kunci edit terbuka.">Jam hadir</th>
-              <th class="num" title="Ijin 10 % dan Sakit 20 % jam ketentuan. Hanya untuk persentase kehadiran, tidak untuk pembiayaan.">Bobot ijin/sakit</th>
-              <th class="num" title="(Jam hadir + Bobot ijin/sakit) ÷ Jam terjadwal">% Hadir</th>
+              <th class="num" title="Ijin 10 %, Sakit 20 %, dan HTTM 100 % jam ketentuan. Hanya untuk persentase kehadiran, tidak untuk pembiayaan.">Bobot ijin/sakit/HTTM</th>
+              <th class="num" title="(Jam hadir + Bobot ijin/sakit/HTTM) ÷ Jam terjadwal">% Hadir</th>
               <th></th>
             </tr></thead>
             <tbody id="bodyRekap"></tbody>
@@ -142,7 +143,7 @@
           </table>
         </div>
         <div class="table-foot">Hari kerja dihitung dari ketentuan Jam Kerja Staf di Data Induk pada rentang ini, di luar hari libur sekolah.
-          Jam terjadwal = jumlah jam ketentuan pada hari kerja itu; Jam hadir = jam ketentuan pada hari ia hadir dikurangi menit terlambat dan pulang cepat (hadir di luar hari kerja dihitung dari jam masuk–pulang yang tercatat); Bobot ijin/sakit = Ijin 10 % dan Sakit 20 % jam ketentuan (kekurangan jam yang diasumsikan dari satu scan bernilai 0 %, seperti tanpa keterangan); % Hadir = (Jam hadir + Bobot ijin/sakit) ÷ Jam terjadwal. Bobot hanya untuk persentase kehadiran; Induk Pembiayaan memakai Jam hadir saja.
+          Jam terjadwal = jumlah jam ketentuan pada hari kerja itu; Jam hadir = jam ketentuan pada hari ia hadir dikurangi menit terlambat dan pulang cepat (hadir di luar hari kerja dihitung dari jam masuk–pulang yang tercatat); Bobot ijin/sakit/HTTM = Ijin 10 %, Sakit 20 %, dan HTTM 100 % jam ketentuan (kekurangan jam yang diasumsikan dari satu scan bernilai 0 %, seperti tanpa keterangan); % Hadir = (Jam hadir + Bobot ijin/sakit/HTTM) ÷ Jam terjadwal. Bobot hanya untuk persentase kehadiran; Induk Pembiayaan memakai Jam hadir saja.
           Terlambat dan pulang cepat dibandingkan dengan ketentuan jam kerja orang itu; bagi yang bukan pemegang tugas Staf dipakai jam kerja bawaan sekolah.
           Saat kunci edit terbuka, Hadir (jumlah hari), Jam terjadwal, dan Jam hadir (jam:menit) bisa dikoreksi langsung di tabel — koreksi tersimpan untuk rentang tanggal yang sama persis, kosongkan untuk kembali ke hitungan. Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan menurut pola honor masing-masing.</div>
       </section>
@@ -174,8 +175,9 @@
       <button type="button" class="pilih-tidak" data-status="Tidak Hadir">Tanpa Keterangan</button>
       <button type="button" class="pilih-ijin" data-status="Ijin">Ijin <small>10 %</small></button>
       <button type="button" class="pilih-sakit" data-status="Sakit">Sakit <small>20 %</small></button>
+      <button type="button" class="pilih-httm" data-status="HTTM" title="Tidak ke sekolah karena penugasan">HTTM <small>penugasan</small></button>
     </div>
-    <p class="field-hint" style="margin:-10px 0 16px;">Bila tidak hadir, pilih keterangannya: Ijin bernilai 10 % hadir, Sakit 20 % hadir, Tanpa Keterangan tidak bernilai. Bobot ini hanya untuk persentase kehadiran, tidak untuk pembiayaan.</p>
+    <p class="field-hint" style="margin:-10px 0 16px;">Bila tidak hadir, pilih keterangannya: Ijin bernilai 10 % hadir, Sakit 20 % hadir, Tanpa Keterangan tidak bernilai. HTTM (tidak ke sekolah karena penugasan) dihitung hadir penuh, tetapi tanpa konsumsi dan insentif. Bobot ini hanya untuk persentase kehadiran, tidak untuk pembiayaan.</p>
 
     <div class="modal-actions">
       <button type="button" id="statusHapus" class="btn btn-danger-text" hidden>Batalkan catatan</button>
@@ -274,6 +276,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/staf.js?v=20261026d"></script>
+<script type="module" src="scripts/staf.js?v=20261026e"></script>
 </body>
 </html>

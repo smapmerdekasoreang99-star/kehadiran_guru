@@ -918,8 +918,23 @@ async function simpanBelumTercatat() {
 async function batalkanSemua() {
     if (!isUnlocked() || !catatanSiap() || !state.catatan.length) return;
     const n = state.catatan.length;
-    if (!confirm(`Batalkan ${n} catatan kehadiran staf pada ${tglIndo(state.awal)} – ${tglIndo(state.akhir)}?\n\n`
-        + "Termasuk yang berasal dari rekaman fingerprint. Yang dibatalkan tidak bisa dikembalikan — harus dicatat ulang.")) return;
+    // Pengaman (26 Oktober 2026, sesudah 245 catatan Oktober terhapus tanpa
+    // sengaja): ringkasan siapa saja yang kena, lalu jumlah catatannya harus
+    // diketik ulang. Satu klik OK tidak cukup lagi.
+    const nMesin = state.catatan.filter((c) => c.sumber === "fingerprint").length;
+    const perOrang = new Map();
+    for (const c of state.catatan) perOrang.set(c.guru_id, (perOrang.get(c.guru_id) || 0) + 1);
+    const namaOrang = (id) => state.guru.find((g) => g.id === id)?.nama || id;
+    const daftar = [...perOrang.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
+        .map(([id, k]) => `• ${namaOrang(id)}: ${k}`).join("\n")
+        + (perOrang.size > 8 ? `\n• … dan ${perOrang.size - 8} orang lain` : "");
+    const ketik = window.prompt(`HAPUS ${n} catatan kehadiran staf milik ${perOrang.size} orang pada ${tglIndo(state.awal)} – ${tglIndo(state.akhir)}?\n\n`
+        + `${daftar}\n\n`
+        + (nMesin ? `Termasuk ${nMesin} rekaman fingerprint. ` : "")
+        + "Yang dihapus tidak bisa dikembalikan dari aplikasi; harus dicatat atau diunggah ulang.\n\n"
+        + `Untuk melanjutkan, ketik angka ${n}:`);
+    if (ketik == null) return;
+    if (ketik.trim() !== String(n)) { kabar(`Dibatalkan: angka yang diketik bukan ${n}. Tidak ada catatan yang dihapus.`); return; }
     if (isSupabaseConfigured) {
         const id = state.catatan.map((c) => c.id);
         for (let i = 0; i < id.length; i += 200) {

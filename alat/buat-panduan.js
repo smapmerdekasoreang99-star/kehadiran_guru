@@ -152,7 +152,7 @@ const ISI = [
     ["Tanpa Keterangan", "0"],
   ], [2.5, 3.5]),
   P("Bobot Ijin dan Sakit **hanya untuk persentase kehadiran (kinerja)**, tidak untuk pembiayaan. Induk Pembiayaan tetap memakai **Jam hadir** dan **Hadir** yang sungguhan."),
-  P("Sel bergaris merah = hari libur kerja orang itu (tetap bisa diisi untuk lembur). Garis bawah emas = masuk lebih lambat dari ketentuan. Tombol **Simpan … yang belum tercatat** dan **Batalkan … catatan** bekerja seperti di Piket."),
+  P("Sel bergaris merah = hari libur kerja orang itu (tetap bisa diisi untuk lembur). Garis bawah emas = masuk lebih lambat dari ketentuan. Tombol **Simpan … yang belum tercatat** bekerja seperti di Piket. **Batalkan … catatan dalam rentang ini** menghapus SEMUA catatan pada rentang yang tampil, termasuk rekaman fingerprint; aplikasi menampilkan siapa saja yang terkena dan meminta Anda **mengetik jumlah catatannya** sebelum menghapus."),
   H2("Mengunggah rekaman fingerprint"),
   OL("Ekspor rekaman dari mesin fingerprint ke **.xls/.xlsx** (kolom **No. ID**, **Tanggal**, **Scan Masuk**, **Scan Pulang**; **Nama** dan **Absent** bila ada). Contoh bentuknya: **unduh template (xlsx)**. Bila hasil ekspor mesin berbentuk lain, **unduh prompt ChatGPT (.txt)** membantu mengubahnya.",
     "Klik **Unggah fingerprint**, pilih berkasnya.",

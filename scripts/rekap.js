@@ -241,10 +241,10 @@ function hitungPengganti() {
 function jagaDariCatatan(catatan) {
     const per = new Map();
     for (const c of catatan) {
-        if (c.status !== "Hadir") continue;
+        if (c.status !== "Hadir" && c.status !== "HTTM") continue;
         const kunci = c.guru_id + "|" + c.jenis;
-        if (!per.has(kunci)) per.set(kunci, { guru_id: c.guru_id, jenis: c.jenis, jaga: 0 });
-        per.get(kunci).jaga += 1;
+        if (!per.has(kunci)) per.set(kunci, { guru_id: c.guru_id, jenis: c.jenis, jaga: 0, httm: 0 });
+        per.get(kunci)[c.status === "HTTM" ? "httm" : "jaga"] += 1;
     }
     return [...per.values()];
 }
@@ -316,14 +316,15 @@ async function hitung() {
    hanya melaporkan jumlah harinya. */
 const KUNCI_JENIS = { "Meja Sekolah": "meja", "Unit": "unit", "Parkiran": "parkiran" };
 
-/* Persentase per jenis piket: jaga ÷ terjadwal. Tanpa bobot status,
-   karena pelaksanaan piket hanya mengenal hadir atau tidak. */
-const persenPiket = (x) => x.terjadwal ? Math.round((x.jaga / x.terjadwal) * 10000) / 100 : null;
+/* Persentase per jenis piket: (jaga + HTTM) ÷ terjadwal. HTTM (26 Oktober
+   2026) = tidak menjaga karena penugasan: dihitung hadir untuk persentase,
+   tetapi bukan "Jaga" — transport piketnya dari jaga sungguhan. */
+const persenPiket = (x) => x.terjadwal ? Math.round(((x.jaga + (x.httm || 0)) / x.terjadwal) * 10000) / 100 : null;
 
 function rekapPiket(hari) {
     const per = new Map();
     const baris = (id) => {
-        if (!per.has(id)) per.set(id, { guru_id: id, meja: { terjadwal: 0, jaga: 0 }, unit: { terjadwal: 0, jaga: 0 }, parkiran: { terjadwal: 0, jaga: 0 } });
+        if (!per.has(id)) per.set(id, { guru_id: id, meja: { terjadwal: 0, jaga: 0, httm: 0 }, unit: { terjadwal: 0, jaga: 0, httm: 0 }, parkiran: { terjadwal: 0, jaga: 0, httm: 0 } });
         return per.get(id);
     };
 
@@ -370,17 +371,20 @@ function rekapPiket(hari) {
            menambah apa pun — gilirannya tetap terhitung terjadwal tetapi
            tidak dijaga, dan selisih itulah keterangannya. */
         baris(c.guru_id)[k].jaga += c.jaga;
+        baris(c.guru_id)[k].httm += Number(c.httm) || 0;
     }
     const rows = [...per.values()]
         .map((r) => ({ ...r, nama: namaGuru(r.guru_id) }))
         .sort(urutBaris);
-    const total = { meja: { terjadwal: 0, jaga: 0 }, unit: { terjadwal: 0, jaga: 0 }, parkiran: { terjadwal: 0, jaga: 0 } };
+    const total = { meja: { terjadwal: 0, jaga: 0, httm: 0 }, unit: { terjadwal: 0, jaga: 0, httm: 0 }, parkiran: { terjadwal: 0, jaga: 0, httm: 0 } };
     for (const r of rows)
-        for (const k of ["meja", "unit", "parkiran"]) { total[k].terjadwal += r[k].terjadwal; total[k].jaga += r[k].jaga; }
+        for (const k of ["meja", "unit", "parkiran"]) { total[k].terjadwal += r[k].terjadwal; total[k].jaga += r[k].jaga; total[k].httm += r[k].httm; }
     return { baris: rows, total };
 }
 
-const selPiket = (x) => num(x.terjadwal) + num(x.jaga) + persenCell(persenPiket(x));
+const selPiket = (x) => num(x.terjadwal)
+    + `<td class="num">${x.jaga}${x.httm ? ` <small title="tidak menjaga karena penugasan: dihitung hadir untuk persentase, tanpa transport">+${x.httm} HTTM</small>` : ""}</td>`
+    + persenCell(persenPiket(x));
 
 function renderPiket() {
     const h = state.hasilPiket; if (!h) return;
@@ -402,8 +406,8 @@ function renderPiket() {
         `Satuannya mengikuti jadwalnya: Meja Sekolah dan Unit dihitung per JAM pelajaran, `
         + `Parkiran per HARI jaga — parkiran memang bukan jam pelajaran, melainkan sekali jaga `
         + `sesudah bel pulang. "Terjadwal" dihitung dari jadwal piket pada hari kerja dalam `
-        + `rentang ini, di luar hari libur; "Jaga" adalah yang benar-benar dijalankan; `
-        + `"% Kehadiran" = Jaga ÷ Terjadwal. Piket tidak mengenal pengganti, jadi selisih antara `
+        + `rentang ini, di luar hari libur; "Jaga" adalah yang benar-benar dijalankan (dasar transport); `
+        + `"+n HTTM" = giliran yang tidak dijaga karena penugasan; "% Kehadiran" = (Jaga + HTTM) ÷ Terjadwal. Piket tidak mengenal pengganti, jadi selisih antara `
         + `keduanya berarti petugasnya tidak hadir, atau gilirannya belum dicatat. `
         + `Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan.`;
 }

@@ -533,14 +533,15 @@ function labelJam(jamKe) {
 
 function pitaHtml(iso, jenis, p, jamKe = null, extra = "", panjang = 1) {
     const c = cariCatatan(iso, jenis, p.guruId, p.tugasId, jamKe);
-    const status = c ? (c.status === "Tidak Hadir" ? "absen" : "hadir") : "draf";
+    // HTTM (26 Okt 2026): tidak menjaga karena penugasan — hadir untuk persentase, bukan transport.
+    const status = c ? (c.status === "Tidak Hadir" ? "absen" : c.status === "HTTM" ? "httm" : "hadir") : "draf";
     const kelas = ["pk-pita", status, p.tercecer && "tercecer", extra].filter(Boolean).join(" ");
     const ket = [labelJam(jamKe), p.ket].filter(Boolean).join(" · ");
     const judul = [
         p.nama,
         `${jenis} · ${tglIndo(iso)}`,
         ket,
-        c ? `Status: ${c.status}` : "Belum dicatat",
+        c ? `Status: ${c.status === "HTTM" ? "HTTM (penugasan): hadir untuk persentase, tanpa transport" : c.status}` : "Belum dicatat",
         c?.catatan ? `Catatan: ${c.catatan}` : "",
         isUnlocked() ? "Ketuk untuk memilih kehadirannya" : "Buka kunci edit untuk mencatat",
     ].filter(Boolean).join("\n");
@@ -726,24 +727,24 @@ function renderParkiran() {
 
 function renderRingkas(tab, isiPer) {
     const jenis = JENIS[tab];
-    let total = 0, hadir = 0, absen = 0;
+    let total = 0, hadir = 0, absen = 0, httm = 0;
     for (const d of state.hari) {
         for (const p of isiPer.get(d.iso) || []) {
             for (const jk of jamGiliran(p)) {
                 total++;
                 const c = cariCatatan(d.iso, jenis, p.guruId, p.tugasId, jk);
                 if (!c) continue;
-                if (c.status === "Tidak Hadir") absen++; else hadir++;
+                if (c.status === "Tidak Hadir") absen++; else if (c.status === "HTTM") httm++; else hadir++;
             }
         }
     }
-    const belum = total - hadir - absen;
+    const belum = total - hadir - absen - httm;
     const hari = state.hari.length;
     // Satuannya disebut apa adanya: meja dan unit per jam pelajaran,
     // parkiran per hari jaga.
     const satuan = tab === "parkiran" ? "hari jaga" : "jam jaga";
     document.getElementById("ringkas" + besar(tab)).textContent = total
-        ? `${hari} hari kerja · ${total} ${satuan} · ${hadir} hadir · ${absen} tidak hadir · ${belum} belum dicatat`
+        ? `${hari} hari kerja · ${total} ${satuan} · ${hadir} hadir · ${absen} tidak hadir${httm ? ` · ${httm} HTTM` : ""} · ${belum} belum dicatat`
         : "";
 
     // Tombol simpan menyebut berapa yang masih tertunda, supaya jelas ada

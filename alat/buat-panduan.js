@@ -129,14 +129,14 @@ const ISI = [
   OL("Pilih rentang **Dari … sampai …** atau pakai **◀ / Pekan ini / ▶**.",
     "Ketuk pita nama petugas. Pita putih bergaris putus-putus = **belum dicatat**.",
     "Bila perlu, tulis **Catatan** lebih dulu (mis. datang terlambat, tukar hari).",
-    "Pilih **Hadir** atau **Tidak Hadir** — **pilihan langsung tersimpan**. Centang \"Berlaku untuk seluruh … jam jaganya hari ini\" mencatat semua jamnya sekaligus; lepas bila hanya jam ini yang berbeda."),
+    "Pilih **Hadir**, **Tidak Hadir**, atau **HTTM** (tidak menjaga karena penugasan) — **pilihan langsung tersimpan**. Centang \"Berlaku untuk seluruh … jam jaganya hari ini\" mencatat semua jamnya sekaligus; lepas bila hanya jam ini yang berbeda."),
   P("Warna pita: **hijau** hadir, **merah** tidak hadir. Pita bergaris titik emas = tercatat tetapi tidak ada di jadwal tanggal itu."),
   H2("Mencatat cepat dan formulir paraf"),
   UL("**Simpan … yang belum tercatat** mengisi semua giliran yang belum dicatat dalam rentang sebagai **Hadir** (hari libur dilewati). Pakai setelah yang tidak hadir ditandai lebih dulu.",
     "**Batalkan … catatan dalam rentang ini** mengembalikan semuanya menjadi \"belum dicatat\". Tidak bisa dikembalikan — harus dicatat ulang.",
     "**Unduh formulir paraf** (tanpa PIN): lembar kosong sepekan berkop untuk difotokopi dan diparaf petugas. Formulir meja/unit ditandatangani Wakasek Kurikulum; parkiran oleh Wakasek Kesiswaan."),
   KOTAK("info", "Piket tidak mengenal pengganti",
-    "Bila petugas berhalangan, jaganya memang tidak berjalan dan dicatat **Tidak Hadir**. Besaran kompensasi dihitung di Induk Pembiayaan."),
+    "Bila petugas berhalangan, jaganya memang tidak berjalan dan dicatat **Tidak Hadir**. Bila tidak menjaga karena **penugasan**, catat **HTTM**: dihitung hadir untuk **persentase kehadiran** (yang ikut menentukan persentase wali kelas / koordinator unit), tetapi **transport piket hanya untuk yang benar-benar berjaga**. Di Rekap, kolom Jaga menyebut \"+n HTTM\" dan % Kehadiran = (Jaga + HTTM) ÷ Terjadwal. Besaran kompensasi dihitung di Induk Pembiayaan."),
 
   /* ============================ 7 ============================ */
   H1("Kehadiran Staf"),

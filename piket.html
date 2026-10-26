@@ -102,6 +102,7 @@
       <div class="piket-legenda">
         <span class="pk-legenda hadir">Hadir</span>
         <span class="pk-legenda absen">Tidak hadir</span>
+        <span class="pk-legenda httm">HTTM penugasan (hadir untuk persentase, tanpa transport)</span>
         <span class="pk-legenda draf">Belum dicatat</span>
         <span class="pk-legenda-teks">Ketuk nama untuk memilih kehadirannya.</span>
       </div>
@@ -183,7 +184,9 @@
     <div class="pilih-hadir">
       <button type="button" class="pilih-ya" data-status="Hadir">Hadir</button>
       <button type="button" class="pilih-tidak" data-status="Tidak Hadir">Tidak Hadir</button>
+      <button type="button" class="pilih-httm" data-status="HTTM" title="Tidak menjaga karena penugasan: dihitung hadir untuk persentase, tanpa transport">HTTM</button>
     </div>
+    <p class="field-hint" style="margin:-10px 0 16px;">HTTM = tidak menjaga karena penugasan: dihitung hadir untuk persentase kehadiran, tetapi transport piket hanya untuk yang benar-benar berjaga.</p>
 
     <div class="modal-actions">
       <button type="button" id="statusHapus" class="btn btn-danger-text" hidden>Batalkan catatan</button>
@@ -213,6 +216,6 @@
 
 <script src="assets/kop-dokumen.js?v=6"></script>
 <script src="assets/formulir-piket.js?v=7"></script>
-<script type="module" src="scripts/piket.js?v=20261004c"></script>
+<script type="module" src="scripts/piket.js?v=20261026a"></script>
 </body>
 </html>

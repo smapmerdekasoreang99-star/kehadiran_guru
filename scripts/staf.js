@@ -863,6 +863,7 @@ function bukaPilihan(el) {
     document.getElementById("statusJedaKeluar").value = jam5(c?.jeda_keluar);
     document.getElementById("statusJedaKembali").value = jam5(c?.jeda_kembali);
     document.getElementById("statusKetJeda").value = c?.ket_jeda || "";
+    document.getElementById("statusJedaBlok").open = !!c?.jeda_keluar;
     const terpilih = c ? c.status : "Hadir";
     document.querySelectorAll(".pilih-hadir button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.status === terpilih)));
     document.getElementById("statusHapus").hidden = !c;

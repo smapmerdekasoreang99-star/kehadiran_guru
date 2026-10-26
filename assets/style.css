@@ -527,6 +527,11 @@ textarea {
     border-radius: 10px;
     width: 100%;
     max-width: 440px;
+    /* Tidak pernah lebih tinggi dari layar: isinya digulir (26 Okt 2026, dialog Kehadiran Staf terpotong). */
+    max-height: calc(100vh - 40px);
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 28px 28px 20px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.25);
 }
@@ -1288,6 +1293,9 @@ tr.total td {
 .pilih-hadir .pilih-sakit { background: var(--emas-muda); border-color: var(--emas-tua); color: var(--emas-teks); }
 .pilih-hadir button small { font-weight: 400; font-size: 12px; }
 /* Alasan menit yang kurang & jeda (Kehadiran Staf): berjajar, turun bila sempit. */
+.lipat-jeda { margin-bottom: 14px; }
+.lipat-jeda > summary { cursor: pointer; font-weight: 600; font-size: 13.5px; padding: 4px 0; }
+.lipat-jeda[open] > summary { margin-bottom: 8px; }
 .baris-alasan { display: flex; flex-wrap: wrap; gap: 8px 12px; }
 .baris-alasan label { display: flex; flex-direction: column; gap: 4px; flex: 1 1 120px; min-width: 0; font-weight: 600; }
 .baris-alasan select, .baris-alasan input { width: 100%; min-width: 0; }

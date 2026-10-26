@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/dasar.css?v=3">
-<link rel="stylesheet" href="assets/style.css?v=20261026b" />
+<link rel="stylesheet" href="assets/style.css?v=20261026c" />
 <!-- supabase-js dipaku versinya dengan Subresource Integrity (4 Oktober 2026): "@2" menyajikan rilis 2.x terbaru apa pun isinya. Ganti versi = ganti hash. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous" defer></script>
 <!-- Ikon aplikasi (tab browser & layar HP), 13 Okt 2026 -->
@@ -164,6 +164,25 @@
     </div>
     <p class="field-hint" id="statusKetentuan" style="margin:-8px 0 12px;"></p>
 
+    <!-- Hadir sebagian (26 Oktober 2026): alasan menit yang kurang dan jeda di tengah hari. -->
+    <div class="field">
+      <label>Alasan bila datang terlambat / pulang cepat</label>
+      <div class="baris-alasan">
+        <label class="kecil">Datang <select id="statusKetDatang"><option value="">Tanpa keterangan</option><option value="Ijin">Ijin (10 %)</option><option value="Sakit">Sakit (20 %)</option><option value="HTTM">HTTM penugasan (100 %)</option></select></label>
+        <label class="kecil">Pulang <select id="statusKetPulang"><option value="">Tanpa keterangan</option><option value="Ijin">Ijin (10 %)</option><option value="Sakit">Sakit (20 %)</option><option value="HTTM">HTTM penugasan (100 %)</option></select></label>
+      </div>
+      <p class="field-hint">Menit yang diberi alasan tidak dihitung terlambat / pulang cepat. Ijin, Sakit, atau HTTM di tengah hari tetap wajib scan saat masuk dan pulang.</p>
+    </div>
+    <div class="field">
+      <label>Keluar di tengah hari (opsional)</label>
+      <div class="baris-alasan">
+        <label class="kecil">Keluar <input type="time" id="statusJedaKeluar" /></label>
+        <label class="kecil">Kembali <input type="time" id="statusJedaKembali" /></label>
+        <label class="kecil">Alasan <select id="statusKetJeda"><option value="">Tanpa keterangan</option><option value="Ijin">Ijin (10 %)</option><option value="Sakit">Sakit (20 %)</option><option value="HTTM">HTTM penugasan (100 %)</option></select></label>
+      </div>
+      <p class="field-hint">Bila staf scan masuk dan pulang tetapi di tengah hari keluar lalu kembali. Menit keluar tidak dihitung jam hadir (dasar insentif); konsumsi tetap.</p>
+    </div>
+
     <div class="field">
       <label for="statusCatatan">Catatan (opsional)</label>
       <input type="text" id="statusCatatan" placeholder="mis. izin setengah hari, tukar hari" />
@@ -276,6 +295,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/staf.js?v=20261026e"></script>
+<script type="module" src="scripts/staf.js?v=20261026f"></script>
 </body>
 </html>

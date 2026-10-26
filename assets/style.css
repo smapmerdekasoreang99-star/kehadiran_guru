@@ -1287,6 +1287,10 @@ tr.total td {
 .pilih-hadir .pilih-httm { background: var(--netral-muda); border-color: var(--tinta-2); color: var(--tinta); grid-column: 1 / -1; }
 .pilih-hadir .pilih-sakit { background: var(--emas-muda); border-color: var(--emas-tua); color: var(--emas-teks); }
 .pilih-hadir button small { font-weight: 400; font-size: 12px; }
+/* Alasan menit yang kurang & jeda (Kehadiran Staf): berjajar, turun bila sempit. */
+.baris-alasan { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.baris-alasan label { display: flex; flex-direction: column; gap: 4px; flex: 1 1 120px; min-width: 0; font-weight: 600; }
+.baris-alasan select, .baris-alasan input { width: 100%; min-width: 0; }
 /* Empat pilihan (Kehadiran Staf): dua kolom supaya tetap sebesar sasaran sentuh di HP. */
 .pilih-hadir.empat { display: grid; grid-template-columns: 1fr 1fr; }
 .pilih-hadir button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px currentColor; }

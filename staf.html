@@ -132,8 +132,9 @@
               <th class="num" title="Jumlah menit masuk lebih lambat dari ketentuan, dalam rentang">Menit terlambat</th>
               <th class="num" title="Jumlah menit pulang lebih awal dari ketentuan, dalam rentang">Menit pulang cepat</th>
               <th class="num" title="Jumlah jam kerja menurut ketentuan pada hari kerjanya (jam:menit). Bisa dikoreksi saat kunci edit terbuka.">Jam terjadwal</th>
-              <th class="num" title="Jam terjadwal pada hari ia hadir, dikurangi menit terlambat dan pulang cepat, ditambah 10 % hari Ijin dan 20 % hari Sakit (jam:menit). Bisa dikoreksi saat kunci edit terbuka.">Jam hadir</th>
-              <th class="num" title="Jam hadir ÷ Jam terjadwal">% Hadir</th>
+              <th class="num" title="Jam terjadwal pada hari ia hadir, dikurangi menit terlambat dan pulang cepat (jam:menit). Dasar pembiayaan; bobot ijin/sakit tidak termasuk. Bisa dikoreksi saat kunci edit terbuka.">Jam hadir</th>
+              <th class="num" title="Ijin 10 % dan Sakit 20 % jam ketentuan, serta 10 % kekurangan jam yang diasumsikan dari satu scan. Hanya untuk persentase kehadiran, tidak untuk pembiayaan.">Bobot ijin/sakit</th>
+              <th class="num" title="(Jam hadir + Bobot ijin/sakit) ÷ Jam terjadwal">% Hadir</th>
               <th></th>
             </tr></thead>
             <tbody id="bodyRekap"></tbody>
@@ -141,7 +142,7 @@
           </table>
         </div>
         <div class="table-foot">Hari kerja dihitung dari ketentuan Jam Kerja Staf di Data Induk pada rentang ini, di luar hari libur sekolah.
-          Jam terjadwal = jumlah jam ketentuan pada hari kerja itu; Jam hadir = jam ketentuan pada hari ia hadir dikurangi menit terlambat dan pulang cepat (hadir di luar hari kerja dihitung dari jam masuk–pulang yang tercatat); % Hadir = Jam hadir ÷ Jam terjadwal.
+          Jam terjadwal = jumlah jam ketentuan pada hari kerja itu; Jam hadir = jam ketentuan pada hari ia hadir dikurangi menit terlambat dan pulang cepat (hadir di luar hari kerja dihitung dari jam masuk–pulang yang tercatat); Bobot ijin/sakit = Ijin 10 % dan Sakit 20 % jam ketentuan, ditambah 10 % kekurangan jam yang diasumsikan dari satu scan; % Hadir = (Jam hadir + Bobot ijin/sakit) ÷ Jam terjadwal. Bobot hanya untuk persentase kehadiran; Induk Pembiayaan memakai Jam hadir saja.
           Terlambat dan pulang cepat dibandingkan dengan ketentuan jam kerja orang itu; bagi yang bukan pemegang tugas Staf dipakai jam kerja bawaan sekolah.
           Saat kunci edit terbuka, Hadir (jumlah hari), Jam terjadwal, dan Jam hadir (jam:menit) bisa dikoreksi langsung di tabel — koreksi tersimpan untuk rentang tanggal yang sama persis, kosongkan untuk kembali ke hitungan. Nilai rupiahnya dihitung di aplikasi Induk Pembiayaan menurut pola honor masing-masing.</div>
       </section>
@@ -174,7 +175,7 @@
       <button type="button" class="pilih-ijin" data-status="Ijin">Ijin <small>10 %</small></button>
       <button type="button" class="pilih-sakit" data-status="Sakit">Sakit <small>20 %</small></button>
     </div>
-    <p class="field-hint" style="margin:-10px 0 16px;">Bila tidak hadir, pilih keterangannya: Ijin bernilai 10 % hadir, Sakit 20 % hadir, Tanpa Keterangan tidak bernilai.</p>
+    <p class="field-hint" style="margin:-10px 0 16px;">Bila tidak hadir, pilih keterangannya: Ijin bernilai 10 % hadir, Sakit 20 % hadir, Tanpa Keterangan tidak bernilai. Bobot ini hanya untuk persentase kehadiran, tidak untuk pembiayaan.</p>
 
     <div class="modal-actions">
       <button type="button" id="statusHapus" class="btn btn-danger-text" hidden>Batalkan catatan</button>
@@ -238,7 +239,7 @@
           <th>Status</th><th class="num">Masuk</th><th class="num">Pulang</th>
           <th class="num" title="Menit masuk lebih lambat dari ketentuan">Terlambat</th>
           <th class="num" title="Menit pulang lebih awal dari ketentuan">Pulang cepat</th>
-          <th class="num" title="Terjadwal dikurangi terlambat dan pulang cepat; Ijin 10 % dan Sakit 20 % dari terjadwal; hadir di luar hari kerja dari jam masuk–pulang">Jam dihitung</th>
+          <th class="num" title="Terjadwal dikurangi terlambat dan pulang cepat; hadir di luar hari kerja dari jam masuk–pulang">Jam dihitung</th>
           <th>Keterangan</th><th></th>
         </tr></thead>
         <tbody></tbody>
@@ -273,6 +274,6 @@
   </div>
 </div>
 
-<script type="module" src="scripts/staf.js?v=20261026a"></script>
+<script type="module" src="scripts/staf.js?v=20261026b"></script>
 </body>
 </html>

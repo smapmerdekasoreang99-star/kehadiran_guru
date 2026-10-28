@@ -74,17 +74,22 @@ const KELAS_STATUS = { Hadir: "hadir", "Tidak Hadir": "absen", Ijin: "ijin", Sak
 const BOBOT = { Ijin: 0.10, Sakit: 0.20, HTTM: 1 };
 const labelStatus = (s) => LABEL_STATUS[s] || s || "";
 /* Satu scan saja dari mesin (aturan user 28 Oktober 2026): patokannya
-   pertengahan jam kerja orang itu pada hari itu, dan jam yang hilang
-   diasumsikan setengah jam kerja dari scan-nya:
-     scan <= pertengahan -> scan datang; pulang = datang + setengah jam kerja
-     scan >  pertengahan -> scan pulang; masuk  = pulang − setengah jam kerja
+   pertengahan jadwal kerja orang itu pada hari itu, dan hari itu dianggap
+   hadir 50 %: jam yang hilang = scan ± setengah jam kerja hari itu
+   (ralat user 28 Oktober 2026).
+     scan <= pertengahan -> scan datang; pulang = scan + setengah jam kerja
+     scan >  pertengahan -> scan pulang; masuk  = scan − setengah jam kerja
+   Scan di luar jadwal dipatok dulu ke jadwal (datang sebelum jam masuk
+   dihitung dari jam masuk; pulang sesudah jam pulang dihitung dari jam
+   pulang), sehingga yang terhitung selalu tepat setengah hari. Jam scan
+   aslinya tetap yang disimpan.
    Senin–Kamis 06.25–15.40: pertengahan 11.02.30, setengahnya 277,5 menit.
    Jumat 06.25–14.25: pertengahan 10.25, setengahnya 240 menit.
    Hari tanpa ketentuan (mis. libur kerja) memakai CADANGAN_SATU_SCAN.
    Kekurangan menit di sisi yang diasumsikan terhadap ketentuan dianggap
    tanpa keterangan (bernilai 0 %, ralat user 26 Oktober 2026). */
 const CADANGAN_SATU_SCAN = { masuk: "06:25", pulang: "15:40" };
-const TEKS_ASUMSI = "scan sampai pertengahan jam kerja hari itu dianggap datang dan pulangnya diasumsikan jam datang + setengah jam kerja; scan sesudahnya dianggap pulang dan masuknya diasumsikan jam pulang − setengah jam kerja (Senin–Kamis: pertengahan 11.02.30, setengahnya 277,5 menit; Jumat: 10.25 dan 240 menit)";
+const TEKS_ASUMSI = "hari itu dianggap hadir 50 %: scan sampai pertengahan jadwal kerja dianggap datang dan pulangnya diasumsikan jam datang + setengah jam kerja; scan sesudahnya dianggap pulang dan masuknya diasumsikan jam pulang − setengah jam kerja (Senin–Kamis 277,5 menit, Jumat 240 menit; scan di luar jadwal dihitung dari jam jadwal)";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -357,7 +362,7 @@ function pitaHtml(d, s) {
         c?.ket_datang ? `Datang terlambat beralasan: ${labelStatus(c.ket_datang)}` : "",
         c?.ket_pulang ? `Pulang cepat beralasan: ${labelStatus(c.ket_pulang)}` : "",
         c?.jeda_keluar ? `Keluar ${jam5(c.jeda_keluar)}–${jam5(c.jeda_kembali)}${c.ket_jeda ? ` (${labelStatus(c.ket_jeda)})` : " (tanpa keterangan)"}` : "",
-        c?.jam_diasumsikan ? `* Jam ${c.jam_diasumsikan} tidak terekam mesin: diasumsikan setengah jam kerja hari itu dari scan ${c.jam_diasumsikan === "pulang" ? "datang" : "pulang"}; kekurangannya dianggap tanpa keterangan (0 %)` : "",
+        c?.jam_diasumsikan ? `* Jam ${c.jam_diasumsikan} tidak terekam mesin: diasumsikan setengah jam kerja hari itu dari scan ${c.jam_diasumsikan === "pulang" ? "datang" : "pulang"} (hadir 50 %); kekurangannya dianggap tanpa keterangan (0 %)` : "",
         terlambat ? "Masuk lebih lambat dari ketentuan" : "",
         c?.catatan ? `Catatan: ${c.catatan}` : "",
         isUnlocked() ? "Ketuk untuk memilih kehadirannya" : "Buka kunci edit untuk mencatat"].filter(Boolean).join("\n");
@@ -850,7 +855,7 @@ function bukaPilihan(el) {
         ? `Ketentuan jam kerja hari ini: ${jam5(k.masuk)}–${jam5(k.pulang)}${k.sumber === "khusus" ? " (jam khusus)" : s.tanpaKetentuan ? " (bawaan sekolah)" : ""}. Ubah bila jamnya berbeda.`
         : "Menurut ketentuan, hari ini bukan hari kerjanya.";
     if (c?.jam_diasumsikan) document.getElementById("statusKetentuan").textContent +=
-        ` Jam ${c.jam_diasumsikan} tidak terekam mesin, jadi diasumsikan setengah jam kerja hari itu dari scan ${c.jam_diasumsikan === "pulang" ? "datang" : "pulang"}; kekurangannya dianggap tanpa keterangan (0 %). Mengubah jam itu berarti jamnya pasti.`;
+        ` Jam ${c.jam_diasumsikan} tidak terekam mesin, jadi diasumsikan setengah jam kerja hari itu dari scan ${c.jam_diasumsikan === "pulang" ? "datang" : "pulang"} (hadir 50 %); kekurangannya dianggap tanpa keterangan (0 %). Mengubah jam itu berarti jamnya pasti.`;
     const liburBox = document.getElementById("statusLibur");
     const libur = state.libur.has(tanggal);
     liburBox.hidden = !libur && (!!k?.bekerja || !!s.tanpaHariKerja);
@@ -1020,22 +1025,24 @@ async function batalkanSemua() {
    satu sidik jari dua kali; jam pulangnya dianggap tidak ada.
    Hanya satu scan (aturan 28 Oktober 2026) — diterapkan saat menyimpan,
    apa pun kolom tempat scan itu berada di berkas:
-     scan <= pertengahan jam kerja -> scan datang; pulang = datang + setengah jam kerja
-     scan >  pertengahan jam kerja -> scan pulang; masuk  = pulang − setengah jam kerja
+     scan <= pertengahan jadwal kerja -> scan datang; pulang = datang + setengah jam kerja
+     scan >  pertengahan jadwal kerja -> scan pulang; masuk  = pulang − setengah jam kerja
+   (scan di luar jadwal dihitung dari jam jadwal)
    (jam kerja orang itu pada hari itu; lihat CADANGAN_SATU_SCAN)
    dan jam_diasumsikan mencatat sisi mana yang diasumsikan; kekurangan
    menit di sisi itu terhadap ketentuan dianggap tanpa keterangan (0 %). */
 const detikDari = (t) => { const [h, m, s] = String(t || "").split(":").map(Number); return h * 3600 + (m || 0) * 60 + (s || 0); };
 const jamDariDetik = (d) => { d = Math.min(86399, Math.max(0, Math.round(d)));
     return [Math.floor(d / 3600), Math.floor(d / 60) % 60, d % 60].map((x) => String(x).padStart(2, "0")).join(":"); };
-/* Satu scan -> { masuk, pulang, asumsi } menurut pertengahan jam kerja k
-   (detik, karena setengah jam kerja bisa berakhir di :30). */
+/* Satu scan -> { masuk, pulang, asumsi }: sisi yang hilang = scan ±
+   setengah jadwal kerja k, dengan scan dipatok ke dalam jadwal (detik,
+   karena setengah jam kerja bisa berakhir di :30). */
 function lengkapiSatuScan(scan, k) {
     const ada = k?.bekerja !== false && k?.masuk && k?.pulang && detikDari(k.pulang) > detikDari(k.masuk);
     const a = detikDari(ada ? k.masuk : CADANGAN_SATU_SCAN.masuk), b = detikDari(ada ? k.pulang : CADANGAN_SATU_SCAN.pulang);
     const tengah = (a + b) / 2, setengah = (b - a) / 2, s = detikDari(jam5(scan));
-    return s > tengah ? { masuk: jamDariDetik(s - setengah), pulang: jam5(scan), asumsi: "masuk" }
-                      : { masuk: jam5(scan), pulang: jamDariDetik(s + setengah), asumsi: "pulang" };
+    return s > tengah ? { masuk: jamDariDetik(Math.min(s, b) - setengah), pulang: jam5(scan), asumsi: "masuk" }
+                      : { masuk: jam5(scan), pulang: jamDariDetik(Math.max(s, a) + setengah), asumsi: "pulang" };
 }
 let unggahan = null;   // hasil pembacaan berkas yang sedang ditinjau di modal
 
@@ -1197,8 +1204,8 @@ async function unduhTemplateFinger() {
         [],
         ["Yang dilakukan aplikasi:"],
         ["• Ada scan (masuk atau pulang) → Hadir, jamnya ikut tersimpan."],
-        ["• Hanya satu scan → patokannya pertengahan jam kerja hari itu. Sampai pertengahan dianggap scan datang, jam pulang = jam datang + setengah jam kerja. Sesudahnya dianggap scan pulang, jam masuk = jam pulang − setengah jam kerja."],
-        ["  Senin–Kamis (06:25–15:40): pertengahan 11:02:30, setengahnya 277,5 menit. Jumat (06:25–14:25): pertengahan 10:25, setengahnya 240 menit."],
+        ["• Hanya satu scan → hari itu dianggap hadir 50 %. Scan sampai pertengahan jadwal = scan datang, jam pulang = jam datang + setengah jam kerja. Sesudahnya = scan pulang, jam masuk = jam pulang − setengah jam kerja."],
+        ["  Senin–Kamis (06:25–15:40): pertengahan 11:02:30, setengahnya 277,5 menit. Jumat (06:25–14:25): pertengahan 10:25, setengahnya 240 menit. Datang sebelum 06:25 dihitung dari 06:25; pulang sesudah jam pulang dihitung dari jam pulang."],
         ["  Kekurangan menitnya terhadap ketentuan jam kerja dianggap tanpa keterangan (0 %). Jam yang diasumsikan ditandai * di aplikasi."],
         ["• Absent = True tanpa scan → Tanpa Keterangan, kecuali hari libur sekolah atau hari libur kerja orang itu."],
         ["  Bila ternyata ijin (10 % hadir) atau sakit (20 % hadir), ubah di aplikasi dengan mengetuk selnya."],
@@ -1396,7 +1403,7 @@ async function simpanUnggahan() {
     await muatRentang();
     const rincian = [
         `${n.hadir} hadir`, `${n.tidak} tanpa keterangan`,
-        n.asumsi ? `${n.asumsi} hanya satu scan, jam lainnya diasumsikan scan ± setengah jam kerja hari itu (ditandai *)` : "",
+        n.asumsi ? `${n.asumsi} hanya satu scan, jam lainnya diasumsikan scan ± setengah jam kerja hari itu, hadir 50 % (ditandai *)` : "",
         n.manual ? `${n.manual} dilewati karena sudah dicatat manual` : "",
         n.libur ? `${n.libur} tanpa scan pada hari libur dilewati` : "",
         n.kosong ? `${n.kosong} baris tanpa rekaman dilewati` : "",

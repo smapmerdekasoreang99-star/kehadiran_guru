@@ -168,8 +168,8 @@ const ISI = [
     "Klik **Simpan rekaman … orang** dan baca ringkasannya."),
   TB(["Isi baris di berkas", "Dicatat sebagai"], [
     ["Scan masuk dan pulang", "**Hadir** beserta jam masuk/pulang"],
-    ["Hanya satu scan, sampai pertengahan jam kerja", "**Hadir**; dianggap scan datang, jam pulang diasumsikan = jam datang + setengah jam kerja (ditandai *). Kekurangan menitnya terhadap ketentuan dianggap **tanpa keterangan (0 %)**"],
-    ["Hanya satu scan, sesudah pertengahan jam kerja", "**Hadir**; dianggap scan pulang, jam masuk diasumsikan = jam pulang − setengah jam kerja (ditandai *). Kekurangan menitnya terhadap ketentuan dianggap **tanpa keterangan (0 %)**"],
+    ["Hanya satu scan, sampai pertengahan jadwal kerja", "**Hadir 50 %**; dianggap scan datang, jam pulang diasumsikan = jam datang + setengah jam kerja (Senin–Kamis **277,5 menit**, Jumat **240 menit**; datang sebelum 06.25 dihitung dari 06.25; ditandai *). Kekurangan menitnya terhadap ketentuan dianggap **tanpa keterangan (0 %)**"],
+    ["Hanya satu scan, sesudah pertengahan jadwal kerja", "**Hadir 50 %**; dianggap scan pulang, jam masuk diasumsikan = jam pulang − setengah jam kerja (pulang sesudah jam pulang dihitung dari jam pulang; ditandai *). Kekurangan menitnya terhadap ketentuan dianggap **tanpa keterangan (0 %)**"],
     ["Absent = True tanpa scan", "**Tanpa Keterangan** (kecuali hari libur); ubah menjadi Ijin atau Sakit bila ada keterangannya"],
     ["Tanpa scan dan tanpa Absent", "Dilewati"],
   ], [2.5, 3.5]),

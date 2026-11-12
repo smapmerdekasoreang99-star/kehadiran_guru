@@ -231,11 +231,12 @@ function tulisSheetKehadiran(wb, namaSheet, judul, baris, total, { ExcelJS, peng
     };
     baris.forEach((b, i) => {
         selData(ws, r, 1, i + 1, { align: "center" }); selData(ws, r, 2, b.nama);
+        selData(ws, r, 3, b.rombel || "", { align: "center" });
         tulisAngka(b);
         ws.getRow(r).height = 30;
         r += 1;
     });
-    selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
+    selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 3);
     tulisAngka(total, { bold: true, fill: true });
     r += 2;
     ws.getCell(r, 1).value = `Kontrak = jam per minggu menurut jadwal KBM; (+n) = jam Tugas Tambahan per minggu.  Bobot kehadiran: HTTM ${bobot.HTTM * 100}% · ST ${bobot.ST * 100}% · IT ${bobot.IT * 100}% · TK ${bobot.TK * 100}%.  ${hari ? "Hari Datang = hari terjadwal yang tidak absen pada seluruh jamnya.  " : ""}Bobot Hadir = Jam Hadir + HTTM + 20% ST + 10% IT; % Kehadiran = Bobot Hadir ÷ Jam Terjadwal.  ${catatan || ""}`;
@@ -254,35 +255,36 @@ function tulisSheetKehadiran(wb, namaSheet, judul, baris, total, { ExcelJS, peng
 export async function bukuWali({ ExcelJS, baris, total, pengaturan, awal, akhir, jumlahHariKerja, bobot, logoBase64 }) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Tugas Wali Kelas");
-    const KOL = 7;
-    ws.columns = [{ width: 5 }, { width: 34 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 13 }];
+    const KOL = 8;
+    ws.columns = [{ width: 5 }, { width: 32 }, { width: 11 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 13 }];
     let r = tulisKop(ws, { ExcelJS, wb, logoBase64, pengaturan, judul: "REKAPITULASI KEHADIRAN TUGAS WALI KELAS",
         sub: `${labelPeriode(awal, akhir).replace(" :", ":")}  ·  ${jumlahHariKerja} hari kerja`, kolomTerakhir: KOL });
-    kepalaTabel(ws, r, ["NO", "NAMA WALI KELAS",
+    kepalaTabel(ws, r, ["NO", "NAMA WALI KELAS", "ROMBEL",
                         "UPACARA TERJADWAL (JAM)", "UPACARA HADIR (JAM)",
                         "BIMBINGAN WK TERJADWAL (JAM)", "BIMBINGAN WK HADIR (JAM)",
                         "% KEHADIRAN"], { tinggi: 34 });
     r += 1;
     const tulisAngka = (b, opsi = {}) => {
         [b.terjadwalUpacara, b.hadirUpacara, b.terjadwalBimbingan, b.hadirBimbingan]
-            .forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", ...opsi }));
-        selData(ws, r, 7, b.persen === null || b.persen === undefined ? "" : b.persen / 100,
+            .forEach((v, j) => selData(ws, r, 4 + j, v, { align: "center", ...opsi }));
+        selData(ws, r, 8, b.persen === null || b.persen === undefined ? "" : b.persen / 100,
                 { fmt: "0.00%", align: "center", bold: true, ...opsi });
     };
     baris.forEach((b, i) => {
         selData(ws, r, 1, i + 1, { align: "center" }); selData(ws, r, 2, b.nama);
+        selData(ws, r, 3, b.rombel || "", { align: "center" });
         tulisAngka(b);
         ws.getRow(r).height = 30;
         r += 1;
     });
-    selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
+    selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 3);
     tulisAngka(total, { bold: true, fill: true });
     r += 2;
     ws.getCell(r, 1).value = `Upacara & Bimbingan Wali Kelas, Senin jam 1-2, terpisah dari jam mengajar. % Kehadiran dihitung dari gabungan keduanya `
         + `dengan bobot status: HTTM ${bobot.HTTM * 100}% · ST ${bobot.ST * 100}% · IT ${bobot.IT * 100}% · TK ${bobot.TK * 100}%.`;
     ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true }; ws.mergeCells(r, 1, r, KOL);
     r += 2;
-    blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 6, kolomTerakhir: KOL });
+    blokTandaTangan(ws, r, { pengaturan, tanggal: akhir, kolomKiri: 2, kolomKanan: 7, kolomTerakhir: KOL });
     pengaturanCetak(ws, "portrait");
     ws.pageSetup.printTitlesRow = "6:6";
     return wb;

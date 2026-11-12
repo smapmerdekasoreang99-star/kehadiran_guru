@@ -6,8 +6,8 @@ import { urutkanKelas, jenisKelas } from "../assets/kelas-order.js?v=20260921v";
 import { semesterTanggal, semesterBaris } from "../assets/semester.js?v=20260921ad";
 import { mencakup, konteksLibur, namaHari, tanggalLengkap, bulanTahun, bulanPendek, uraianCakupan, uraianJam, waktuJam } from "../assets/libur.js?v=20261007c";
 import { muatRujukan } from "../assets/simpanan.js?v=20261004a";
-import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas, rekapDariJumlah, rekapWaliDariJumlah } from "../assets/rekap-hitung.js?v=20261007c";
-import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20261004b";
+import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas, MAPEL_WALI_KELAS, rekapDariJumlah, rekapWaliDariJumlah } from "../assets/rekap-hitung.js?v=20261007c";
+import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20261112a";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 import { esc, ambilSemua, tombolSibuk, muatExcelJS } from "../assets/aman.js?v=20261004a";
 
@@ -440,10 +440,23 @@ function renderKehadiran() {
     tandaiPerluHitung();
 }
 
+/* Rombel perwalian: dari Tugas Guru di Data Induk (v_guru.wali_kelas, tahun
+   ajaran aktif). Bila kosong, diambil dari kelas jadwal Upacara/Bimbingan
+   Wali Kelas orang itu, supaya kolomnya tetap terisi. */
+function rombelWali(gid) {
+    const g = state.guru.find((x) => x.id === gid);
+    if (g?.wali_kelas) return g.wali_kelas;
+    const nama = new Set(state.jadwal
+        .filter((j) => j.guru_id === gid && MAPEL_WALI_KELAS.includes(j.mapel_id))
+        .map((j) => state.kelas.find((k) => k.id === j.kelas_id)?.nama_kelas || j.kelas_id)
+        .filter(Boolean));
+    return [...nama].join(", ");
+}
+
 function barisWaliTersaring() {
     const q = state.saringWali.trim().toLowerCase();
-    return (state.hasilWali?.baris || []).map((r) => ({ ...r, nama: namaGuru(r.guru_id) }))
-        .filter((r) => !q || r.nama.toLowerCase().includes(q)).sort(urutBaris);
+    return (state.hasilWali?.baris || []).map((r) => ({ ...r, nama: namaGuru(r.guru_id), rombel: rombelWali(r.guru_id) }))
+        .filter((r) => !q || r.nama.toLowerCase().includes(q) || r.rombel.toLowerCase().includes(q)).sort(urutBaris);
 }
 
 /* Upacara dan Bimbingan Wali Kelas masing-masing punya kolom Terjadwal
@@ -459,8 +472,8 @@ function renderWali() {
     const w = state.hasilWali; if (!w) return;
     const rows = barisWaliTersaring();
     document.getElementById("bodyWali").innerHTML = rows.map((r) => `
-      <tr><td class="nama">${esc(r.nama)}</td>${selWali(r)}</tr>`).join("")
-      || `<tr><td colspan="6" class="empty-state">Tidak ada jam tugas wali kelas pada rentang ini.</td></tr>`;
+      <tr><td class="nama">${esc(r.nama)}</td><td>${esc(r.rombel) || "—"}</td>${selWali(r)}</tr>`).join("")
+      || `<tr><td colspan="7" class="empty-state">Tidak ada jam tugas wali kelas pada rentang ini.</td></tr>`;
     const t = w.total;
     document.getElementById("ringkasWali").textContent =
         `${w.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
@@ -475,7 +488,7 @@ function renderWali() {
         + "Pembiayaan angkanya per minggu (1 jam), karena honornya dibayarkan bulanan atas dasar jam "
         + "kontrak itu — bukan dikalikan banyaknya pekan. Ketidakhadiran yang berstatus (sakit, ijin, "
         + "HTTM) tidak masuk kolom Hadir, tetapi tetap dihitung berbobot pada % Kehadiran.";
-    document.getElementById("footWali").innerHTML = `<tr class="total"><td>Total (${w.baris.length} wali kelas)</td>${selWali(t)}</tr>`;
+    document.getElementById("footWali").innerHTML = `<tr class="total"><td colspan="2">Total (${w.baris.length} wali kelas)</td>${selWali(t)}</tr>`;
 }
 
 // ---------- Render pengganti ----------

@@ -10,6 +10,11 @@ import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT
 import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20261112a";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 import { esc, ambilSemua, tombolSibuk, muatExcelJS } from "../assets/aman.js?v=20261004a";
+import { pasangUrut, terapkanUrut } from "../assets/urut-tabel.js?v=20261117a";
+
+// Tabel rekap yang judul kolomnya bisa diketuk untuk mengurutkan.
+const tabelDari = (id) => document.getElementById(id)?.closest("table");
+const urutUlang = (...id) => id.forEach((x) => { const t = tabelDari(x); if (t) { pasangUrut(t); terapkanUrut(t); } });
 
 // Halaman ini hanya merekap KEHADIRAN. Seluruh perhitungan uang — honor
 // mengajar, honor pengganti, dan transport — pindah ke aplikasi Induk
@@ -395,6 +400,7 @@ function renderPiket() {
         <td class="num">${i + 1}</td><td class="nama">${esc(r.nama)}</td>
         ${selPiket(r.meja)}${selPiket(r.unit)}${selPiket(r.parkiran)}
       </tr>`).join("");
+    urutUlang("bodyPiket");
     const t = h.total;
     document.getElementById("footPiket").innerHTML = rows.length ? `
       <tr class="total"><td></td><td>Total (${rows.length} petugas)</td>
@@ -435,6 +441,7 @@ function renderKehadiran() {
     const t = h.total;
     document.getElementById("footKehadiran").innerHTML = `
       <tr class="total"><td>Total (${h.baris.length} guru)</td><td class="num">${t.kontrak}${(() => { const s = h.baris.reduce((a, r) => a + jamTambahan(r.guru_id), 0); return s ? ` <small class="satuan-kolom">(+${s})</small>` : ""; })()}</td>${num(t.hariTerjadwal)}${num(t.hariDatang)}${num(t.terjadwal)}${num(t.hadirTM)}${num(t.HTTM)}${num(t.ST)}${num(t.IT)}${num(t.TK)}${num(fmt(t.hadir))}${persenCell(t.persen)}</tr>`;
+    urutUlang("bodyKehadiran");
     document.getElementById("ringkasKehadiran").textContent = `${h.jumlahHariKerja} hari kerja · ${tanggalPanjang(state.awal)} – ${tanggalPanjang(state.akhir)}`;
     renderWali();
     tandaiPerluHitung();
@@ -488,6 +495,7 @@ function renderWali() {
         + "Pembiayaan angkanya per minggu (1 jam), karena honornya dibayarkan bulanan atas dasar jam "
         + "kontrak itu — bukan dikalikan banyaknya pekan. Ketidakhadiran yang berstatus (sakit, ijin, "
         + "HTTM) tidak masuk kolom Hadir, tetapi tetap dihitung berbobot pada % Kehadiran.";
+    urutUlang("bodyWali");
     document.getElementById("footWali").innerHTML = `<tr class="total"><td colspan="2">Total (${w.baris.length} wali kelas)</td>${selWali(t)}</tr>`;
 }
 
@@ -506,6 +514,7 @@ function renderPengganti() {
         <td class="nama">${esc(namaGuru(r.guru_id))}</td><td><span class="badge-status badge-${esc(r.status.toLowerCase())}">${esc(r.status)}</span></td>
         <td class="nama">${r.pengganti_id ? esc(namaGuru(r.pengganti_id)) : "—"}</td><td><span class="badge-tugas badge-${esc(r.kode.toLowerCase())}">${esc(r.kode)}</span></td>
       </tr>`).join("") || `<tr><td colspan="8" class="empty-state">Belum ada penugasan pada rentang ini.</td></tr>`;
+    urutUlang("bodyRingkas", "bodyRinci");
     document.getElementById("ringkasPengganti").textContent = `${h.total.total} jam digantikan · ${h.tanpaPengganti} jam tanpa pengganti (TP)` + (state.jamWaliDikecualikan ? ` · ${state.jamWaliDikecualikan} jam tugas wali kelas tidak termasuk` : "");
     document.getElementById("footPengganti").textContent = `GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler · TP = Tidak Perlu Pengganti (tidak masuk hitungan per guru).`;
 }

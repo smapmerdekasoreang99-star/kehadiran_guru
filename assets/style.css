@@ -1948,3 +1948,10 @@ tr.baris-libur .badge-kelas { opacity: .7; }
     .sidebar .panduan { margin-left: auto; }
     .panduan-menu { position: fixed; left: 16px; right: 16px; top: 76px; bottom: auto; width: auto; }
 }
+
+/* Judul kolom tabel rekap bisa diketuk untuk mengurutkan (17 Nov 2026) */
+.urut-kol { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.urut-kol .panah { font-size: .85em; opacity: .3; }
+.urut-kol:hover .panah, th[aria-sort] .urut-kol .panah { opacity: 1; }
+th[aria-sort] .urut-kol { color: var(--sakit-tua); }
+.urut-kol:focus-visible { outline: 2px solid var(--sakit); outline-offset: 2px; border-radius: 4px; }

@@ -293,7 +293,7 @@ export async function bukuWali({ ExcelJS, baris, total, pengaturan, awal, akhir,
 // =========================================================
 // 3. REKAP GURU PENGGANTI (ringkas + rincian)
 // =========================================================
-export async function bukuPengganti({ ExcelJS, ringkas, rincian, tanpaPengganti, pengaturan, awal, akhir, logoBase64 }) {
+export async function bukuPengganti({ ExcelJS, ringkas, rincian, tanpaPengganti, belumDiverifikasi = 0, pengaturan, awal, akhir, logoBase64 }) {
     const wb = new ExcelJS.Workbook();
     // Sheet 1: per guru pengganti
     const ws = wb.addWorksheet("Per Guru Pengganti");
@@ -311,21 +311,22 @@ export async function bukuPengganti({ ExcelJS, ringkas, rincian, tanpaPengganti,
     selData(ws, r, 1, "JUMLAH", { bold: true, align: "center", fill: true }); ws.mergeCells(r, 1, r, 2);
     [tot.GT, tot.PT, tot.Inf, tot.total].forEach((v, j) => selData(ws, r, 3 + j, v, { align: "center", bold: true, fill: true }));
     r += 2;
-    ws.getCell(r, 1).value = `GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler.  Jam tanpa pengganti (TP): ${tanpaPengganti}.`;
+    ws.getCell(r, 1).value = `GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler.  Hanya penugasan yang sudah diverifikasi.  Belum diverifikasi: ${belumDiverifikasi} jam.  Jam tanpa pengganti (TP): ${tanpaPengganti}.`;
     ws.getCell(r, 1).font = { name: FONT, size: 8, italic: true }; ws.mergeCells(r, 1, r, 6);
     pengaturanCetak(ws, "portrait");
     ws.pageSetup.printTitlesRow = "6:6";
 
     // Sheet 2: rincian
     const wr = wb.addWorksheet("Rincian per Jam");
-    wr.columns = [{ width: 5 }, { width: 13 }, { width: 8 }, { width: 14 }, { width: 22 }, { width: 30 }, { width: 8 }, { width: 30 }, { width: 8 }];
-    let q = tulisKop(wr, { ExcelJS, wb, logoBase64, pengaturan, judul: "RINCIAN PENUGASAN GURU PENGGANTI", sub: labelPeriode(awal, akhir).replace(" :", ":"), kolomTerakhir: 9 });
-    kepalaTabel(wr, q, ["NO", "TANGGAL", "JAM KE", "KELAS", "MATA PELAJARAN", "GURU TIDAK HADIR", "KET", "GURU PENGGANTI", "STATUS"]); q += 1;
+    wr.columns = [{ width: 5 }, { width: 13 }, { width: 8 }, { width: 14 }, { width: 22 }, { width: 30 }, { width: 8 }, { width: 30 }, { width: 8 }, { width: 12 }];
+    let q = tulisKop(wr, { ExcelJS, wb, logoBase64, pengaturan, judul: "RINCIAN PENUGASAN GURU PENGGANTI", sub: labelPeriode(awal, akhir).replace(" :", ":"), kolomTerakhir: 10 });
+    kepalaTabel(wr, q, ["NO", "TANGGAL", "JAM KE", "KELAS", "MATA PELAJARAN", "GURU TIDAK HADIR", "KET", "GURU PENGGANTI", "STATUS", "VERIFIKASI"]); q += 1;
     rincian.forEach((b, i) => {
         selData(wr, q, 1, i + 1, { align: "center" }); selData(wr, q, 2, tglIndo(b.tanggal), { align: "center" });
         selData(wr, q, 3, b.jam_ke, { align: "center" }); selData(wr, q, 4, b.kelas, { align: "center" });
         selData(wr, q, 5, b.mapel); selData(wr, q, 6, b.guru); selData(wr, q, 7, b.status, { align: "center" });
         selData(wr, q, 8, b.pengganti || "—"); selData(wr, q, 9, b.kode, { align: "center" });
+        selData(wr, q, 10, b.kode === "TP" ? "—" : b.diverifikasi ? "✓" : "Belum", { align: "center" });
         wr.getRow(q).height = 30; q += 1;
     });
     pengaturanCetak(wr, "landscape");

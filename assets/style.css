@@ -1955,3 +1955,11 @@ tr.baris-libur .badge-kelas { opacity: .7; }
 .urut-kol:hover .panah, th[aria-sort] .urut-kol .panah { opacity: 1; }
 th[aria-sort] .urut-kol { color: var(--sakit-tua); }
 .urut-kol:focus-visible { outline: 2px solid var(--sakit); outline-offset: 2px; border-radius: 4px; }
+
+/* Verifikasi guru pengganti (Rekap → Guru Pengganti, 24 Nov 2026) */
+.kolom-verifikasi { text-align: center; }
+.cek-verifikasi { width: 18px; height: 18px; cursor: pointer; accent-color: var(--gold); }
+.cek-verifikasi:disabled { cursor: not-allowed; }
+.belum-verifikasi { color: #B4532A; font-weight: 600; }
+.saring-verifikasi { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-muted); }
+.saring-verifikasi select { padding: 4px 6px; border-radius: 6px; }

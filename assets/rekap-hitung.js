@@ -241,23 +241,29 @@ export function rekapPengganti({ penugasan, ketidakhadiran, jadwal, awal, akhir 
     const jMap = new Map(jadwal.map((j) => [j.id, j]));
     const per = new Map();
     const rincian = [];
-    let tanpaPengganti = 0;
+    let tanpaPengganti = 0, belumDiverifikasi = 0;
     for (const p of penugasan) {
         const k = kMap.get(p.ketidakhadiran_id);
         if (!k || k.tanggal < awal || k.tanggal > akhir) continue;
         const j = jMap.get(k.jadwal_id);
         if (!j) continue;
-        if (p.status_pengganti === "TP" || !p.guru_pengganti_id) { tanpaPengganti++; rincian.push({ tanggal: k.tanggal, jam_ke: j.jam_ke, kelas_id: j.kelas_id, mapel_id: j.mapel_id, guru_id: j.guru_id, status: k.status, pengganti_id: null, kode: "TP" }); continue; }
-        if (!per.has(p.guru_pengganti_id)) per.set(p.guru_pengganti_id, { guru_id: p.guru_pengganti_id, GT: 0, PT: 0, Inf: 0, total: 0 });
+        const dasar = { ketidakhadiran_id: p.ketidakhadiran_id, tanggal: k.tanggal, jam_ke: j.jam_ke, kelas_id: j.kelas_id, mapel_id: j.mapel_id, guru_id: j.guru_id, status: k.status };
+        if (p.status_pengganti === "TP" || !p.guru_pengganti_id) { tanpaPengganti++; rincian.push({ ...dasar, pengganti_id: null, kode: "TP", diverifikasi: null }); continue; }
+        if (!per.has(p.guru_pengganti_id)) per.set(p.guru_pengganti_id, { guru_id: p.guru_pengganti_id, GT: 0, PT: 0, Inf: 0, total: 0, belum: 0 });
         const b = per.get(p.guru_pengganti_id);
-        if (b[p.status_pengganti] !== undefined) b[p.status_pengganti] += 1;
-        b.total += 1;
-        rincian.push({ tanggal: k.tanggal, jam_ke: j.jam_ke, kelas_id: j.kelas_id, mapel_id: j.mapel_id, guru_id: j.guru_id, status: k.status, pengganti_id: p.guru_pengganti_id, kode: p.status_pengganti });
+        /* Verifikasi Asri (24 Nov 2026): hanya penugasan yang sudah dicentang
+           yang masuk hitungan; yang belum hanya disebut jumlahnya. */
+        const sah = p.diverifikasi !== false;
+        if (sah) {
+            if (b[p.status_pengganti] !== undefined) b[p.status_pengganti] += 1;
+            b.total += 1;
+        } else { b.belum += 1; belumDiverifikasi++; }
+        rincian.push({ ...dasar, pengganti_id: p.guru_pengganti_id, kode: p.status_pengganti, diverifikasi: sah });
     }
     rincian.sort((a, b) => a.tanggal.localeCompare(b.tanggal) || a.jam_ke - b.jam_ke);
-    const baris = [...per.values()].sort((a, b) => b.total - a.total);
-    const total = baris.reduce((t, r) => ({ GT: t.GT + r.GT, PT: t.PT + r.PT, Inf: t.Inf + r.Inf, total: t.total + r.total }), { GT: 0, PT: 0, Inf: 0, total: 0 });
-    return { baris, total, rincian, tanpaPengganti };
+    const baris = [...per.values()].sort((a, b) => b.total - a.total || b.belum - a.belum);
+    const total = baris.reduce((t, r) => ({ GT: t.GT + r.GT, PT: t.PT + r.PT, Inf: t.Inf + r.Inf, total: t.total + r.total, belum: t.belum + r.belum }), { GT: 0, PT: 0, Inf: 0, total: 0, belum: 0 });
+    return { baris, total, rincian, tanpaPengganti, belumDiverifikasi };
 }
 
 // ---------- CSV ----------

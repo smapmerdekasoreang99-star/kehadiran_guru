@@ -6,8 +6,8 @@ import { urutkanKelas, jenisKelas } from "../assets/kelas-order.js?v=20260921v";
 import { semesterTanggal, semesterBaris } from "../assets/semester.js?v=20260921ad";
 import { mencakup, konteksLibur, namaHari, tanggalLengkap, bulanTahun, bulanPendek, uraianCakupan, uraianJam, waktuJam } from "../assets/libur.js?v=20261007c";
 import { muatRujukan } from "../assets/simpanan.js?v=20261004a";
-import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas, MAPEL_WALI_KELAS, rekapDariJumlah, rekapWaliDariJumlah } from "../assets/rekap-hitung.js?v=20261007c";
-import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20261112a";
+import { rekapKehadiran, rekapWali, rekapPengganti, isoTanggal, hariKerja, BOBOT_HADIR, pisahWaliKelas, MAPEL_WALI_KELAS, rekapDariJumlah, rekapWaliDariJumlah } from "../assets/rekap-hitung.js?v=20261124a";
+import { bukuKehadiran, bukuPengganti, bukuPiket, bukuWali, unduhWorkbook, ambilLogoBase64 } from "../assets/excel-export.js?v=20261124a";
 import { tanggalPanjang } from "../assets/bagikan-wa.js?v=20260921v";
 import { esc, ambilSemua, tombolSibuk, muatExcelJS } from "../assets/aman.js?v=20261004a";
 import { pasangUrut, terapkanUrut } from "../assets/urut-tabel.js?v=20261117a";
@@ -20,7 +20,7 @@ const urutUlang = (...id) => id.forEach((x) => { const t = tabelDari(x); if (t) 
 // mengajar, honor pengganti, dan transport — pindah ke aplikasi Induk
 // Pembiayaan, begitu pula pengaturan tarifnya. Identitas dokumen dibaca dari
 // profil_dokumen milik Data Induk, tidak lagi disalin ke kg_pengaturan.
-try { initLockUI(() => renderLibur()); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
+try { initLockUI(() => { renderLibur(); renderPengganti(); }); } catch (err) { console.error("Gagal memasang tombol kunci:", err); }
 
 function laporError(konteks, error) {
     console.error(konteks, error);
@@ -47,7 +47,7 @@ let state = {
     kelompokRombel: [],   // kg_kelompok_rombel: kelompok ikut libur bila seluruh rombel anggotanya libur
     ketidakhadiran: [], penugasan: [],
     hasilKehadiran: null, hasilWali: null, hasilPengganti: null, jamWaliDikecualikan: 0,
-    saring: "", saringWali: "", viewPengganti: "ringkas",
+    saring: "", saringWali: "", viewPengganti: "ringkas", saringVerifikasi: "semua",
     profil: null,
     tambahan: new Map(),   // guru_id -> jam tugas tambahan per minggu
     piket: [], hasilPiket: null,
@@ -214,7 +214,7 @@ async function hitungDiServer() {
     const [srv, rK] = await Promise.all([
         supabaseClient.rpc("kg_rekap", { p_awal: state.awal, p_akhir: state.akhir }),
         ambilSemua(() => supabaseClient.from("kg_ketidakhadiran_guru")
-            .select("id, jadwal_id, tanggal, guru_id, status, kg_penugasan_pengganti!inner(guru_pengganti_id, status_pengganti)")
+            .select("id, jadwal_id, tanggal, guru_id, status, kg_penugasan_pengganti!inner(guru_pengganti_id, status_pengganti, diverifikasi)")
             .gte("tanggal", state.awal).lte("tanggal", state.akhir).order("id")),
     ]);
     if (srv.error || !srv.data) { console.warn("kg_rekap gagal, kembali ke hitungan peramban:", srv.error); return false; }
@@ -268,7 +268,7 @@ async function hitung() {
         // diminta per 200 id secara berurutan sesudahnya.
         const [rK, rP] = await Promise.all([
             ambilSemua(() => supabaseClient.from("kg_ketidakhadiran_guru")
-                .select("id, jadwal_id, tanggal, guru_id, status, kg_penugasan_pengganti(guru_pengganti_id, status_pengganti)")
+                .select("id, jadwal_id, tanggal, guru_id, status, kg_penugasan_pengganti(guru_pengganti_id, status_pengganti, diverifikasi)")
                 .gte("tanggal", state.awal).lte("tanggal", state.akhir).order("id")),
             ambilSemua(() => supabaseClient.from("kg_pelaksanaan_piket")
                 .select("tanggal, jenis, guru_id, tugas_id, status")
@@ -504,19 +504,49 @@ function renderPengganti() {
     const h = state.hasilPengganti; if (!h) return;
     document.getElementById("tabelRingkas").hidden = state.viewPengganti !== "ringkas";
     document.getElementById("tabelRinci").hidden = state.viewPengganti !== "rinci";
+    document.getElementById("saringVerifikasiWrap").hidden = state.viewPengganti !== "rinci";
+    const belumSel = (n) => `<td class="num">${n ? `<span class="belum-verifikasi">${n}</span>` : "—"}</td>`;
     document.getElementById("bodyRingkas").innerHTML = h.baris.map((r) => `
-      <tr><td class="nama">${esc(namaGuru(r.guru_id))}</td>${num(r.GT)}${num(r.PT)}${num(r.Inf)}<td class="num"><strong>${r.total}</strong></td></tr>`).join("")
-      || `<tr><td colspan="5" class="empty-state">Belum ada penugasan pada rentang ini.</td></tr>`;
-    document.getElementById("footRingkas").innerHTML = `<tr class="total"><td>Total (${h.baris.length} guru pengganti)</td>${num(h.total.GT)}${num(h.total.PT)}${num(h.total.Inf)}<td class="num"><strong>${h.total.total}</strong></td></tr>`;
-    document.getElementById("bodyRinci").innerHTML = h.rincian.map((r) => `
+      <tr><td class="nama">${esc(namaGuru(r.guru_id))}</td>${num(r.GT)}${num(r.PT)}${num(r.Inf)}<td class="num"><strong>${r.total}</strong></td>${belumSel(r.belum)}</tr>`).join("")
+      || `<tr><td colspan="6" class="empty-state">Belum ada penugasan pada rentang ini.</td></tr>`;
+    document.getElementById("footRingkas").innerHTML = `<tr class="total"><td>Total (${h.baris.length} guru pengganti)</td>${num(h.total.GT)}${num(h.total.PT)}${num(h.total.Inf)}<td class="num"><strong>${h.total.total}</strong></td>${belumSel(h.total.belum)}</tr>`;
+    // Saringan Rincian: semua / belum / sudah diverifikasi (TP hanya tampil pada "Semua").
+    const sv = state.saringVerifikasi;
+    const rinci = h.rincian.filter((r) => sv === "semua" || (r.kode !== "TP" && (sv === "sudah") === r.diverifikasi));
+    const bisaUbah = isUnlocked();
+    const selVerif = (r) => r.kode === "TP" ? `<td class="kolom-verifikasi">—</td>`
+      : `<td class="kolom-verifikasi"><input type="checkbox" class="cek-verifikasi" data-kid="${esc(r.ketidakhadiran_id)}"${r.diverifikasi ? " checked" : ""}${bisaUbah ? "" : " disabled"} title="${bisaUbah ? "Centang bila guru pengganti sudah mengonfirmasi dan memaraf daftar hadir" : "Buka Kunci Edit dulu untuk memverifikasi"}" aria-label="Verifikasi"></td>`;
+    document.getElementById("bodyRinci").innerHTML = rinci.map((r) => `
       <tr>
         <td>${esc(r.tanggal)}</td><td>Jam ke-${esc(r.jam_ke)}</td><td><span class="badge-kelas">${esc(namaKelas(r.kelas_id))}</span></td><td class="nama">${esc(namaMapel(r.mapel_id))}</td>
         <td class="nama">${esc(namaGuru(r.guru_id))}</td><td><span class="badge-status badge-${esc(r.status.toLowerCase())}">${esc(r.status)}</span></td>
-        <td class="nama">${r.pengganti_id ? esc(namaGuru(r.pengganti_id)) : "—"}</td><td><span class="badge-tugas badge-${esc(r.kode.toLowerCase())}">${esc(r.kode)}</span></td>
-      </tr>`).join("") || `<tr><td colspan="8" class="empty-state">Belum ada penugasan pada rentang ini.</td></tr>`;
+        <td class="nama">${r.pengganti_id ? esc(namaGuru(r.pengganti_id)) : "—"}</td><td><span class="badge-tugas badge-${esc(r.kode.toLowerCase())}">${esc(r.kode)}</span></td>${selVerif(r)}
+      </tr>`).join("") || `<tr><td colspan="9" class="empty-state">${h.rincian.length ? "Tidak ada penugasan yang cocok dengan saringan." : "Belum ada penugasan pada rentang ini."}</td></tr>`;
     urutUlang("bodyRingkas", "bodyRinci");
-    document.getElementById("ringkasPengganti").textContent = `${h.total.total} jam digantikan · ${h.tanpaPengganti} jam tanpa pengganti (TP)` + (state.jamWaliDikecualikan ? ` · ${state.jamWaliDikecualikan} jam tugas wali kelas tidak termasuk` : "");
-    document.getElementById("footPengganti").textContent = `GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler · TP = Tidak Perlu Pengganti (tidak masuk hitungan per guru).`;
+    document.getElementById("ringkasPengganti").textContent = `${h.total.total} jam digantikan (terverifikasi)${h.belumDiverifikasi ? ` · ${h.belumDiverifikasi} jam belum diverifikasi` : ""} · ${h.tanpaPengganti} jam tanpa pengganti (TP)` + (state.jamWaliDikecualikan ? ` · ${state.jamWaliDikecualikan} jam tugas wali kelas tidak termasuk` : "");
+    document.getElementById("footPengganti").textContent = `GT = Guru diTugaskan · PT = Piket diTugaskan · Inf = Infaler · TP = Tidak Perlu Pengganti (tidak masuk hitungan per guru). Hanya penugasan yang sudah dicentang di kolom Verifikasi (Rincian per jam) yang masuk Total jam dan honor pengganti di Induk Pembiayaan. Centang gugur sendiri bila guru pengganti atau statusnya diubah.`;
+}
+
+/* Verifikasi Asri (24 Nov 2026): centang di Rincian per jam disimpan ke
+   kg_penugasan_pengganti.diverifikasi. Hitungan dan tampilan diperbarui
+   langsung dari data yang sudah diunduh, tanpa Hitung ulang. */
+async function simpanVerifikasi(cb) {
+    const kid = cb.dataset.kid, nilai = cb.checked;
+    if (!isUnlocked()) { cb.checked = !nilai; return; }
+    cb.disabled = true;
+    if (isSupabaseConfigured) {
+        const { data, error } = await supabaseClient.from("kg_penugasan_pengganti")
+            .update({ diverifikasi: nilai }).eq("ketidakhadiran_id", kid).select("ketidakhadiran_id");
+        if (error || !data?.length) {
+            cb.checked = !nilai; cb.disabled = false;
+            laporError("Gagal menyimpan verifikasi guru pengganti", error || { message: "Tidak ada baris yang berubah — penugasan ini mungkin sudah dihapus. Tekan Hitung untuk memuat ulang." });
+            return;
+        }
+    }
+    const p = state.penugasan.find((x) => x.ketidakhadiran_id === kid);
+    if (p) p.diverifikasi = nilai;
+    hitungPengganti();
+    renderPengganti();
 }
 
 // ---------- Hari libur ----------
@@ -931,9 +961,9 @@ const xlsWali = bungkus(async () => {
 const xlsPengganti = bungkus(async () => {
     const h = state.hasilPengganti; if (!h) return;
     const wb = await bukuPengganti({ ExcelJS: await ExcelJSLib(),
-        ringkas: h.baris.map((r) => ({ nama: namaGuru(r.guru_id), GT: r.GT, PT: r.PT, Inf: r.Inf, total: r.total })),
-        rincian: h.rincian.map((r) => ({ tanggal: r.tanggal, jam_ke: r.jam_ke, kelas: namaKelas(r.kelas_id), mapel: namaMapel(r.mapel_id), guru: namaGuru(r.guru_id), status: r.status, pengganti: r.pengganti_id ? namaGuru(r.pengganti_id) : "", kode: r.kode })),
-        tanpaPengganti: h.tanpaPengganti, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
+        ringkas: h.baris.filter((r) => r.total > 0).map((r) => ({ nama: namaGuru(r.guru_id), GT: r.GT, PT: r.PT, Inf: r.Inf, total: r.total })),
+        rincian: h.rincian.map((r) => ({ tanggal: r.tanggal, jam_ke: r.jam_ke, kelas: namaKelas(r.kelas_id), mapel: namaMapel(r.mapel_id), guru: namaGuru(r.guru_id), status: r.status, pengganti: r.pengganti_id ? namaGuru(r.pengganti_id) : "", kode: r.kode, diverifikasi: r.diverifikasi })),
+        tanpaPengganti: h.tanpaPengganti, belumDiverifikasi: h.belumDiverifikasi, pengaturan: state.profil, awal: state.awal, akhir: state.akhir, logoBase64: await logo() });
     await unduhWorkbook(wb, `Rekap Guru Pengganti ${state.awal} sd ${state.akhir}.xlsx`);
 });
 const xlsPiket = bungkus(async () => {
@@ -967,6 +997,10 @@ try {
         document.querySelectorAll("#tab-pengganti .day-tabs button").forEach((x) => x.classList.toggle("active", x === b));
         renderPengganti();
     }));
+    document.getElementById("saringVerifikasi").addEventListener("change", (e) => { state.saringVerifikasi = e.target.value; renderPengganti(); });
+    document.getElementById("bodyRinci").addEventListener("change", (e) => {
+        if (e.target.classList?.contains("cek-verifikasi")) simpanVerifikasi(e.target).catch((err) => laporError("Gagal menyimpan verifikasi", err));
+    });
     document.getElementById("cariKehadiran").addEventListener("input", (e) => { state.saring = e.target.value; renderKehadiran(); });
     document.getElementById("cariWali").addEventListener("input", (e) => { state.saringWali = e.target.value; renderWali(); });
     document.getElementById("xlsKehadiran").addEventListener("click", xlsKehadiran);
